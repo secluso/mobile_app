@@ -1,0 +1,75 @@
+{
+  "_note1": "KEEP THIS FILE! Check it into a version control system (VCS) like git.",
+  "_note2": "ObjectBox manages crucial IDs for your object model. See docs for details.",
+  "_note3": "If you have VCS merge conflicts, you must resolve them according to ObjectBox docs.",
+  "entities": [
+    {
+      "id": "1:8389224194934376797",
+      "lastPropertyId": "2:7994559052489606",
+      "name": "Camera",
+      "properties": [
+        {
+          "id": "1:5668045976753399270",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:7994559052489606",
+          "name": "name",
+          "type": 9,
+          "flags": 2048,
+          "indexId": "1:810695139669244375"
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "2:2694203379812396816",
+      "lastPropertyId": "5:4048055400990323206",
+      "name": "Video",
+      "properties": [
+        {
+          "id": "1:2060005644598737486",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:5184179301129026563",
+          "name": "camera",
+          "type": 9
+        },
+        {
+          "id": "3:4854843348949567277",
+          "name": "video",
+          "type": 9,
+          "flags": 2048,
+          "indexId": "2:9006837534420486771"
+        },
+        {
+          "id": "4:4353268878583621277",
+          "name": "received",
+          "type": 1
+        },
+        {
+          "id": "5:4048055400990323206",
+          "name": "motion",
+          "type": 1
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "lastEntityId": "2:2694203379812396816",
+  "lastIndexId": "2:9006837534420486771",
+  "lastRelationId": "0:0",
+  "lastSequenceId": "0:0",
+  "modelVersion": 5,
+  "modelVersionParserMinimum": 5,
+  "retiredEntityUids": [],
+  "retiredIndexUids": [],
+  "retiredPropertyUids": [],
+  "retiredRelationUids": [],
+  "version": 1
+}
