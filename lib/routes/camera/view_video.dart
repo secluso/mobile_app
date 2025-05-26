@@ -4,7 +4,7 @@ import 'package:video_player/video_player.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path/path.dart' as p;
-import 'package:image_gallery_saver/image_gallery_saver.dart';
+//import 'package:image_gallery_saver/image_gallery_saver.dart';
 
 class VideoViewPage extends StatefulWidget {
   final String videoTitle;
@@ -75,7 +75,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
     try {
       //final bytes = await videoFile.readAsBytes();
 
-      final result = await ImageGallerySaver.saveFile(videoFile.path);
+      /**final result = await ImageGallerySaver.saveFile(videoFile.path);
 
       if ((result['isSuccess'] ?? false) == true) {
         ScaffoldMessenger.of(
@@ -86,6 +86,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
           const SnackBar(content: Text("Failed to save to Photos")),
         );
       }
+      **/
     } catch (e) {
       ScaffoldMessenger.of(
         context,

@@ -14,6 +14,9 @@ use simplelog::SharedLogger;
 use simplelog::TermLogger;
 use simplelog::TerminalMode;
 
+#[cfg(target_os = "android")]
+use android_logger::log;
+
 use parking_lot::RwLock;
 
 use crate::api::logmod::LogEntry;

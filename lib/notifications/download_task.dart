@@ -6,6 +6,29 @@ import 'package:privastead_flutter/objectbox.g.dart';
 import 'package:privastead_flutter/database/entities.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
 import 'package:privastead_flutter/routes/app_drawer.dart';
+import 'package:privastead_flutter/src/rust/frb_generated.dart';
+
+// We have another instance of this due to Android requiring another RustLib for our DownloadTasks. This isn't necessary for iOS. We can only have one instance per process, thus needing this.
+class RustBridgeHelper {
+  static bool _initialized = false;
+
+  static Future<void>? _initFuture;
+
+  /// Call this to avoid double-initialize in Android in the entry-point
+  static Future<void> ensureInitialized() {
+    if (_initialized) {
+      return Future.value();
+    }
+
+    _initFuture ??= _doInit();
+    return _initFuture!;
+  }
+
+  static Future<void> _doInit() async {
+    await RustLib.init();
+    _initialized = true;
+  }
+}
 
 Future<bool> doWork(String cameraName) async {
   print("DownloadTask: Starting to work");
@@ -13,6 +36,8 @@ Future<bool> doWork(String cameraName) async {
   // TODO: Should we wait for downloadingMotionVideos to be false before continuing? Is this meant to be a spinlock?
   var prefs = await SharedPreferences.getInstance();
   await prefs.setBool(PrefKeys.downloadingMotionVideos, true);
+
+  await RustBridgeHelper.ensureInitialized();
 
   bool result = await retrieveVideos(cameraName);
 
@@ -47,7 +72,7 @@ Future<bool> retrieveVideos(String cameraName) async {
       var decFileName = await decryptVideo(
         cameraName: cameraName,
         encFilename: file.path,
-      ); // TODO: do we use path or name here?
+      );
       print("Dec file name = $decFileName");
 
       if (decFileName != "Error") {
@@ -76,7 +101,7 @@ Future<bool> retrieveVideos(String cameraName) async {
           box.put(video); // ObjectBox updates since id is preserved
           successes++;
         } else {
-          // We don't have an existing video for some reason... must've lost the FCM notification and we recovered it. Create thew new video entity now
+          // We don't have an existing video for some reason... must've lost the FCM notification and we recovered it. Create the new video entity now
           var video = Video(
             cameraName,
             decFileName,

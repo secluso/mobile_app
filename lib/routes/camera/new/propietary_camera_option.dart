@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:privastead_flutter/keys.dart';
 
 /// Popup: User connects to camera's Wi-Fi hotspot.
+/// TODO: This isn't setup yet for Android.
+/// Plan for Android: Use native code to interact with Android's WifiNetworkSpecifier builder. We can request the user to easily join a local network. Drawback: May need temp location permissions.
 class ProprietaryCameraConnectDialog extends StatefulWidget {
   const ProprietaryCameraConnectDialog({super.key});
 
@@ -279,6 +281,7 @@ class _ProprietaryCameraInfoDialogState
     result["wifiSsid"] = wifiSsid;
     result["wifiPassword"] = wifiPassword;
     result["qrCode"] = _qrCode ?? 'not scanned';
+    result["type"] = "proprietary";
 
     print(result);
 

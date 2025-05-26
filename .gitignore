@@ -59,3 +59,8 @@ firebase.json
 temp
 google-services.json
 GoogleService-Info.plist
+
+
+# JNI Libs
+jniLibs/
+rust/build/

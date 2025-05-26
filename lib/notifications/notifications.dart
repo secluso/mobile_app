@@ -51,6 +51,7 @@ Future<void> showMotionNotification({
     vibrationPattern: Int64List.fromList([500, 500, 500, 500, 500]),
     enableLights: true,
     color: const Color(0xFF00FF00),
+    ledColor: const Color(0xFF00FF00),
     ledOnMs: 2000,
     ledOffMs: 2000,
   );
@@ -64,6 +65,7 @@ Future<void> showMotionNotification({
 
   // Cross-platform wrapper
   final details = NotificationDetails(android: androidDetails, iOS: iosDetails);
+  print("Sent notification!");
 
   await _notifs.show(
     DateTime.now().millisecondsSinceEpoch ~/ 1000, // unique id
@@ -82,9 +84,14 @@ Future<void> _ensureNotificationPermissions() async {
               AndroidFlutterLocalNotificationsPlugin
             >();
 
+    print("Requesting notification permissions");
     // Android 13+ runtime permission
     final granted = (await androidPlugin?.areNotificationsEnabled()) ?? true;
+    print("Previously granted: $granted");
     if (!granted) await androidPlugin?.requestNotificationsPermission();
+    final granted_after =
+        (await androidPlugin?.areNotificationsEnabled()) ?? true;
+    print("Now granted: $granted_after");
   } else if (Platform.isIOS) {
     await _notifs
         .resolvePlatformSpecificImplementation<

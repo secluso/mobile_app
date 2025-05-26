@@ -6,6 +6,7 @@ import 'package:privastead_flutter/utilities/camera_util.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 //TODO: We need to have a check that checks if they've entered the server options, and if not, tell them to do so to avoid any weird errors
+// TODO: Make the transtiion from adding a camera to be more smooth. There shouldn't be a delay between the addition -> complete setup (might confuse user)
 
 class ShowNewCameraOptions extends StatelessWidget {
   const ShowNewCameraOptions({super.key});
@@ -13,15 +14,15 @@ class ShowNewCameraOptions extends StatelessWidget {
   /// Navigates to the proprietary (QR) camera setup page.
   /// We return the scannedResult back to the previous page if present.
   Future<void> _navigateToProprietaryCamera(BuildContext context) async {
-    print("before");
+    print("Before show proprietary camera flow");
     final result =
         await ProprietaryCameraConnectDialog.showProprietaryCameraSetupFlow(
           context,
         );
 
-    print("After");
+    print("After (Proprietary camera flow)");
     if (result != null) {
-      //  "cameraName": cameraName, "wifiSsid": wifiSsid, "wifiPassword": wifiPassword,  "qrCode": _qrCode ?? 'not scanned',
+      // fmt: "cameraName": cameraName, "wifiSsid": wifiSsid, "wifiPassword": wifiPassword,  "qrCode": _qrCode ?? 'not scanned',
       print("Got $result");
       final res = addCamera(
         result["cameraName"]! as String,
@@ -58,17 +59,46 @@ class ShowNewCameraOptions extends StatelessWidget {
     }
   }
 
-  /// Navigates to your IP camera setup page
-  /// TODO: This needs to be finished
+  /// Navigates to IP camera setup page
   void _navigateToIPCamera(BuildContext context) async {
+    print("Before show IP camera flow");
     final result = await IpCameraDialog.showIpCameraPopup(context);
+    print("After (IP camera navigation start)");
     if (result != null) {
-      // result = { "cameraName": "...", "cameraIp": "...", "qrCode": "..." }
-      debugPrint('Added IP camera: $result');
+      print("Got $result");
+      final res = addCamera(
+        result["cameraName"]! as String,
+        result["cameraIp"] as String,
+        List<int>.from(result["qrCode"]! as Uint8List),
+        false,
+        '',
+        '',
+      );
+
+      res.then((t) async {
+        print("Got 2 $t");
+
+        if (t) {
+          final SharedPreferences prefs = await SharedPreferences.getInstance();
+          prefs.setBool(
+            "first_time_" + (result["cameraName"]! as String),
+            true,
+          );
+          Navigator.pop(context, {"name": result["cameraName"]! as String});
+        } else {
+          // Display an error message...
+          Navigator.of(context).pop(); //Empty = error...
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Failed to add camera due to internal error"),
+            ),
+          );
+        }
+      });
+      print("After");
     } else {
-      debugPrint('User canceled IP camera setup.');
+      debugPrint("User cancelled Proprietary camera setup");
     }
-    Navigator.pop(context, {"name": "My IP Camera"});
   }
 
   @override
@@ -94,8 +124,8 @@ class ShowNewCameraOptions extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Image.network(
-                    'https://cdn-shop.adafruit.com/970x728/5025-02.jpg', // TODO: Incorporate these images into the app itself (to avoid network use)
+                  Image.asset(
+                    'assets/proprietary_camera_option.jpg',
                     height: 180,
                     fit: BoxFit.cover,
                   ),
@@ -143,8 +173,8 @@ class ShowNewCameraOptions extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Image.network(
-                    'https://www.shutterstock.com/image-photo/surveillance-cameras-set-different-videcam-600nw-2200503529.jpg', // TODO: Incorporate these images into the app itself (to avoid network use)
+                  Image.asset(
+                    'assets/ip_camera_option.jpg',
                     height: 180,
                     fit: BoxFit.cover,
                   ),

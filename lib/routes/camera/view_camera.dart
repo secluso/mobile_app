@@ -355,6 +355,21 @@ class _CameraViewPageState extends State<CameraViewPage> {
   }
 
   Future<Widget> _thumbPlaceholder(String cameraName, String videoFile) async {
+    if (Platform.isAndroid) {
+      // For android, I skipped the thumbnail generation due to replacement of this mechanism with a frame from the camera's internal sent separately going to be used in the future
+      print("Returning android placeholder");
+      return SizedBox(
+        width: 80,
+        height: 80,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: const Image(
+            image: AssetImage('assets/android_thumbnail_placeholder.jpeg'),
+          ),
+        ),
+      );
+    }
+
     final fullVideoPath =
         (await getApplicationDocumentsDirectory()).path +
         "/camera_dir_" +
@@ -378,7 +393,7 @@ class _CameraViewPageState extends State<CameraViewPage> {
 
     var thumbnailData = null;
     try {
-      // Send request to iOS / Android native code to generate thumbnail (due to lack of good Flutter option)
+      // Send request to iOS native code to generate thumbnail (due to lack of good Flutter option)
       Uint8List? bytes = await _ch.invokeMethod<Uint8List>(
         'generateThumbnail',
         {'path': fullVideoPath, 'fullSize': false},

@@ -67,11 +67,19 @@ class _CameraCardState extends State<CameraCard> {
             children: [
               // Thumbnail
               Positioned.fill(
-                child: _cameraThumbnailPlaceholder(widget.cameraName),
+                child:
+                    Platform.isIOS
+                        ? _cameraThumbnailPlaceholder(widget.cameraName)
+                        : const Image(
+                          image: AssetImage(
+                            'assets/android_thumbnail_placeholder.jpeg',
+                          ),
+                          fit: BoxFit.cover,
+                        ),
               ),
 
               // Overlay depending on image presence
-              if (!hasImage) ...[
+              if (!hasImage && Platform.isIOS) ...[
                 Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -251,7 +259,7 @@ class _CameraCardState extends State<CameraCard> {
   }
 }
 
-class CamerasPageState extends State<CamerasPage> {
+class CamerasPageState extends State<CamerasPage> with WidgetsBindingObserver {
   final List<Map<String, dynamic>> cameras = [];
   final _ch = MethodChannel('privastead.com/thumbnail');
 
@@ -270,7 +278,26 @@ class CamerasPageState extends State<CamerasPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadCamerasFromDatabase();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!mounted) return;
+
+    if (state == AppLifecycleState.resumed) {
+      // regenerate on resume
+      _thumbCache.clear();
+      _thumbFutures.clear();
+      setState(() {});
+    }
   }
 
   Future<void> deleteCamera(String cameraName) async {

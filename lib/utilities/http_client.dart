@@ -40,8 +40,7 @@ class HttpClientService {
   }
 
   Future<String> _livestreamGroupName(String cameraName) async {
-    print("TODO: Finish this");
-    return cameraName;
+    return await getLivestreamGroupName(cameraName: cameraName);
   }
 
   /// saves as [fileName] then DELETEs the same URL.
@@ -141,15 +140,16 @@ class HttpClientService {
   /// POST /livestream/<group>
   Future<Result<void>> livestreamStart(String cameraName) async {
     try {
-      final serverIp = await _pref('saved_ip');
-      final username = await _pref('server_username');
-      final password = await _pref('server_password');
+      final serverIp = await _pref(PrefKeys.savedIp);
+      final username = await _pref(PrefKeys.serverUsername);
+      final password = await _pref(PrefKeys.serverPassword);
 
       if ([serverIp, username, password].contains(null)) {
         return Result.failure(Exception('Missing server credentials'));
       }
 
       final group = await _livestreamGroupName(cameraName);
+      print("Group for camera in livestream start: $group");
       final url = Uri.parse('http://$serverIp:8080/livestream/$group');
       final headers = await _basicAuthHeaders(username!, password!);
 
@@ -174,9 +174,9 @@ class HttpClientService {
     required int chunkNumber,
   }) async {
     try {
-      final serverIp = await _pref('saved_ip');
-      final username = await _pref('server_username');
-      final password = await _pref('server_password');
+      final serverIp = await _pref(PrefKeys.savedIp);
+      final username = await _pref(PrefKeys.serverUsername);
+      final password = await _pref(PrefKeys.serverPassword);
 
       if ([serverIp, username, password].contains(null)) {
         return Result.failure(Exception('Missing server credentials'));

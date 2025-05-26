@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-
-// TODO: Use code from Proprietary camera to finish this
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:privastead_flutter/keys.dart';
+import 'qr_scan.dart';
+import 'package:flutter/services.dart';
 
 class IpCameraDialog extends StatefulWidget {
   const IpCameraDialog({super.key});
@@ -8,10 +10,10 @@ class IpCameraDialog extends StatefulWidget {
   @override
   State<IpCameraDialog> createState() => _IpCameraDialogState();
 
-  static Future<Map<String, String>?> showIpCameraPopup(
+  static Future<Map<String, Object>?> showIpCameraPopup(
     BuildContext context,
   ) async {
-    return showDialog<Map<String, String>>(
+    return showDialog<Map<String, Object>>(
       context: context,
       barrierDismissible: false, // user must tap X or a button
       builder: (ctx) => const IpCameraDialog(),
@@ -23,7 +25,7 @@ class _IpCameraDialogState extends State<IpCameraDialog> {
   final _cameraNameController = TextEditingController();
   final _cameraIpController = TextEditingController();
 
-  String? _qrCode;
+  Uint8List? _qrCode;
 
   @override
   void dispose() {
@@ -37,22 +39,47 @@ class _IpCameraDialogState extends State<IpCameraDialog> {
   }
 
   Future<void> _onScanQrCode() async {
-    // TODO: Complete this.
-    setState(() {
-      _qrCode = 'DEMO-QR-5678';
-    });
+    final result = await QrScanDialog.showQrScanDialog(context);
+    if (result != null) {
+      print('Scanned QR code: $result');
+      setState(() {
+        _qrCode = result;
+      });
+    } else {
+      print('QR scan cancelled');
+    }
   }
 
-  void _onAddCamera() {
+  void _onAddCamera() async {
     final cameraName = _cameraNameController.text.trim();
     final cameraIp = _cameraIpController.text.trim();
 
-    // Return user input in a map
-    Navigator.of(context).pop({
-      "cameraName": cameraName,
-      "cameraIp": cameraIp,
-      "qrCode": _qrCode ?? 'not scanned!',
-    });
+    try {
+      // Optional: save to SharedPreferences or DB if needed
+      final prefs = await SharedPreferences.getInstance();
+      final existingCameraSet = prefs.getStringList(PrefKeys.cameraSet) ?? [];
+      if (!existingCameraSet.contains(cameraName)) {
+        Map<String, Object> result = new Map();
+        result["type"] = "ip";
+        result["cameraName"] = cameraName;
+
+        result["qrCode"] = _qrCode ?? 'not scanned';
+        result["cameraIp"] = cameraIp;
+        print(result);
+
+        Navigator.of(context).pop<Map<String, Object>>(result);
+      } else {
+        print("Error: Set already contains camera name.");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Please use a unique name for the camera")),
+        );
+        return;
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Failed to add camera: $e")));
+    }
   }
 
   @override
@@ -123,7 +150,7 @@ class _IpCameraDialogState extends State<IpCameraDialog> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'QR code: ${_qrCode ?? "not scanned!"}',
+                    'QR code: ${_qrCode != null ? "Successfully scanned" : "not scanned!"}',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),

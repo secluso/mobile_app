@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:privastead_flutter/src/rust/api.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:privastead_flutter/keys.dart';
 
 Future<bool> addCamera(
@@ -92,4 +93,52 @@ Future<bool> connectCore(String cameraName, bool firstTime) async {
     cameraName: cameraName,
     firstTime: firstTime,
   );
+}
+
+Future<bool> livestreamUpdateApi({
+  required String cameraName,
+  required Uint8List msg,
+}) async {
+  final SharedPreferences prefs = await SharedPreferences.getInstance();
+  final String dir =
+      (await getApplicationDocumentsDirectory()).path +
+      "/camera_dir_" +
+      cameraName;
+
+  final bool firstTime = !(prefs.getBool("first_time_" + cameraName) ?? false);
+
+  final success = await initializeCamera(
+    fileDir: dir,
+    cameraName: cameraName,
+    firstTime: firstTime,
+  );
+
+  if (!success) return false;
+
+  return await livestreamUpdate(cameraName: cameraName, msg: msg);
+}
+
+/// Decrypts a livestream chunk
+Future<Uint8List> livestreamDecryptApi({
+  required String cameraName,
+  required Uint8List encData,
+  required int expectedChunkNumber,
+}) async {
+  final SharedPreferences prefs = await SharedPreferences.getInstance();
+  final String dir =
+      (await getApplicationDocumentsDirectory()).path +
+      "/camera_dir_" +
+      cameraName;
+
+  final bool firstTime = !(prefs.getBool("first_time_" + cameraName) ?? false);
+
+  final success = await initializeCamera(
+    fileDir: dir,
+    cameraName: cameraName,
+    firstTime: firstTime,
+  );
+
+  if (!success) return Uint8List(0);
+
+  return await livestreamDecrypt(cameraName: cameraName, data: encData);
 }

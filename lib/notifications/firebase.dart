@@ -10,15 +10,49 @@ import 'package:privastead_flutter/notifications/scheduler.dart';
 import 'package:privastead_flutter/utilities/http_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../keys.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
+//TODO: import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:privastead_flutter/src/rust/api.dart';
 import '../utilities/result.dart';
 import 'package:privastead_flutter/database/entities.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:privastead_flutter/src/rust/frb_generated.dart';
+import 'dart:io' show Platform;
 
 class TaskNames {
   static String downloadAndroid(String cam) => 'DownloadTask_$cam';
+}
+
+class RustBridgeHelper {
+  static bool _initialized = false;
+
+  static Future<void>? _initFuture;
+
+  /// Call this to avoid double-initialize in Android in the entry-point
+  static Future<void> ensureInitialized() {
+    if (_initialized) {
+      return Future.value();
+    }
+
+    _initFuture ??= _doInit();
+    return _initFuture!;
+  }
+
+  static Future<void> _doInit() async {
+    await RustLib.init();
+    _initialized = true;
+  }
+}
+
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // Re-init Firebase
+  await Firebase.initializeApp();
+
+  await RustBridgeHelper.ensureInitialized();
+
+  await PushNotificationService.instance._process(message.data);
 }
 
 class PushNotificationService {
@@ -58,7 +92,7 @@ class PushNotificationService {
         );
 
     //FCM streams
-    FirebaseMessaging.onBackgroundMessage(_bgHandler);
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
     FirebaseMessaging.onMessage.listen((RemoteMessage msg) {
       print('onMessage');
       _handleMessage(msg);
@@ -69,7 +103,9 @@ class PushNotificationService {
 
     await initLocalNotifications();
 
-    if (await FirebaseMessaging.instance.getAPNSToken() != null) {
+    if (Platform.isAndroid ||
+        (Platform.isIOS &&
+            await FirebaseMessaging.instance.getAPNSToken() != null)) {
       final tok = await FirebaseMessaging.instance.getToken();
       print("Set FCM token to $tok");
       if (tok != null) await _updateToken(tok);
@@ -83,8 +119,13 @@ class PushNotificationService {
     final credentials = prefs.getString(PrefKeys.serverUsername) ?? '';
 
     if (token.isEmpty) {
-      print("Attempting to capture token");
-      if (await FirebaseMessaging.instance.getAPNSToken() != null) {
+      var android = Platform.isAndroid;
+      print("Attempting to capture token $android");
+      if (Platform.isAndroid ||
+          (Platform.isIOS &&
+              await FirebaseMessaging.instance.getAPNSToken() != null)) {
+        print("Entered capturing area");
+
         final tok = await FirebaseMessaging.instance.getToken();
         print("Set FCM token to $tok");
         if (tok != null) {
@@ -112,8 +153,6 @@ class PushNotificationService {
 
   Future<void> _handleMessage(RemoteMessage msg) => _process(msg.data);
   void _handleTapFromTray(RemoteMessage msg) {}
-  static Future<void> _bgHandler(RemoteMessage msg) async =>
-      PushNotificationService.instance._process(msg.data);
 
   // Core notification processing method
   Future<void> _process(Map<String, dynamic> data) async {
@@ -124,7 +163,7 @@ class PushNotificationService {
     print("Got a message");
 
     final prefs = await SharedPreferences.getInstance();
-    await WakelockPlus.enable(); // TODO: Make this optional depending on if it's called from background processing
+    //  await WakelockPlus.enable(); // TODO: Make this optional depending on if it's called from background processing
 
     try {
       print("ATP - 1");
@@ -159,12 +198,16 @@ class PushNotificationService {
         } else if (response != 'Error' && response != 'None') {
           //TODO: Figure out if (needNotification) {
           showMotionNotification(cameraName: cameraName, timestamp: response);
-          await addPendingToRepository(cameraName, response);
+
+          // TODO: I removed the pending to repository addition for Android because it's not possible to init ObjectBox in the background handler (as Android requires). Find alternate solution maybe. Not sure this is needed anymore (as we don't want to show users pending videos in cases of failure)
+          if (Platform.isIOS) {
+            await addPendingToRepository(cameraName, response);
+          }
         }
       }
     } finally {
       print("After processing");
-      await WakelockPlus.disable();
+      // await WakelockPlus.disable(); TODO: Fix above wakelock depending on foreground or not
     }
   }
 
@@ -188,10 +231,6 @@ class PushNotificationService {
       token,
     );
 
-    if (result.isFailure) {
-      await prefs.setBool(PrefKeys.needUpdateFcmToken, true);
-    } else {
-      await prefs.setBool(PrefKeys.needUpdateFcmToken, false);
-    }
+    await prefs.setBool(PrefKeys.needUpdateFcmToken, result.isFailure);
   }
 }

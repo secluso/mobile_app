@@ -14,25 +14,32 @@ void callbackDispatcher() {
     final camera = inputData?['camera'] as String? ?? 'Unknown';
     final retry = inputData?['retry'] as int? ?? 0;
 
-    final ok = await doWork(camera);
+    if (camera != 'Unknown') {
+      final ok = await doWork(camera);
 
-    if (!ok && retry < _maxRetries) {
-      print("Retrying due to failure (and < than max retries)");
-      final nextRetry = retry + 1;
-      final delayMin = nextRetry * nextRetry * 15;
+      if (!ok && retry < _maxRetries) {
+        print("Retrying due to failure (and < than max retries)");
+        final nextRetry = retry + 1;
+        final delayMin = nextRetry * nextRetry * 15;
 
-      await Workmanager().registerOneOffTask(
-        _bgTaskId,
-        _workerName,
-        inputData: {'camera': camera, 'retry': nextRetry},
-        existingWorkPolicy: ExistingWorkPolicy.replace,
-        constraints: Constraints(networkType: NetworkType.connected),
-        initialDelay:
-            Platform.isIOS ? Duration(minutes: delayMin) : Duration.zero,
+        await Workmanager().registerOneOffTask(
+          _bgTaskId,
+          _workerName,
+          inputData: {'camera': camera, 'retry': nextRetry},
+          existingWorkPolicy: ExistingWorkPolicy.replace,
+          constraints: Constraints(networkType: NetworkType.connected),
+          initialDelay:
+              Platform.isIOS ? Duration(minutes: delayMin) : Duration.zero,
+        );
+      }
+
+      return ok; // Intreprets true=success, false=retry
+    } else {
+      print(
+        'TODO: Incorporate special startup behavior to fetch all cameras in crash scenario.',
       );
+      return true;
     }
-
-    return ok; // Intreprets true=success, false=retry
   });
 }
 
@@ -51,7 +58,8 @@ class DownloadScheduler {
       isInDebugMode: debug && Platform.isAndroid,
     ); // debug mode only on android
 
-    // Seed one BG task so force-quit users recover on next launch
+    // Send one BG task so force-quit users recover on next launch
+    // IMPORTANT TODO: We need to feed a camera name, or this will always fail. Should we loop through all cameras, as this is only at startup? Should we make then a special option?
     await Workmanager().registerOneOffTask(
       _bgTaskId,
       _workerName,
@@ -74,7 +82,8 @@ class DownloadScheduler {
     final allowCellular = true; // TODO: load from settings
 
     print("Network statuses: wifi = $wifi, cell = $cell");
-    if (wifi || (cell && allowCellular)) {
+    // TODO: We can't do work now in Android due to the ObjectBox error where we can't double instantiate (as Android background work doesn't hold the lock that the main process does, so it can't touch the database)
+    if (Platform.isIOS && (wifi || (cell && allowCellular))) {
       print("Trying to do work now for $camera");
       final ok = await doWork(camera);
       if (ok) return; // Success in foreground
