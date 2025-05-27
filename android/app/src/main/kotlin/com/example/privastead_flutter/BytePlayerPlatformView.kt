@@ -30,7 +30,7 @@ class BytePlayerPlatformView(
     private val spinner: ProgressBar
 
     init {
-        Log.d("BytePV", "▶️ BytePlayerPlatformView ctor for stream $streamId")
+        Log.d("BytePV", "BytePlayerPlatformView ctor for stream $streamId")
 
         // Grab the shared byte‐queue
         val q: LinkedBlockingQueue<ByteArray> =
@@ -88,7 +88,7 @@ class BytePlayerPlatformView(
         // Listen for first‐frame
         player.addListener(object : Player.Listener {
             override fun onRenderedFirstFrame() {
-                Log.d("BytePV", "first frame rendered ✓")
+                Log.d("BytePV", "first frame rendered")
                 spinner.isVisible = false
             }
 
@@ -99,12 +99,10 @@ class BytePlayerPlatformView(
     }
 
     override fun getView(): View {
-        Log.d("BytePV", "▶️ getView() called; returning container")
         return container
     }
 
     override fun dispose() {
-        Log.d("BytePV", "▶️ dispose() called")
         player.release()
     }
 }

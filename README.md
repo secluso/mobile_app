@@ -1,44 +1,118 @@
-# Privastead Mobile Application
+# Privastead Mobile Application  
+**Developer Quick-Start Guide (Android & iOS)**
 
-## Development - Getting Started
+> Use this guide to build the Privastead mobile application from source.  
+> Important: Complete all core setup steps in [`HOW_TO.md`](https://github.com/privastead/privastead/blob/main/HOW_TO.md) before continuing.
 
-[Flutter Online Documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+---
 
-## Custom Set Up (rough draft guide) (Android)
+## 1. Reference Documentation
 
-Should you wish to build the application yourself instead of using our pre-built versions, this aims to help you do so.
-This assumes you have already followed the setup instructions in https://github.com/privastead/privastead/blob/main/HOW_TO.md
+- **Flutter Docs:** [flutter.dev](https://docs.flutter.dev/)
+- **Firebase Setup for Flutter:** [firebase.google.com/docs/flutter/setup](https://firebase.google.com/docs/flutter/setup?platform=ios)
 
-### Step 1: Clone the repository
+---
 
-### Step 2: Download Visual Studio Code
+## 2. Prerequisites
 
-### Step 3: Open the repository within Visual Studio Code
+Make sure the following tools are installed:
 
-### Step 4: Open the terminal within VSC and run 'flutter pub get' (downloads all the necessary packages)
+| Tool | Purpose |
+|------|---------|
+| Flutter SDK (3.x or later) | Cross-platform mobile framework |
+| Rust + rustup | Native library support |
+| Android NDK | Compile Rust code for Android |
+| Visual Studio Code | Recommended IDE |
+| Firebase Account | Required for push notifications |
 
-### Step 5: Set up Flutter Fire (google's notification service within Flutter)
+You can verify setup with `flutter doctor`.
 
-To accomplish this, see the official tutorial - https://firebase.google.com/docs/flutter/setup?platform=ios
+---
 
-Select only iOS and Android when asked for platforms to set up.
+## 3. Project Setup (Step-by-Step)
 
-Move the firebase_options.dart file automatically generated from lib/ to lib/notifications/
+### 3.1 Clone the Repository
 
-### Step 6: Setup Rust Code for Android
+```
+git clone https://github.com/privastead/privastead.git  
+cd privastead
+```
 
-cd rust/ (from main directory)
+---
 
+### 3.2 Open the Project in Visual Studio Code
+
+- Launch Visual Studio Code
+- Open the privastead/ folder  
+- Install any recommended extensions (Flutter, Rust, Dart)
+
+---
+
+### 3.3 Install Flutter Packages
+
+```
+flutter pub get
+```
+
+---
+
+## 4. Firebase Setup (Push Notifications)
+
+1. Follow the [official Firebase guide](https://firebase.google.com/docs/flutter/setup?platform=ios)
+2. When asked which platforms to support, select **iOS** and **Android** only.
+3. After setup, move the generated file:
+
+```
+lib/firebase_options.dart → lib/notifications/firebase_options.dart
+```
+
+---
+
+## 5. Compile Rust Code for Android
+
+From the project root:
+
+```
+cd rust
+```
+
+Add Android build targets:
+
+```
 rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+```
 
+Build and export to the Android JNI directory:
+
+```
 cargo ndk -o ../android/app/src/main/jniLibs build
+```
 
-### Step 6: Plug your device in to your computer. To verify, you should see it connected within Visual Studio Code (see bottom right corner)
+This will generate .so files for each architecture and place them in the appropriate folder.
 
-### Step 7: Run command: flutter run in main repo directory (/)
+---
 
-## Debugging
+## 6. Run on a Physical Android Device
 
-Should you run into issues on Android with the app not updating after restarting flutter run, run the command flutter clean and try running it again.
+1. Plug in your Android device via USB
+2. Enable Developer Mode and USB Debugging
+3. Ensure the device is recognized in Visual Studio Code (bottom-right status bar)
+4. From the project root, run:
 
+```
+flutter run
+```
+
+This will build and launch the app on your connected device.
+
+---
+
+## 7. Debugging Tips
+
+| Problem | Solution |
+|--------|----------|
+| App doesn’t update after `flutter run` | Run `flutter clean` first |
+| Rust compilation errors | Ensure targets and NDK are properly set 
+---
+
+> Need help or want to contribute? Visit the [Privastead GitHub Repository](https://github.com/privastead/privastead).

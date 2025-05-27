@@ -145,9 +145,9 @@ class PushNotificationService {
     final result = await HttpClientService.instance.uploadFcmToken(token);
     if (result.isSuccess) {
       prefs.setBool(PrefKeys.needUpdateFcmToken, false);
-      debugPrint('[FCM] token re‑uploaded ✔');
+      debugPrint('[FCM] token re‑uploaded');
     } else {
-      debugPrint('[FCM] token upload failed ✘');
+      debugPrint('[FCM] token upload failed');
     }
   }
 

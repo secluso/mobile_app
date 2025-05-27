@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_icmp_ping/flutter_icmp_ping.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:privastead_flutter/keys.dart';
+import 'dart:io' show Platform;
 
 /// Popup: User connects to camera's Wi-Fi hotspot.
 /// TODO: This isn't setup yet for Android.
@@ -51,7 +52,10 @@ class _ProprietaryCameraConnectDialogState
   bool _isConnected = false;
   bool _connectivityError = false;
 
-  static const platform = MethodChannel("privastead.com/wifi");
+  final platform =
+      Platform.isIOS
+          ? MethodChannel("privastead.com/wifi")
+          : MethodChannel("privastead.com/android/wifi");
 
   Future<void> _connectToCamera() async {
     print("Connecting to wifi");
@@ -63,24 +67,25 @@ class _ProprietaryCameraConnectDialogState
         'connectToWifi',
         <String, dynamic>{'ssid': "Privastead", 'password': '12345678'},
       );
-      print("Got result $result");
-
-      // TODO: Make an Android equivalent to adding wifi
+      print("First result from Wifi Connect Attempt: $result");
 
       if (result == "connected") {
         //TODO: Show 'connecting' status
-        //Connect again to ensure no awkward errors (not sure why this occurs sometimes)
-        final result = await platform.invokeMethod<String>(
-          'connectToWifi',
-          <String, dynamic>{'ssid': "Privastead", 'password': '12345678'},
-        );
-        print("Got result $result");
+
+        if (Platform.isIOS) {
+          //Connect again to ensure no awkward errors (not sure why this occurs sometimes)
+          final result = await platform.invokeMethod<String>(
+            'connectToWifi',
+            <String, dynamic>{'ssid': "Privastead", 'password': '12345678'},
+          );
+          print("Secondary result from Wifi Connect Attempt: $result");
+        }
 
         // Do an additional ping to the camera to ensure connectivity.
         // We expect the same IP for all Raspberry Pi Cameras
         try {
           Ping ping = Ping(
-            '10.42.0.1', //TODO: make this a global constant
+            PrefKeys.proprietaryCameraIp,
             count: 4,
             timeout: 5,
             interval: 1,

@@ -1,11 +1,9 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter/rendering.dart';
 
-// utilities/byte_player_view.dart
 class BytePlayerView extends StatelessWidget {
   final int streamId;
   const BytePlayerView({required this.streamId, Key? key}) : super(key: key);
