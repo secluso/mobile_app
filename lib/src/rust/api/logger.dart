@@ -5,12 +5,16 @@
 
 import '../frb_generated.dart';
 import '../lib.dart';
-import 'logmod.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `record_to_entry`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `SEND_TO_DART_LOGGER_STREAM_SINK`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `as_log`, `as_log`, `config`, `config`, `deref`, `enabled`, `enabled`, `flush`, `flush`, `initialize`, `level`, `level`, `log`, `log`
+
+Stream<LogEntry> createLogStream() =>
+    RustLib.instance.api.crateApiLoggerCreateLogStream();
+
+Future<void> rustSetUp() => RustLib.instance.api.crateApiLoggerRustSetUp();
 
 Future<void> initLogger() => RustLib.instance.api.crateApiLoggerInitLogger();
 
@@ -29,4 +33,32 @@ abstract class SendToDartLogger implements RustOpaqueInterface {
 
   static Stream<LogEntry> setStreamSink() =>
       RustLib.instance.api.crateApiLoggerSendToDartLoggerSetStreamSink();
+}
+
+class LogEntry {
+  final PlatformInt64 timeMillis;
+  final int level;
+  final String tag;
+  final String msg;
+
+  const LogEntry({
+    required this.timeMillis,
+    required this.level,
+    required this.tag,
+    required this.msg,
+  });
+
+  @override
+  int get hashCode =>
+      timeMillis.hashCode ^ level.hashCode ^ tag.hashCode ^ msg.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LogEntry &&
+          runtimeType == other.runtimeType &&
+          timeMillis == other.timeMillis &&
+          level == other.level &&
+          tag == other.tag &&
+          msg == other.msg;
 }

@@ -6,7 +6,6 @@
 import 'api.dart';
 import 'api/core.dart';
 import 'api/logger.dart';
-import 'api/logmod.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;

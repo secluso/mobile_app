@@ -13,13 +13,28 @@ use simplelog::ConfigBuilder;
 use simplelog::SharedLogger;
 use simplelog::TermLogger;
 use simplelog::TerminalMode;
+use parking_lot::RwLock;
 
 #[cfg(target_os = "android")]
 use android_logger::log;
 
-use parking_lot::RwLock;
+#[flutter_rust_bridge::frb]
+pub struct LogEntry {
+    pub time_millis: i64,
+    pub level: i32,
+    pub tag: String,
+    pub msg: String,
+}
 
-use crate::api::logmod::LogEntry;
+#[flutter_rust_bridge::frb]
+pub fn create_log_stream(s: StreamSink<LogEntry>) {
+    SendToDartLogger::set_stream_sink(s);
+}
+
+#[flutter_rust_bridge::frb]
+pub fn rust_set_up() {
+    init_logger();
+}
 
 static INIT_LOGGER_ONCE: Once = Once::new();
 

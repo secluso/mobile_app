@@ -6,7 +6,6 @@
 import 'api.dart';
 import 'api/core.dart';
 import 'api/logger.dart';
-import 'api/logmod.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
@@ -68,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.9.0';
 
   @override
-  int get rustContentHash => 649769379;
+  int get rustContentHash => -725428121;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -108,7 +107,7 @@ abstract class RustLibApi extends BaseApi {
     required String wifiPassword,
   });
 
-  Stream<LogEntry> crateApiLogmodCreateLogStream();
+  Stream<LogEntry> crateApiLoggerCreateLogStream();
 
   Future<String> crateApiDecryptFcmTimestamp({
     required String cameraName,
@@ -193,7 +192,7 @@ abstract class RustLibApi extends BaseApi {
     required List<int> commitMsg,
   });
 
-  Future<void> crateApiLogmodRustSetUp();
+  Future<void> crateApiLoggerRustSetUp();
 
   RustArcIncrementStrongCountFnType get rust_arc_increment_strong_count_Clients;
 
@@ -472,7 +471,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Stream<LogEntry> crateApiLogmodCreateLogStream() {
+  Stream<LogEntry> crateApiLoggerCreateLogStream() {
     final s = RustStreamSink<LogEntry>();
     unawaited(
       handler.executeNormal(
@@ -491,7 +490,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             decodeSuccessData: sse_decode_unit,
             decodeErrorData: null,
           ),
-          constMeta: kCrateApiLogmodCreateLogStreamConstMeta,
+          constMeta: kCrateApiLoggerCreateLogStreamConstMeta,
           argValues: [s],
           apiImpl: this,
         ),
@@ -500,7 +499,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return s.stream;
   }
 
-  TaskConstMeta get kCrateApiLogmodCreateLogStreamConstMeta =>
+  TaskConstMeta get kCrateApiLoggerCreateLogStreamConstMeta =>
       const TaskConstMeta(debugName: "create_log_stream", argNames: ["s"]);
 
   @override
@@ -1161,7 +1160,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<void> crateApiLogmodRustSetUp() {
+  Future<void> crateApiLoggerRustSetUp() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -1177,14 +1176,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiLogmodRustSetUpConstMeta,
+        constMeta: kCrateApiLoggerRustSetUpConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiLogmodRustSetUpConstMeta =>
+  TaskConstMeta get kCrateApiLoggerRustSetUpConstMeta =>
       const TaskConstMeta(debugName: "rust_set_up", argNames: []);
 
   RustArcIncrementStrongCountFnType

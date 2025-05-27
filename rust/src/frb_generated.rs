@@ -43,7 +43,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.9.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 649769379;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -725428121;
 
 // Section: executor
 
@@ -189,7 +189,7 @@ fn wire__crate__api__logger__SendToDartLogger_set_stream_sink_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_stream_sink = <StreamSink<
-                crate::api::logmod::LogEntry,
+                crate::api::logger::LogEntry,
                 flutter_rust_bridge::for_generated::SseCodec,
             >>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -272,7 +272,7 @@ fn wire__crate__api__core__add_camera_impl(
         },
     )
 }
-fn wire__crate__api__logmod__create_log_stream_impl(
+fn wire__crate__api__logger__create_log_stream_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -295,14 +295,14 @@ fn wire__crate__api__logmod__create_log_stream_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_s = <StreamSink<
-                crate::api::logmod::LogEntry,
+                crate::api::logger::LogEntry,
                 flutter_rust_bridge::for_generated::SseCodec,
             >>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
                     let output_ok = Result::<_, ()>::Ok({
-                        crate::api::logmod::create_log_stream(api_s);
+                        crate::api::logger::create_log_stream(api_s);
                     })?;
                     Ok(output_ok)
                 })())
@@ -1191,7 +1191,7 @@ fn wire__crate__api__core__livestream_update_impl(
         },
     )
 }
-fn wire__crate__api__logmod__rust_set_up_impl(
+fn wire__crate__api__logger__rust_set_up_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -1217,7 +1217,7 @@ fn wire__crate__api__logmod__rust_set_up_impl(
             move |context| {
                 transform_result_sse::<_, ()>((move || {
                     let output_ok = Result::<_, ()>::Ok({
-                        crate::api::logmod::rust_set_up();
+                        crate::api::logger::rust_set_up();
                     })?;
                     Ok(output_ok)
                 })())
@@ -1343,7 +1343,7 @@ impl SseDecode
 }
 
 impl SseDecode
-    for StreamSink<crate::api::logmod::LogEntry, flutter_rust_bridge::for_generated::SseCodec>
+    for StreamSink<crate::api::logger::LogEntry, flutter_rust_bridge::for_generated::SseCodec>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -1393,14 +1393,14 @@ impl SseDecode for Vec<u8> {
     }
 }
 
-impl SseDecode for crate::api::logmod::LogEntry {
+impl SseDecode for crate::api::logger::LogEntry {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_timeMillis = <i64>::sse_decode(deserializer);
         let mut var_level = <i32>::sse_decode(deserializer);
         let mut var_tag = <String>::sse_decode(deserializer);
         let mut var_msg = <String>::sse_decode(deserializer);
-        return crate::api::logmod::LogEntry {
+        return crate::api::logger::LogEntry {
             time_millis: var_timeMillis,
             level: var_level,
             tag: var_tag,
@@ -1447,7 +1447,7 @@ fn pde_ffi_dispatcher_primary_impl(
             data_len,
         ),
         5 => wire__crate__api__core__add_camera_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__logmod__create_log_stream_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__logger__create_log_stream_impl(port, ptr, rust_vec_len, data_len),
         7 => wire__crate__api__decrypt_fcm_timestamp_impl(port, ptr, rust_vec_len, data_len),
         8 => wire__crate__api__core__decrypt_fcm_timestamp_impl(port, ptr, rust_vec_len, data_len),
         9 => wire__crate__api__decrypt_video_impl(port, ptr, rust_vec_len, data_len),
@@ -1472,7 +1472,7 @@ fn pde_ffi_dispatcher_primary_impl(
         23 => wire__crate__api__core__livestream_decrypt_impl(port, ptr, rust_vec_len, data_len),
         24 => wire__crate__api__livestream_update_impl(port, ptr, rust_vec_len, data_len),
         25 => wire__crate__api__core__livestream_update_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__logmod__rust_set_up_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__logger__rust_set_up_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1552,7 +1552,7 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<SendToDartLogger>> for SendToD
 }
 
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::logmod::LogEntry {
+impl flutter_rust_bridge::IntoDart for crate::api::logger::LogEntry {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.time_millis.into_into_dart().into_dart(),
@@ -1563,11 +1563,11 @@ impl flutter_rust_bridge::IntoDart for crate::api::logmod::LogEntry {
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::logmod::LogEntry {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::logmod::LogEntry>
-    for crate::api::logmod::LogEntry
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::logger::LogEntry {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::logger::LogEntry>
+    for crate::api::logger::LogEntry
 {
-    fn into_into_dart(self) -> crate::api::logmod::LogEntry {
+    fn into_into_dart(self) -> crate::api::logger::LogEntry {
         self
     }
 }
@@ -1661,7 +1661,7 @@ impl SseEncode
 }
 
 impl SseEncode
-    for StreamSink<crate::api::logmod::LogEntry, flutter_rust_bridge::for_generated::SseCodec>
+    for StreamSink<crate::api::logger::LogEntry, flutter_rust_bridge::for_generated::SseCodec>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1707,7 +1707,7 @@ impl SseEncode for Vec<u8> {
     }
 }
 
-impl SseEncode for crate::api::logmod::LogEntry {
+impl SseEncode for crate::api::logger::LogEntry {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i64>::sse_encode(self.time_millis, serializer);

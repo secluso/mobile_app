@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:privastead_flutter/notifications/scheduler.dart';
 import 'package:privastead_flutter/src/rust/frb_generated.dart';
-import 'package:privastead_flutter/src/rust/api/logmod.dart';
+import 'package:privastead_flutter/src/rust/api/logger.dart';
 import 'package:privastead_flutter/utilities/camera_util.dart';
 import 'routes/home_page.dart';
 import "routes/theme_provider.dart";

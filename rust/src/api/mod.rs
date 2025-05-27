@@ -1,14 +1,11 @@
 pub mod core;
 pub mod logger;
-pub mod logmod;
-
-use log::info;
 
 use crate::api::core::Clients;
-use crate::api::logmod::rust_set_up;
 
 use std::collections::HashMap;
 use std::sync::Mutex;
+use log::info;
 
 static CLIENTS: Mutex<Option<HashMap<String, Mutex<Option<Box<Clients>>>>>> = Mutex::new(None);
 
@@ -126,7 +123,7 @@ pub fn flutter_add_camera(
 #[flutter_rust_bridge::frb(init)]
 pub fn init_app() {
     flutter_rust_bridge::setup_default_user_utils();
-    rust_set_up();
+    logger::rust_set_up();
     info!("Setup logging correctly!");
 
     {

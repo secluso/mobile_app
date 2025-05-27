@@ -159,9 +159,9 @@ fn send_wifi_info(
     wifi_ssid: String,
     wifi_password: String,
 ) -> io::Result<()> {
-    let wifi_ssid_msg = client.encrypt(&wifi_ssid.into_bytes(), group_name.clone())?;
+    let wifi_ssid_msg = client.encrypt(&wifi_ssid.into_bytes(), &group_name)?;
     write_varying_len(stream, &wifi_ssid_msg)?;
-    let wifi_password_msg = client.encrypt(&wifi_password.into_bytes(), group_name)?;
+    let wifi_password_msg = client.encrypt(&wifi_password.into_bytes(), &group_name)?;
     write_varying_len(stream, &wifi_password_msg)?;
     client.save_groups_state();
 
@@ -245,12 +245,12 @@ pub fn add_camera(
 
     // Check for duplicate camera_name
     let name_used = [
-        clients.client_motion.get_group_name(camera_name.clone()),
+        clients.client_motion.get_group_name(&camera_name),
         clients
             .client_livestream
-            .get_group_name(camera_name.clone()),
-        clients.client_fcm.get_group_name(camera_name.clone()),
-        clients.client_config.get_group_name(camera_name.clone()),
+            .get_group_name(&camera_name),
+        clients.client_fcm.get_group_name(&camera_name),
+        clients.client_config.get_group_name(&camera_name),
     ]
     .into_iter()
     .any(|res| res.is_ok());
@@ -314,7 +314,7 @@ pub fn add_camera(
     // Motion
     let motion_contact = clients
         .client_motion
-        .add_contact(camera_name.clone(), camera_motion_key_packages)
+        .add_contact(&camera_name, camera_motion_key_packages)
         .unwrap();
 
     if let Err(e) = process_welcome_message(
@@ -329,7 +329,7 @@ pub fn add_camera(
     // Livestream
     let livestream_contact = clients
         .client_livestream
-        .add_contact(camera_name.clone(), camera_livestream_key_packages)
+        .add_contact(&camera_name, camera_livestream_key_packages)
         .unwrap();
 
     if let Err(e) = process_welcome_message(
@@ -344,7 +344,7 @@ pub fn add_camera(
     // FCM
     let fcm_contact = clients
         .client_fcm
-        .add_contact(camera_name.clone(), camera_fcm_key_packages)
+        .add_contact(&camera_name, camera_fcm_key_packages)
         .unwrap();
 
     if let Err(e) =
@@ -357,7 +357,7 @@ pub fn add_camera(
     // Config
     let config_contact = clients
         .client_config
-        .add_contact(camera_name.clone(), camera_config_key_packages)
+        .add_contact(&camera_name, camera_config_key_packages)
         .unwrap();
 
     if let Err(e) = process_welcome_message(
@@ -373,7 +373,7 @@ pub fn add_camera(
     if standalone_camera {
         let group_name = clients
             .client_config
-            .get_group_name(camera_name.to_string())
+            .get_group_name(&camera_name)
             .unwrap();
         if let Err(e) = send_wifi_info(
             &mut stream,
@@ -576,7 +576,7 @@ pub fn get_motion_group_name(
         .as_mut()
         .unwrap()
         .client_motion
-        .get_group_name(camera_name)
+        .get_group_name(&camera_name)
 }
 
 pub fn get_livestream_group_name(
@@ -594,7 +594,7 @@ pub fn get_livestream_group_name(
         .as_mut()
         .unwrap()
         .client_livestream
-        .get_group_name(camera_name)
+        .get_group_name(&camera_name)
 }
 
 pub fn livestream_decrypt(
@@ -653,30 +653,28 @@ pub fn deregister(clients: &mut Option<Box<Clients>>) {
         return;
     }
 
-    let file_dir = clients.as_mut().unwrap().client_motion.get_file_dir();
-
-    match clients.as_mut().unwrap().client_motion.deregister() {
+    match clients.as_mut().unwrap().client_motion.clean() {
         Ok(_) => {}
         Err(e) => {
             println!("Error: Deregistering client_motion failed: {e}");
         }
     }
 
-    match clients.as_mut().unwrap().client_livestream.deregister() {
+    match clients.as_mut().unwrap().client_livestream.clean() {
         Ok(_) => {}
         Err(e) => {
             println!("Error: Deregistering client_livestream failed: {e}")
         }
     }
 
-    match clients.as_mut().unwrap().client_fcm.deregister() {
+    match clients.as_mut().unwrap().client_fcm.clean() {
         Ok(_) => {}
         Err(e) => {
             println!("Error: Deregistering client_fcm failed: {e}")
         }
     }
 
-    match clients.as_mut().unwrap().client_config.deregister() {
+    match clients.as_mut().unwrap().client_config.clean() {
         Ok(_) => {}
         Err(e) => {
             println!("Error: Deregistering client_config failed: {e}")
@@ -684,10 +682,11 @@ pub fn deregister(clients: &mut Option<Box<Clients>>) {
     }
 
     // FIXME: We currently support one camera only. Therefore, here, we delete all state files.
-    let _ = fs::remove_file(file_dir.clone() + "/app_motion_name");
-    let _ = fs::remove_file(file_dir.clone() + "/app_livestream_name");
-    let _ = fs::remove_file(file_dir.clone() + "/app_fcm_name");
-    let _ = fs::remove_file(file_dir.clone() + "/app_config_name");
+   // let _ = fs::remove_file(file_dir.clone() + "/app_motion_name");
+    //let _ = fs::remove_file(file_dir.clone() + "/app_livestream_name");
+    //let _ = fs::remove_file(file_dir.clone() + "/app_fcm_name");
+    //let _ = fs::remove_file(file_dir.clone() + "/app_config_name");
+
 
     *clients = None;
 }
