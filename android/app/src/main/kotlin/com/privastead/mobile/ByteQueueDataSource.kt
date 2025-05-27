@@ -1,4 +1,4 @@
-package com.example.privastead_flutter   // adjust to your package
+package com.privastead.mobile
 
 import androidx.media3.common.C
 import androidx.media3.datasource.BaseDataSource

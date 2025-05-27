@@ -1,4 +1,4 @@
-package com.example.privastead_flutter   // adjust
+package com.privastead.mobile
 
 import android.content.Context
 import android.net.ConnectivityManager

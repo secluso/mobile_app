@@ -2,7 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/services.dart';
 
 class ByteStreamPlayer {
-  static const _ch = MethodChannel('privastead/byte_player');
+  static const _ch = MethodChannel('privastead.com/android/byte_player');
 
   /// For the embedded widget
   static Future<int> createStream() async {

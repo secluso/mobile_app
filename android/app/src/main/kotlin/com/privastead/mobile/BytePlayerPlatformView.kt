@@ -1,4 +1,4 @@
-package com.example.privastead_flutter
+package com.privastead.mobile
 
 import android.content.Context
 import android.graphics.SurfaceTexture
