@@ -50,7 +50,9 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Re-init Firebase
   await Firebase.initializeApp();
 
-  await RustBridgeHelper.ensureInitialized();
+  if (Platform.isAndroid) {
+    await RustBridgeHelper.ensureInitialized();
+  }
 
   await PushNotificationService.instance._process(message.data);
 }

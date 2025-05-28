@@ -14,6 +14,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
 import 'dart:io';
 
+_CameraViewPageState? globalCameraViewPageState;
+
 class CameraViewPage extends StatefulWidget {
   final String cameraName;
   const CameraViewPage({super.key, required this.cameraName});
@@ -42,6 +44,7 @@ class _CameraViewPageState extends State<CameraViewPage> {
   void initState() {
     super.initState();
     _initDbAndFirstPage();
+    globalCameraViewPageState = this;
     _scrollController.addListener(_maybeLoadNextPage);
   }
 
@@ -54,8 +57,27 @@ class _CameraViewPageState extends State<CameraViewPage> {
   void dispose() {
     _confetti.dispose();
     _scrollController.dispose();
+    globalCameraViewPageState = null;
 
     super.dispose();
+  }
+
+  Future<void> reloadVideos() async {
+    final query =
+        _videoBox
+            .query(Video_.camera.equals(widget.cameraName))
+            .order(Video_.id, flags: Order.descending)
+            .build()
+          ..limit = _offset;
+
+    final newVideos = query.find();
+    query.close();
+
+    setState(() {
+      _videos.clear();
+      _videos.addAll(newVideos);
+      _hasMore = newVideos.length == _pageSize;
+    });
   }
 
   Future<void> _loadNextPage() async {

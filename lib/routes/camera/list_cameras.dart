@@ -330,6 +330,18 @@ class CamerasPageState extends State<CamerasPage> with WidgetsBindingObserver {
       }
     }
 
+    final camDirPending = Directory(
+      p.join(docsDir.path, 'waiting', 'camera_$cameraName'),
+    );
+    if (await camDirPending.exists()) {
+      try {
+        await camDirPending.delete(recursive: true);
+        print('Deleted camera waiting folder: ${camDirPending.path}');
+      } catch (e) {
+        print('Error deleting folder: $e');
+      }
+    }
+
     // Clear any thumbnail cache
     invalidateThumbnail(cameraName);
 

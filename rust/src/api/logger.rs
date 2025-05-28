@@ -41,12 +41,7 @@ static INIT_LOGGER_ONCE: Once = Once::new();
 pub fn init_logger() {
     // https://stackoverflow.com/questions/30177845/how-to-initialize-the-logger-for-integration-tests
     INIT_LOGGER_ONCE.call_once(|| {
-        let level = if cfg!(debug_assertions) {
-            LevelFilter::Debug
-        } else {
-            LevelFilter::Warn
-        };
-
+        let level = LevelFilter::Trace;
         assert!(
             level <= log::STATIC_MAX_LEVEL,
             "Should respect log::STATIC_MAX_LEVEL={:?}, which is done in compile time. level{:?}",

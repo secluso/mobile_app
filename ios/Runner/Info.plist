@@ -71,5 +71,7 @@
 	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>We need access to save videos to your photo library</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>This app requires access to devices on your local network.</string>
 </dict>
 </plist>

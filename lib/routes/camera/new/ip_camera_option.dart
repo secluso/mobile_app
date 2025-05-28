@@ -142,7 +142,7 @@ class _IpCameraDialogState extends State<IpCameraDialog> {
                   hintText: '192.168.x.x',
                   border: OutlineInputBorder(),
                 ),
-                keyboardType: TextInputType.number,
+                keyboardType: TextInputType.text,
                 onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 20),

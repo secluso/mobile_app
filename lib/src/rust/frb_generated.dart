@@ -1187,44 +1187,44 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "rust_set_up", argNames: []);
 
   RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_Clients =>
-      wire.rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerClients;
+  get rust_arc_increment_strong_count_Clients => wire
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerClients;
 
   RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_Clients =>
-      wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerClients;
+  get rust_arc_decrement_strong_count_Clients => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerClients;
 
   RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_LevelFilter =>
-      wire.rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerLevelFilter;
+  get rust_arc_increment_strong_count_LevelFilter => wire
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerLevelFilter;
 
   RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_LevelFilter =>
-      wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerLevelFilter;
+  get rust_arc_decrement_strong_count_LevelFilter => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerLevelFilter;
 
   RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_MyMobileLogger =>
-      wire.rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerMyMobileLogger;
+  get rust_arc_increment_strong_count_MyMobileLogger => wire
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerMyMobileLogger;
 
   RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_MyMobileLogger =>
-      wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerMyMobileLogger;
+  get rust_arc_decrement_strong_count_MyMobileLogger => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerMyMobileLogger;
 
   RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_OptionBoxClients =>
-      wire.rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients;
+  get rust_arc_increment_strong_count_OptionBoxClients => wire
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients;
 
   RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_OptionBoxClients =>
-      wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients;
+  get rust_arc_decrement_strong_count_OptionBoxClients => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients;
 
   RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_SendToDartLogger =>
-      wire.rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSendToDartLogger;
+  get rust_arc_increment_strong_count_SendToDartLogger => wire
+      .rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSendToDartLogger;
 
   RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_SendToDartLogger =>
-      wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSendToDartLogger;
+  get rust_arc_decrement_strong_count_SendToDartLogger => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSendToDartLogger;
 
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw) {
@@ -1908,11 +1908,10 @@ class OptionBoxClientsImpl extends RustOpaque implements OptionBoxClients {
         RustLib.instance.api.rust_arc_increment_strong_count_OptionBoxClients,
     rustArcDecrementStrongCount:
         RustLib.instance.api.rust_arc_decrement_strong_count_OptionBoxClients,
-    rustArcDecrementStrongCountPtr:
-        RustLib
-            .instance
-            .api
-            .rust_arc_decrement_strong_count_OptionBoxClientsPtr,
+    rustArcDecrementStrongCountPtr: RustLib
+        .instance
+        .api
+        .rust_arc_decrement_strong_count_OptionBoxClientsPtr,
   );
 }
 
@@ -1933,10 +1932,9 @@ class SendToDartLoggerImpl extends RustOpaque implements SendToDartLogger {
         RustLib.instance.api.rust_arc_increment_strong_count_SendToDartLogger,
     rustArcDecrementStrongCount:
         RustLib.instance.api.rust_arc_decrement_strong_count_SendToDartLogger,
-    rustArcDecrementStrongCountPtr:
-        RustLib
-            .instance
-            .api
-            .rust_arc_decrement_strong_count_SendToDartLoggerPtr,
+    rustArcDecrementStrongCountPtr: RustLib
+        .instance
+        .api
+        .rust_arc_decrement_strong_count_SendToDartLoggerPtr,
   );
 }

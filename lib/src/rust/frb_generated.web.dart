@@ -23,24 +23,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     required super.portManager,
   });
 
-  CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_ClientsPtr =>
-      wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerClients;
+  CrossPlatformFinalizerArg
+  get rust_arc_decrement_strong_count_ClientsPtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerClients;
 
   CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_LevelFilterPtr =>
-      wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerLevelFilter;
+  get rust_arc_decrement_strong_count_LevelFilterPtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerLevelFilter;
 
   CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_MyMobileLoggerPtr =>
-      wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerMyMobileLogger;
+  get rust_arc_decrement_strong_count_MyMobileLoggerPtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerMyMobileLogger;
 
   CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_OptionBoxClientsPtr =>
-      wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients;
+  get rust_arc_decrement_strong_count_OptionBoxClientsPtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients;
 
   CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_SendToDartLoggerPtr =>
-      wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSendToDartLogger;
+  get rust_arc_decrement_strong_count_SendToDartLoggerPtr => wire
+      .rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerSendToDartLogger;
 
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw);

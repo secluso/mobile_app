@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:flutter/material.dart';
 import 'package:privastead_flutter/notifications/scheduler.dart';
 import 'package:privastead_flutter/src/rust/frb_generated.dart';
@@ -12,6 +14,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'notifications/firebase.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
 import 'package:privastead_flutter/database/entities.dart';
+import 'package:privastead_flutter/notifications/pending_processor.dart';
+import 'dart:ui';
+import 'dart:isolate';
+
+final ReceivePort _mainReceivePort = ReceivePort();
 
 void main() async {
   print("Start");
@@ -23,11 +30,24 @@ void main() async {
   await AppStores.init();
   await DownloadScheduler.init();
 
+  QueueProcessor.instance.start();
+
   createLogStream().listen((event) {
     print(
       '[${event.level}] ${event.tag}: ${event.msg} (rust_time=${event.timeMillis})',
     );
   });
+
+  _mainReceivePort.listen((message) {
+    if (message == 'signal_new_file') {
+      QueueProcessor.instance.signalNewFile();
+    }
+  });
+
+  IsolateNameServer.registerPortWithName(
+    _mainReceivePort.sendPort,
+    'queue_processor_signal_port',
+  );
 
   await PushNotificationService.instance.init();
 
@@ -71,6 +91,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       print("Resuming work");
       PushNotificationService.tryUploadIfNeeded(false);
       _initAllCameras();
+      QueueProcessor.instance
+          .signalNewFile(); // Try to process any new uploads now
     }
   }
 
