@@ -35,8 +35,12 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Camera Settings"),
+        title: const Text(
+          "Camera Settings",
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: const Color.fromARGB(255, 27, 114, 60),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -204,7 +208,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               child: const Text(
                 "Save Settings",
-                style: TextStyle(fontSize: 16),
+                style: TextStyle(fontSize: 16, color: Colors.white),
               ),
             ),
           ],

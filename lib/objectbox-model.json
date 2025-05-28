@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:8389224194934376797",
-      "lastPropertyId": "2:7994559052489606",
+      "lastPropertyId": "3:4706244820305147424",
       "name": "Camera",
       "properties": [
         {
@@ -20,6 +20,11 @@
           "type": 9,
           "flags": 2048,
           "indexId": "1:810695139669244375"
+        },
+        {
+          "id": "3:4706244820305147424",
+          "name": "unreadMessages",
+          "type": 1
         }
       ],
       "relations": []
@@ -59,9 +64,28 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "3:6234359154707246677",
+      "lastPropertyId": "2:535086818200965587",
+      "name": "Meta",
+      "properties": [
+        {
+          "id": "1:8194352013682617878",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:535086818200965587",
+          "name": "dbVersion",
+          "type": 6
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "2:2694203379812396816",
+  "lastEntityId": "3:6234359154707246677",
   "lastIndexId": "2:9006837534420486771",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",

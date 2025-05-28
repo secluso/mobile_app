@@ -8,7 +8,9 @@ class Camera {
   @Index()
   String name;
 
-  Camera(this.name, {this.id = 0});
+  bool unreadMessages;
+
+  Camera(this.name, {this.unreadMessages = false, this.id = 0});
 }
 
 // Video entity storing camera association, video file name, received status, and if there was motion (could be a livestream).
@@ -23,4 +25,13 @@ class Video {
   bool motion;
 
   Video(this.camera, this.video, this.received, this.motion, {this.id = 0});
+}
+
+// Entity that stores the current daatbase version. Used to let us know if we need to apply any database patches in the migration runner.
+@Entity()
+class Meta {
+  int id = 0;
+  int dbVersion;
+
+  Meta({this.dbVersion = 0});
 }

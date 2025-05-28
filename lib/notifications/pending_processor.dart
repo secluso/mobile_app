@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:privastead_flutter/database/entities.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
 import 'package:privastead_flutter/routes/camera/view_camera.dart';
+import '../../objectbox.g.dart';
 
 /// Used to fix Android's background process not being allowed to acquire ObjectBox references. We store temporary files for each video that needs to be processed later and strictly have the main isolate add them to the database.
 class QueueProcessor {
@@ -72,6 +73,30 @@ class QueueProcessor {
             final box = AppStores.instance.videoStore.box<Video>();
             var video = Video(cameraName, videoFile, true, true);
             box.put(video);
+
+            final cameraBox = AppStores.instance.cameraStore.box<Camera>();
+            final cameraQuery =
+                cameraBox.query(Camera_.name.equals(cameraName)).build();
+
+            final foundCamera = cameraQuery.findFirst();
+            cameraQuery.close();
+
+            if (foundCamera == null) {
+              print(
+                "Camera entity is null in database. This shouldn't be possible. Camera: $cameraName Video: $videoFile",
+              );
+              await file.delete();
+
+              continue;
+            }
+
+            if (!foundCamera.unreadMessages) {
+              print("Setting camera $cameraName to have unreadMessages = true");
+              foundCamera.unreadMessages = true;
+              cameraBox.put(foundCamera);
+            } else {
+              print("Camera was already set on unreadMessages = true");
+            }
 
             if (globalCameraViewPageState?.mounted == true &&
                 globalCameraViewPageState?.widget.cameraName == cameraName) {

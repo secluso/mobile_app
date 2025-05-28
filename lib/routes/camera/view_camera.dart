@@ -40,9 +40,26 @@ class _CameraViewPageState extends State<CameraViewPage> {
     duration: const Duration(seconds: 2),
   );
 
+  /// We store an unreadMessages flag instead of iterating through all videos to be more efficient
+  Future<void> _markCameraRead() async {
+    final cameraBox = AppStores.instance.cameraStore.box<Camera>();
+    final cameraQuery =
+        cameraBox.query(Camera_.name.equals(widget.cameraName)).build();
+
+    final foundCamera = cameraQuery.findFirst();
+    cameraQuery.close();
+
+    if (foundCamera != null && foundCamera.unreadMessages) {
+      foundCamera.unreadMessages = false;
+      // Save the updated row; wrap in a transaction for safety.
+      cameraBox.put(foundCamera);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _markCameraRead();
     _initDbAndFirstPage();
     globalCameraViewPageState = this;
     _scrollController.addListener(_maybeLoadNextPage);
@@ -201,9 +218,10 @@ class _CameraViewPageState extends State<CameraViewPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.cameraName),
+        title: Text(widget.cameraName, style: TextStyle(color: Colors.white)),
         backgroundColor: const Color.fromARGB(255, 27, 114, 60),
         centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
             tooltip: 'Settings',

@@ -1,0 +1,33 @@
+import 'app_stores.dart';
+import 'migrations.dart';
+import 'entities.dart';
+
+Future<void> runMigrations() async {
+  final metaBox = AppStores.instance.cameraStore.box<Meta>();
+  List<Meta> metas = metaBox.getAll();
+  Meta? meta;
+
+  if (metas.length == 0) {
+    meta = Meta(dbVersion: 0);
+    metaBox.put(meta);
+    print("Migrations: Assuming legacy user. Performing all migrations");
+  } else {
+    meta = metas.first;
+  }
+
+  final currentVersion = meta.dbVersion;
+  final latestVersion = migrations.length;
+  for (int i = currentVersion; i < latestVersion; i++) {
+    print("[Migration] Applying migration ${i + 1}...");
+    await migrations[i]();
+    meta.dbVersion = i + 1;
+    metaBox.put(meta);
+    print("[Migration] Updated DB version to ${meta.dbVersion}");
+  }
+
+  if (currentVersion == latestVersion) {
+    print("[Migration] Already up to date. No migrations needed.");
+  } else {
+    print("[Migration] Migrations complete.");
+  }
+}

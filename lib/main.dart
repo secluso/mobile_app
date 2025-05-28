@@ -15,6 +15,7 @@ import 'notifications/firebase.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
 import 'package:privastead_flutter/database/entities.dart';
 import 'package:privastead_flutter/notifications/pending_processor.dart';
+import 'package:privastead_flutter/database/migration_runner.dart';
 import 'dart:ui';
 import 'dart:isolate';
 
@@ -28,9 +29,11 @@ void main() async {
   await RustLib.init();
   print("After rust lib init");
   await AppStores.init();
+  await runMigrations();
   await DownloadScheduler.init();
 
   QueueProcessor.instance.start();
+  QueueProcessor.instance.signalNewFile();
 
   createLogStream().listen((event) {
     print(

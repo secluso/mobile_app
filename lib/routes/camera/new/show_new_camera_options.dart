@@ -105,8 +105,12 @@ class ShowNewCameraOptions extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add New Camera'),
+        title: const Text(
+          'Add New Camera',
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: const Color.fromARGB(255, 27, 114, 60),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: ListView(
         padding: const EdgeInsets.all(24.0),

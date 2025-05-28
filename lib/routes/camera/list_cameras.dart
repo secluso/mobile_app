@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'dart:async';
 
 class CamerasPage extends StatefulWidget {
   const CamerasPage({Key? key}) : super(key: key);
@@ -21,12 +22,12 @@ class CamerasPage extends StatefulWidget {
 class CameraCard extends StatefulWidget {
   final String cameraName;
   final IconData icon;
-  final int unreadCount;
+  final bool unreadMessages;
 
   const CameraCard({
     required this.cameraName,
     required this.icon,
-    required this.unreadCount,
+    required this.unreadMessages,
     super.key,
   });
 
@@ -159,7 +160,7 @@ class _CameraCardState extends State<CameraCard> {
                 ),
               ),
 
-              if (widget.unreadCount > 0)
+              if (widget.unreadMessages)
                 Positioned(
                   top: 12,
                   right: 12,
@@ -179,15 +180,6 @@ class _CameraCardState extends State<CameraCard> {
                           Icons.notifications,
                           color: Colors.white,
                           size: 16,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          widget.unreadCount.toString(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
                         ),
                       ],
                     ),
@@ -269,6 +261,9 @@ class CamerasPageState extends State<CamerasPage> with WidgetsBindingObserver {
   /// avoid running the DB query + channel call more than once at a time
   final Map<String, Future<Uint8List?>> _thumbFutures = {};
 
+  // Poll the database every so often and update if there's currently read messages or not
+  Timer? _pollingTimer;
+
   void invalidateThumbnail(String cameraName) {
     _thumbCache.remove(cameraName);
     _thumbFutures.remove(cameraName);
@@ -280,11 +275,17 @@ class CamerasPageState extends State<CamerasPage> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadCamerasFromDatabase();
+
+    _pollingTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _loadCamerasFromDatabase(), // refresh from DB every 5s
+    );
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _pollingTimer?.cancel();
     super.dispose();
   }
 
@@ -368,7 +369,11 @@ class CamerasPageState extends State<CamerasPage> with WidgetsBindingObserver {
       cameras.clear();
       cameras.addAll(
         allCameras.map(
-          (cam) => {"name": cam.name, "icon": Icons.videocam, "unreadCount": 0},
+          (cam) => {
+            "name": cam.name,
+            "icon": Icons.videocam,
+            "unreadMessages": cam.unreadMessages,
+          },
         ),
       );
     });
@@ -522,17 +527,17 @@ class CamerasPageState extends State<CamerasPage> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Cameras'),
+        title: const Text('Cameras', style: TextStyle(color: Colors.white)),
         backgroundColor: const Color.fromARGB(255, 27, 114, 60),
         leading: IconButton(
-          icon: const Icon(Icons.menu),
+          icon: const Icon(Icons.menu, color: Colors.white),
           onPressed: () {
             Scaffold.of(context).openDrawer();
           },
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.help_outline),
+            icon: const Icon(Icons.help_outline, color: Colors.white),
             tooltip: "Need Help?",
             onPressed: () => _showHelpSheet(context),
           ),
@@ -655,7 +660,7 @@ class CamerasPageState extends State<CamerasPage> with WidgetsBindingObserver {
                         return CameraCard(
                           cameraName: camera["name"],
                           icon: camera["icon"],
-                          unreadCount: camera["unreadCount"],
+                          unreadMessages: camera["unreadMessages"],
                         );
                       },
                     ),
@@ -666,14 +671,10 @@ class CamerasPageState extends State<CamerasPage> with WidgetsBindingObserver {
       // Floating Action Button for pairing a new camera via QR
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          final scannedResult = await Navigator.push(
+          await Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => ShowNewCameraOptions()),
           );
-          if (scannedResult != null) {
-            print("TODO: Implement db logic here");
-            //addNewCamera(scannedResult["name"]);
-          }
         },
         backgroundColor: const Color.fromARGB(255, 27, 114, 60),
         tooltip: "Pair New Camera",

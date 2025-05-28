@@ -22,7 +22,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(1, 8389224194934376797),
     name: 'Camera',
-    lastPropertyId: const obx_int.IdUid(2, 7994559052489606),
+    lastPropertyId: const obx_int.IdUid(3, 4706244820305147424),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -37,6 +37,12 @@ final _entities = <obx_int.ModelEntity>[
         type: 9,
         flags: 2048,
         indexId: const obx_int.IdUid(1, 810695139669244375),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 4706244820305147424),
+        name: 'unreadMessages',
+        type: 1,
+        flags: 0,
       ),
     ],
     relations: <obx_int.ModelRelation>[],
@@ -83,6 +89,28 @@ final _entities = <obx_int.ModelEntity>[
     relations: <obx_int.ModelRelation>[],
     backlinks: <obx_int.ModelBacklink>[],
   ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(3, 6234359154707246677),
+    name: 'Meta',
+    lastPropertyId: const obx_int.IdUid(2, 535086818200965587),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 8194352013682617878),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 535086818200965587),
+        name: 'dbVersion',
+        type: 6,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
 ];
 
 /// Shortcut for [obx.Store.new] that passes [getObjectBoxModel] and for Flutter
@@ -123,7 +151,7 @@ Future<obx.Store> openStore({
 obx_int.ModelDefinition getObjectBoxModel() {
   final model = obx_int.ModelInfo(
     entities: _entities,
-    lastEntityId: const obx_int.IdUid(2, 2694203379812396816),
+    lastEntityId: const obx_int.IdUid(3, 6234359154707246677),
     lastIndexId: const obx_int.IdUid(2, 9006837534420486771),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
@@ -147,9 +175,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
       },
       objectToFB: (Camera object, fb.Builder fbb) {
         final nameOffset = fbb.writeString(object.name);
-        fbb.startTable(3);
+        fbb.startTable(4);
         fbb.addInt64(0, object.id);
         fbb.addOffset(1, nameOffset);
+        fbb.addBool(2, object.unreadMessages);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -159,13 +188,23 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final nameParam = const fb.StringReader(
           asciiOptimization: true,
         ).vTableGet(buffer, rootOffset, 6, '');
+        final unreadMessagesParam = const fb.BoolReader().vTableGet(
+          buffer,
+          rootOffset,
+          8,
+          false,
+        );
         final idParam = const fb.Int64Reader().vTableGet(
           buffer,
           rootOffset,
           4,
           0,
         );
-        final object = Camera(nameParam, id: idParam);
+        final object = Camera(
+          nameParam,
+          unreadMessages: unreadMessagesParam,
+          id: idParam,
+        );
 
         return object;
       },
@@ -228,6 +267,36 @@ obx_int.ModelDefinition getObjectBoxModel() {
         return object;
       },
     ),
+    Meta: obx_int.EntityDefinition<Meta>(
+      model: _entities[2],
+      toOneRelations: (Meta object) => [],
+      toManyRelations: (Meta object) => {},
+      getId: (Meta object) => object.id,
+      setId: (Meta object, int id) {
+        object.id = id;
+      },
+      objectToFB: (Meta object, fb.Builder fbb) {
+        fbb.startTable(3);
+        fbb.addInt64(0, object.id);
+        fbb.addInt64(1, object.dbVersion);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final dbVersionParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          6,
+          0,
+        );
+        final object = Meta(dbVersion: dbVersionParam)
+          ..id = const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0);
+
+        return object;
+      },
+    ),
   };
 
   return obx_int.ModelDefinition(model, bindings);
@@ -243,6 +312,11 @@ class Camera_ {
   /// See [Camera.name].
   static final name = obx.QueryStringProperty<Camera>(
     _entities[0].properties[1],
+  );
+
+  /// See [Camera.unreadMessages].
+  static final unreadMessages = obx.QueryBooleanProperty<Camera>(
+    _entities[0].properties[2],
   );
 }
 
@@ -269,5 +343,16 @@ class Video_ {
   /// See [Video.motion].
   static final motion = obx.QueryBooleanProperty<Video>(
     _entities[1].properties[4],
+  );
+}
+
+/// [Meta] entity fields to define ObjectBox queries.
+class Meta_ {
+  /// See [Meta.id].
+  static final id = obx.QueryIntegerProperty<Meta>(_entities[2].properties[0]);
+
+  /// See [Meta.dbVersion].
+  static final dbVersion = obx.QueryIntegerProperty<Meta>(
+    _entities[2].properties[1],
   );
 }

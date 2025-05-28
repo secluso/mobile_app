@@ -198,10 +198,10 @@ class _ServerPageState extends State<ServerPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text("Server Settings"),
+        title: Text("Server Settings", style: TextStyle(color: Colors.white)),
         backgroundColor: const Color.fromARGB(255, 27, 114, 60),
         leading: IconButton(
-          icon: Icon(Icons.menu),
+          icon: Icon(Icons.menu, color: Colors.white),
           onPressed: () {
             Scaffold.of(context).openDrawer();
           },
