@@ -38,7 +38,7 @@ dependencies:
     path: rust_builder
   flutter_rust_bridge: 2.9.0
   shared_preferences: 2.5.3
-  mobile_scanner: 6.0.7
+  mobile_scanner: 6.0.10
   provider: 6.1.4
   confetti: 0.8.0
   wifi_iot: 0.3.19+2

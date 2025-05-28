@@ -54,51 +54,74 @@ class _ServerPageState extends State<ServerPage> {
     //TODO: Check if scanned first?
     Uint8List decodedCredentials = base64Decode(credentials!);
     print(decodedCredentials);
-    String credentialsString = utf8.decode(decodedCredentials);
+    final len = decodedCredentials.length;
+    print(len);
 
-    // TODO: Check how this handles on failure... bad QR code
-    if (credentialsString.length != 28) {
-      var len = credentialsString.length;
-      print("ERROR: User credentials should be 28 characters. Current is $len");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error processing QR code. Please try again")),
+    try {
+      String credentialsString = utf8.decode(decodedCredentials);
+
+      // TODO: Check how this handles on failure... bad QR code
+      if (credentialsString.length != PrefKeys.credentialsLength) {
+        var len = credentialsString.length;
+        print(
+          "ERROR: User credentials should be 28 characters. Current is $len",
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error processing QR code. Please try again"),
+            backgroundColor: Colors.red,
+          ),
+        );
+
+        credentials = null;
+        return;
+      }
+
+      var serverUsername = credentialsString.substring(
+        0,
+        PrefKeys.usernameLength,
+      );
+      var serverPassword = credentialsString.substring(
+        PrefKeys.usernameLength,
+        PrefKeys.usernameLength + PrefKeys.passwordLength,
       );
 
-      credentials = null;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(PrefKeys.savedIp, serverIp!);
+      await prefs.setString(PrefKeys.serverUsername, serverUsername);
+      await prefs.setString(PrefKeys.serverPassword, serverPassword);
+      await prefs.setString('credentials', credentials!);
+
+      print("Before try upload");
+
+      await PushNotificationService.tryUploadIfNeeded(true);
+
+      print("After try upload");
+
+      setState(() {
+        hasSynced = true;
+      });
+
+      //initialize all cameras again
+      final box = AppStores.instance.cameraStore.box<Camera>();
+
+      final allCameras = box.getAll();
+      for (var camera in allCameras) {
+        // TODO: Check if false, perhaps there's some weird error we might need to look into...
+        await connect(camera.name);
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Server settings saved!")));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Potentially invalid QR code. Please try again"),
+        ),
+      );
       return;
     }
-
-    var serverUsername = credentialsString.substring(0, 14);
-    var serverPassword = credentialsString.substring(14, 28);
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(PrefKeys.savedIp, serverIp!);
-    await prefs.setString(PrefKeys.serverUsername, serverUsername);
-    await prefs.setString(PrefKeys.serverPassword, serverPassword);
-    await prefs.setString('credentials', credentials!);
-
-    print("Before try upload");
-
-    await PushNotificationService.tryUploadIfNeeded(true);
-
-    print("After try upload");
-
-    setState(() {
-      hasSynced = true;
-    });
-
-    //initialize all cameras again
-    final box = AppStores.instance.cameraStore.box<Camera>();
-
-    final allCameras = box.getAll();
-    for (var camera in allCameras) {
-      // TODO: Check if false, perhaps there's some weird error we might need to look into...
-      await connect(camera.name);
-    }
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text("Server settings saved!")));
   }
 
   Future<void> _removeServerConnection() async {

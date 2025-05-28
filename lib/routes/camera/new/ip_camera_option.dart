@@ -142,7 +142,7 @@ class _IpCameraDialogState extends State<IpCameraDialog> {
                   hintText: '192.168.x.x',
                   border: OutlineInputBorder(),
                 ),
-                keyboardType: TextInputType.text,
+                keyboardType: TextInputType.numberWithOptions(decimal: true),
                 onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 20),
@@ -151,7 +151,7 @@ class _IpCameraDialogState extends State<IpCameraDialog> {
                 children: [
                   Text(
                     'QR code: ${_qrCode != null ? "Successfully scanned" : "not scanned!"}',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
                   ),
