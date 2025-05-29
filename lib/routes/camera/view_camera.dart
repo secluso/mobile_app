@@ -13,6 +13,7 @@ import 'package:privastead_flutter/database/entities.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
 import 'dart:io';
+import 'package:intl/intl.dart';
 
 _CameraViewPageState? globalCameraViewPageState;
 
@@ -211,6 +212,22 @@ class _CameraViewPageState extends State<CameraViewPage> {
         'pets': Icons.pets,
       }[d.toLowerCase()];
 
+  String repackageVideoTitle(String videoFileName) {
+    if (videoFileName.startsWith("video_") && videoFileName.endsWith(".mp4")) {
+      var timeOf = int.parse(
+        videoFileName.replaceAll("video_", "").replaceAll(".mp4", ""),
+      );
+      final date =
+          DateTime.fromMillisecondsSinceEpoch(
+            timeOf * 1000,
+            isUtc: true,
+          ).toLocal();
+      return DateFormat('yyyy-MM-dd HH:mm:ss').format(date);
+    }
+
+    return videoFileName;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Provider.of<ThemeProvider>(context);
@@ -326,7 +343,7 @@ class _CameraViewPageState extends State<CameraViewPage> {
                           },
                         ),
                         title: Text(
-                          v.video,
+                          repackageVideoTitle(v.video),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -362,6 +379,9 @@ class _CameraViewPageState extends State<CameraViewPage> {
                                     (_) => VideoViewPage(
                                       cameraName: v.camera,
                                       videoTitle: v.video,
+                                      visibleVideoTitle: repackageVideoTitle(
+                                        v.video,
+                                      ),
                                       detections:
                                           v.motion && v.received
                                               ? ['Human']

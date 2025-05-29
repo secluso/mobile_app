@@ -178,8 +178,12 @@ class _LivestreamPageState extends State<LivestreamPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Livestream - ${widget.cameraName}'),
+        title: Text(
+          'Livestream - ${widget.cameraName}',
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: const Color.fromARGB(255, 27, 114, 60),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Center(
         child:

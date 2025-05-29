@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 import 'dart:io';
 import 'dart:ui';
 import 'dart:isolate';
+import 'pending_processor.dart';
 
 // We have another instance of this due to Android requiring another RustLib for our DownloadTasks. This isn't necessary for iOS. We can only have one instance per process, thus needing this.
 class RustBridgeHelper {
@@ -46,6 +47,7 @@ Future<bool> doWork(String cameraName) async {
   bool result = await retrieveVideos(cameraName);
 
   await prefs.setBool(PrefKeys.downloadingMotionVideos, false);
+  QueueProcessor.instance.signalNewFile();
 
   return result;
 }
