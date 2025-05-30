@@ -16,6 +16,9 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.LinkedBlockingQueue
+import java.io.IOException
+import java.net.InetSocketAddress
+import java.net.Socket
 
 class MainActivity : FlutterActivity() {
 
@@ -28,6 +31,7 @@ class MainActivity : FlutterActivity() {
     }
 
     private val CHANNEL_PREFIX = "privastead.com/android/"
+    var activeNetworkCallback: ConnectivityManager.NetworkCallback? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -63,6 +67,8 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
+        var connectedNetwork: Network? = null
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL_PREFIX + "wifi")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -86,22 +92,31 @@ class MainActivity : FlutterActivity() {
                             networkRequestBuilder.addTransportType(NetworkCapabilities.TRANSPORT_WIFI);
                             networkRequestBuilder.setNetworkSpecifier(wifiNetworkSpecifier);
 
+                            var resultReturned = false
                             val networkRequest = networkRequestBuilder.build();
                             val cm = applicationContext
                                 .getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager;
                             val callback = object : ConnectivityManager.NetworkCallback() {
                                 override fun onAvailable(network: Network) {
                                     cm.bindProcessToNetwork(network);
-                                    result.success("connected");
-                                    cm.unregisterNetworkCallback(this);
+                                    if(!resultReturned) {
+                                        connectedNetwork = network;
+                                        resultReturned = true
+                                        result.success("connected");
+                                    }
                                 }
 
                                 override fun onUnavailable() {
-                                    result.success("failed");
+                                    connectedNetwork = null;
+                                    if(!resultReturned) {
+                                        resultReturned = true
+                                        result.success("failed");
+                                    }
                                     cm.unregisterNetworkCallback(this);
                                 }
                             }
                             cm.requestNetwork(networkRequest, callback);
+                            activeNetworkCallback = callback;
                         } else { // Below version 10
                             Log.e("WIFI", "Using old version of SSID connect");
                             val wifiMgr =
@@ -113,6 +128,29 @@ class MainActivity : FlutterActivity() {
                             val netId = wifiMgr.addNetwork(config)
                             val success = wifiMgr.enableNetwork(netId, true)
                             result.success(if (success) "connected" else "failed")
+                        }
+                    }
+
+                    "disconnectFromWifi" -> {
+                        Log.e("WIFI", "Attempting disconnect");
+                        if(connectedNetwork != null) {
+                            val cm = applicationContext
+                                .getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager;
+
+                            // Remove forced connection
+                            cm.bindProcessToNetwork(null);
+
+                            // Deregister the callback
+                            activeNetworkCallback?.let { callback ->
+                                    cm.unregisterNetworkCallback(callback)
+                                    activeNetworkCallback = null
+                                    connectedNetwork = null
+                                    result.success("disconnected")
+                                } ?: run {
+                                    result.success("no_active_connection")
+                                }
+                        } else {
+                            result.success("no_active_connection");
                         }
                     }
 

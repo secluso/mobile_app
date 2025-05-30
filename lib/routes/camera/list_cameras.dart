@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:privastead_flutter/keys.dart';
 import 'view_camera.dart';
 import 'new/show_new_camera_options.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:privastead_flutter/database/entities.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
 import '../../objectbox.g.dart';
@@ -11,6 +9,14 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'dart:async';
+
+class CameraListNotifier {
+  static final CameraListNotifier instance = CameraListNotifier._();
+
+  VoidCallback? refreshCallback;
+
+  CameraListNotifier._();
+}
 
 class CamerasPage extends StatefulWidget {
   const CamerasPage({Key? key}) : super(key: key);
@@ -275,6 +281,7 @@ class CamerasPageState extends State<CamerasPage> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadCamerasFromDatabase();
+    CameraListNotifier.instance.refreshCallback = _loadCamerasFromDatabase;
 
     _pollingTimer = Timer.periodic(
       const Duration(seconds: 5),
@@ -595,39 +602,13 @@ class CamerasPageState extends State<CamerasPage> with WidgetsBindingObserver {
                       ElevatedButton(
                         onPressed: () async {
                           // Same action as the FAB to add a new camera
-                          final scannedResult = await Navigator.push(
+                          await Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder:
                                   (context) => const ShowNewCameraOptions(),
                             ),
                           );
-                          if (scannedResult != null) {
-                            // Now we modify the list of our aggregated camera names... cameraSet
-                            var sharedPreferences =
-                                await SharedPreferences.getInstance();
-                            var existingCameraSet =
-                                sharedPreferences.getStringList(
-                                  PrefKeys.cameraSet,
-                                ) ??
-                                [];
-
-                            existingCameraSet.add(scannedResult["name"]);
-                            await sharedPreferences.setStringList(
-                              PrefKeys.cameraSet,
-                              existingCameraSet,
-                            ); //Update it to include the most recent one
-
-                            // TODO: Why was the existing Android code storing a camera set when we have a database?
-                            final box =
-                                AppStores.instance.cameraStore.box<Camera>();
-
-                            var camera = Camera(scannedResult["name"]);
-                            box.put(camera);
-                            await _loadCamerasFromDatabase(); // Reload UI list from DB
-                          } else {
-                            // We failed...
-                          }
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.white,
@@ -671,9 +652,12 @@ class CamerasPageState extends State<CamerasPage> with WidgetsBindingObserver {
       // Floating Action Button for pairing a new camera via QR
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
+          // Same action as the FAB to add a new camera
           await Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => ShowNewCameraOptions()),
+            MaterialPageRoute(
+              builder: (context) => const ShowNewCameraOptions(),
+            ),
           );
         },
         backgroundColor: const Color.fromARGB(255, 27, 114, 60),

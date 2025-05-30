@@ -38,6 +38,9 @@ PODS:
     - Flutter
   - flutter_local_notifications (0.0.1):
     - Flutter
+  - gal (1.0.0):
+    - Flutter
+    - FlutterMacOS
   - GoogleDataTransport (10.1.0):
     - nanopb (~> 3.30910.0)
     - PromisesObjC (~> 2.4)
@@ -76,8 +79,6 @@ PODS:
     - GoogleUtilities/Logger
     - GoogleUtilities/Privacy
   - GTMSessionFetcher/Core (3.5.0)
-  - image_gallery_saver (2.0.2):
-    - Flutter
   - integration_test (0.0.1):
     - Flutter
   - MLImage (1.0.0-beta6)
@@ -141,7 +142,7 @@ DEPENDENCIES:
   - Flutter (from `Flutter`)
   - flutter_icmp_ping (from `.symlinks/plugins/flutter_icmp_ping/ios`)
   - flutter_local_notifications (from `.symlinks/plugins/flutter_local_notifications/ios`)
-  - image_gallery_saver (from `.symlinks/plugins/image_gallery_saver/ios`)
+  - gal (from `.symlinks/plugins/gal/darwin`)
   - integration_test (from `.symlinks/plugins/integration_test/ios`)
   - mobile_scanner (from `.symlinks/plugins/mobile_scanner/ios`)
   - network_info_plus (from `.symlinks/plugins/network_info_plus/ios`)
@@ -189,8 +190,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/flutter_icmp_ping/ios"
   flutter_local_notifications:
     :path: ".symlinks/plugins/flutter_local_notifications/ios"
-  image_gallery_saver:
-    :path: ".symlinks/plugins/image_gallery_saver/ios"
+  gal:
+    :path: ".symlinks/plugins/gal/darwin"
   integration_test:
     :path: ".symlinks/plugins/integration_test/ios"
   mobile_scanner:
@@ -230,12 +231,12 @@ SPEC CHECKSUMS:
   Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
   flutter_icmp_ping: 47c1df3440c18ddd39fc457e607bb3b42d4a339f
   flutter_local_notifications: a5a732f069baa862e728d839dd2ebb904737effb
+  gal: baecd024ebfd13c441269ca7404792a7152fde89
   GoogleDataTransport: aae35b7ea0c09004c3797d53c8c41f66f219d6a7
   GoogleMLKit: eff9e23ec1d90ea4157a1ee2e32a4f610c5b3318
   GoogleToolboxForMac: d1a2cbf009c453f4d6ded37c105e2f67a32206d8
   GoogleUtilities: 26a3abef001b6533cf678d3eb38fd3f614b7872d
   GTMSessionFetcher: 5aea5ba6bd522a239e236100971f10cb71b96ab6
-  image_gallery_saver: 14711d79da40581063e8842a11acf1969d781ed7
   integration_test: 4a889634ef21a45d28d50d622cf412dc6d9f586e
   MLImage: 0ad1c5f50edd027672d8b26b0fee78a8b4a0fc56
   MLKitBarcodeScanning: 0a3064da0a7f49ac24ceb3cb46a5bc67496facd2

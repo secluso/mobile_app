@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:privastead_flutter/src/rust/api.dart';
 import 'qr_scan.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_icmp_ping/flutter_icmp_ping.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:privastead_flutter/keys.dart';
 import 'dart:io' show Platform;
+import 'package:permission_handler/permission_handler.dart';
 
 /// Popup: User connects to camera's Wi-Fi hotspot.
 /// TODO: This isn't setup yet for Android.
@@ -57,6 +58,34 @@ class _ProprietaryCameraConnectDialogState
           ? MethodChannel("privastead.com/wifi")
           : MethodChannel("privastead.com/android/wifi");
 
+  Future<void> requestPermissions() async {
+    await Permission.locationWhenInUse
+        .onDeniedCallback(() {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Unable to save due to denied access to location'),
+              backgroundColor: Colors.red[700],
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        })
+        .onGrantedCallback(() async {
+          print("Granted permission to location");
+        })
+        .onPermanentlyDeniedCallback(() {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Unable to pair due to permanently denied access to location',
+              ),
+              backgroundColor: Colors.red[700],
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        })
+        .request();
+  }
+
   Future<void> _connectToCamera() async {
     print("Connecting to wifi");
     setState(() {
@@ -84,31 +113,21 @@ class _ProprietaryCameraConnectDialogState
         // Do an additional ping to the camera to ensure connectivity.
         // We expect the same IP for all Raspberry Pi Cameras
         try {
-          Ping ping = Ping(
-            PrefKeys.proprietaryCameraIp,
-            count: 4,
-            timeout: 5,
-            interval: 1,
-            ipv6: false,
-            ttl: 64,
+          requestPermissions();
+
+          bool connected = await pingProprietaryDevice(
+            cameraIp: PrefKeys.proprietaryCameraIp,
           );
-          ping.stream.listen((test) {
-            print(test);
-            print(test.error);
-            if (test.summary != null && test.error != null && !_isConnected) {
-              print("Atp!");
-              setState(() {
-                _connectivityError = true;
-              });
-            } else if (test.summary == null &&
-                test.error == null &&
-                !_isConnected) {
-              setState(() {
-                _isConnected = true;
-                _connectivityError = false;
-              });
-            }
-          });
+          if (!connected) {
+            setState(() {
+              _connectivityError = true;
+            });
+          } else {
+            setState(() {
+              _connectivityError = false;
+              _isConnected = true;
+            });
+          }
         } catch (e) {
           print('error $e');
         }

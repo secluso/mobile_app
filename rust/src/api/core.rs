@@ -7,6 +7,8 @@ use std::net::SocketAddr;
 use std::net::TcpStream;
 use std::str::FromStr;
 
+use log::info;
+
 use privastead_client_lib::pairing;
 use privastead_client_lib::user::{Contact, KeyPackages, User};
 use privastead_client_lib::video_net_info::{VideoNetInfo, VIDEONETINFO_SANITY};
@@ -236,6 +238,7 @@ pub fn add_camera(
     wifi_ssid: String,
     wifi_password: String,
 ) -> bool {
+    println!("Rust: add_camera method triggered");
     if clients_reg.is_none() {
         println!("Error: clients not initialized!");
         return false;
@@ -382,7 +385,7 @@ pub fn add_camera(
             wifi_ssid,
             wifi_password,
         ) {
-            println!("Error: {e}");
+            info!("Error: {e}");
             return false;
         }
     }
@@ -396,7 +399,7 @@ pub fn initialize(
     file_dir: String,
     first_time: bool,
 ) -> io::Result<bool> {
-    println!("Initialize start");
+    info!("Initialize start");
     *clients = None;
 
     println!("Before get_app_names");

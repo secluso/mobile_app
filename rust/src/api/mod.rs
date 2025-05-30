@@ -7,6 +7,10 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use log::info;
 
+use std::net::SocketAddr;
+use std::net::TcpStream;
+use std::str::FromStr;
+
 static CLIENTS: Mutex<Option<HashMap<String, Mutex<Option<Box<Clients>>>>>> = Mutex::new(None);
 
 //good
@@ -134,6 +138,28 @@ pub fn init_app() {
         }
     }
 }
+
+
+#[flutter_rust_bridge::frb]
+pub fn ping_proprietary_device(camera_ip: String) -> bool {
+    info!("Pinging proprietary device");
+    let addr = match SocketAddr::from_str(&(camera_ip + ":12348")) {
+        Ok(a) => a,
+        Err(e) => {
+            info!("Error: invalid IP address: {e}");
+            return false;
+        }
+    };
+
+    match TcpStream::connect(&addr) {
+        Ok(_) => true,
+        Err(e) => {
+            info!("Error: {e}");
+            false
+        }
+    }
+}
+
 
 #[flutter_rust_bridge::frb]
 pub fn decrypt_fcm_timestamp(_camera_name: String, data: Vec<u8>) -> String {
