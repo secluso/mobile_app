@@ -168,7 +168,8 @@ class HttpClientService {
     }
   }
 
-  /// GET /livestream/<group>/<chunkNumber>
+  /// GET /livestream/<group>/<chunkNumber> then deletes the file
+  /// using /<group>/<chunkNumber>
   Future<Result<Uint8List>> livestreamRetrieve({
     required String cameraName,
     required int chunkNumber,
@@ -197,7 +198,54 @@ class HttpClientService {
         );
       }
 
+      // Delete action
+      final delUrl = Uri.parse(
+        'http://$serverIp:8080/$group/$chunkNumber',
+      );
+      final delResponse = await http.delete(delUrl, headers: headers);
+      if (delResponse.statusCode != 200) {
+        print(
+          "Failed to delete video from server: ${delResponse.statusCode} ${delResponse.reasonPhrase} ",
+        );
+        return Result.failure(
+          Exception(
+            'Failed to delete video from server: ${delResponse.statusCode} ${delResponse.reasonPhrase}',
+          ),
+        );
+      }
+
       return Result.success(response.bodyBytes);
+    } catch (e) {
+      return Result.failure(Exception(e.toString()));
+    }
+  }
+
+  /// POST /livestream_end/<group>
+  Future<Result<void>> livestreamEnd(String cameraName) async {
+    try {
+      final serverIp = await _pref(PrefKeys.savedIp);
+      final username = await _pref(PrefKeys.serverUsername);
+      final password = await _pref(PrefKeys.serverPassword);
+
+      if ([serverIp, username, password].contains(null)) {
+        return Result.failure(Exception('Missing server credentials'));
+      }
+
+      final group = await _livestreamGroupName(cameraName);
+      print("Group for camera in livestream start: $group");
+      final url = Uri.parse('http://$serverIp:8080/livestream_end/$group');
+      final headers = await _basicAuthHeaders(username!, password!);
+
+      final response = await http.post(url, headers: headers);
+      if (response.statusCode != 200) {
+        return Result.failure(
+          Exception(
+            'Failed to send data: ${response.statusCode} ${response.reasonPhrase}',
+          ),
+        );
+      }
+
+      return Result.success();
     } catch (e) {
       return Result.failure(Exception(e.toString()));
     }

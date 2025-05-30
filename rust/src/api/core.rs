@@ -619,6 +619,7 @@ pub fn get_livestream_group_name(
 pub fn livestream_decrypt(
     clients: &mut Option<Box<Clients>>,
     enc_data: Vec<u8>,
+    expected_chunk_number: u64,
 ) -> io::Result<Vec<u8>> {
     if clients.is_none() {
         return Err(io::Error::new(
@@ -646,8 +647,6 @@ pub fn livestream_decrypt(
         ));
     }
 
-    // FIXME: add the check
-    /*
     let chunk_number = u64::from_be_bytes(dec_data[..8].try_into().unwrap());
     if chunk_number != expected_chunk_number {
         return Err(io::Error::new(
@@ -655,14 +654,13 @@ pub fn livestream_decrypt(
             format!("Error: invalid chunk number!"),
         ));
     }
-    */
 
     Ok(dec_data[8..].to_vec())
 }
 
 pub fn livestream_update(
     clients: &mut Option<Box<Clients>>,
-    commit_msg: Vec<u8>,
+    updates_msg: Vec<u8>,
 ) -> io::Result<()> {
     if clients.is_none() {
         return Err(io::Error::new(
@@ -671,11 +669,22 @@ pub fn livestream_update(
         ));
     }
 
-    let _ = clients
-        .as_mut()
-        .unwrap()
-        .client_livestream
-        .decrypt(commit_msg, false)?;
+    let update_commit_msgs: Vec<Vec<u8>> = bincode::deserialize(&updates_msg)
+        .map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Error: deserialization of updates_msg failed! - {e}"),
+            )
+        })?;
+
+    for commit_msg in update_commit_msgs {
+        let _ = clients
+            .as_mut()
+            .unwrap()
+            .client_livestream
+            .decrypt(commit_msg, false)?;
+    }
+
     clients
         .as_mut()
         .unwrap()

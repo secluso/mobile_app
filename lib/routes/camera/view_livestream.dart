@@ -93,7 +93,10 @@ class _LivestreamPageState extends State<LivestreamPage> {
             msg: bytes,
           );
 
-          return updated;
+          if (!updated) {
+            _fail('Could not apply commit message');
+          } 
+          return true;
         },
         (err) async {
           debugPrint('[LS] commit attempt $attempt error: $err');
@@ -129,7 +132,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
           final dec = await livestreamDecryptApi(
             cameraName: widget.cameraName,
             encData: enc,
-            expectedChunkNumber: chunk,
+            expectedChunkNumber: BigInt.from(chunk),
           );
           if (chunk == 1) {
             final first16 = dec
@@ -160,6 +163,11 @@ class _LivestreamPageState extends State<LivestreamPage> {
     if (id != null) {
       await ByteStreamPlayer.push(id, Uint8List(0)); // EOF
       await ByteStreamPlayer.finish(id);
+
+      await HttpClientService.instance.livestreamEnd(
+        widget.cameraName,
+      );
+
       debugPrint('[LS] finishNativeStream complete');
 
       // TODO: Save the video to the database

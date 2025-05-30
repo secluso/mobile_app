@@ -122,7 +122,7 @@ Future<bool> livestreamUpdateApi({
 Future<Uint8List> livestreamDecryptApi({
   required String cameraName,
   required Uint8List encData,
-  required int expectedChunkNumber,
+  required BigInt expectedChunkNumber,
 }) async {
   final SharedPreferences prefs = await SharedPreferences.getInstance();
   final String dir =
@@ -140,5 +140,5 @@ Future<Uint8List> livestreamDecryptApi({
 
   if (!success) return Uint8List(0);
 
-  return await livestreamDecrypt(cameraName: cameraName, data: encData);
+  return await livestreamDecrypt(cameraName: cameraName, data: encData, expectedChunkNumber: expectedChunkNumber);
 }

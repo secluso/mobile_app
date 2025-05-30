@@ -208,7 +208,7 @@ pub fn livestream_update(_camera_name: String, msg: Vec<u8>) -> bool {
 }
 
 #[flutter_rust_bridge::frb]
-pub fn livestream_decrypt(_camera_name: String, data: Vec<u8>) -> Vec<u8> {
+pub fn livestream_decrypt(_camera_name: String, data: Vec<u8>, expected_chunk_number: u64) -> Vec<u8> {
     let mut clients_map = CLIENTS.lock().unwrap();
     if let Some(map) = clients_map.as_mut() {
         let client_entry = map
@@ -216,7 +216,7 @@ pub fn livestream_decrypt(_camera_name: String, data: Vec<u8>) -> Vec<u8> {
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        let ret = match crate::api::core::livestream_decrypt(&mut *client_guard, data) {
+        let ret = match crate::api::core::livestream_decrypt(&mut *client_guard, data, expected_chunk_number) {
             Ok(dec_data) => dec_data,
             Err(e) => {
                 println!("Error: {}", e);
