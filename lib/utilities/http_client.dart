@@ -8,6 +8,7 @@ import 'package:privastead_flutter/keys.dart';
 import 'package:privastead_flutter/src/rust/api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'result.dart';
+import 'logger.dart';
 
 class HttpClientService {
   HttpClientService._();
@@ -55,19 +56,19 @@ class HttpClientService {
       final password = await _pref(PrefKeys.serverPassword);
 
       if ([serverIp, username, password].contains(null)) {
-        print("Failed due to missing credentials");
+        Log.d("Failed due to missing credentials");
         return Result.failure(Exception('Missing server credentials'));
       }
 
       final motionGroup = await _motionGroupName(cameraName);
-      print("Motion Group: $motionGroup");
+      Log.d("Motion Group: $motionGroup");
       final url = Uri.parse('http://$serverIp:8080/$motionGroup/$epoch');
       final headers = await _basicAuthHeaders(username!, password!);
 
       // Video download action
       final response = await http.get(url, headers: headers);
       if (response.statusCode != 200) {
-        print(
+        Log.d(
           "Failed to download file: ${response.statusCode} ${response.reasonPhrase}",
         );
         return Result.failure(
@@ -84,7 +85,7 @@ class HttpClientService {
       // Delete action
       final delResponse = await http.delete(url, headers: headers);
       if (delResponse.statusCode != 200) {
-        print(
+        Log.d(
           "Failed to delete video from server: ${delResponse.statusCode} ${delResponse.reasonPhrase} ",
         );
         return Result.failure(
@@ -94,11 +95,11 @@ class HttpClientService {
         );
       }
 
-      print("Success downloading");
+      Log.d("Success downloading");
 
       return Result.success(file);
     } catch (e) {
-      print(e.toString());
+      Log.e('Download video error: $e');
       return Result.failure(Exception(e.toString()));
     }
   }
@@ -110,7 +111,7 @@ class HttpClientService {
       final username = await _pref(PrefKeys.serverUsername);
       final password = await _pref(PrefKeys.serverPassword);
 
-      print("Username = $username, Pass = $password");
+      Log.d("Username = $username, Pass = $password");
 
       if ([serverIp, username, password].contains(null)) {
         return Result.failure(Exception('Missing server credentials'));
@@ -128,7 +129,7 @@ class HttpClientService {
           ),
         );
       } else {
-        print("Successfully sent data");
+        Log.d("Successfully sent data");
       }
 
       return Result.success();
@@ -149,7 +150,7 @@ class HttpClientService {
       }
 
       final group = await _livestreamGroupName(cameraName);
-      print("Group for camera in livestream start: $group");
+      Log.d("Group for camera: $group");
       final url = Uri.parse('http://$serverIp:8080/livestream/$group');
       final headers = await _basicAuthHeaders(username!, password!);
 
@@ -199,12 +200,10 @@ class HttpClientService {
       }
 
       // Delete action
-      final delUrl = Uri.parse(
-        'http://$serverIp:8080/$group/$chunkNumber',
-      );
+      final delUrl = Uri.parse('http://$serverIp:8080/$group/$chunkNumber');
       final delResponse = await http.delete(delUrl, headers: headers);
       if (delResponse.statusCode != 200) {
-        print(
+        Log.d(
           "Failed to delete video from server: ${delResponse.statusCode} ${delResponse.reasonPhrase} ",
         );
         return Result.failure(
@@ -232,7 +231,7 @@ class HttpClientService {
       }
 
       final group = await _livestreamGroupName(cameraName);
-      print("Group for camera in livestream start: $group");
+      Log.d("Group for camera in livestream start: $group");
       final url = Uri.parse('http://$serverIp:8080/livestream_end/$group');
       final headers = await _basicAuthHeaders(username!, password!);
 

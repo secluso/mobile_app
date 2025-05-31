@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:privastead_flutter/src/rust/api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:privastead_flutter/utilities/logger.dart';
 import 'package:privastead_flutter/keys.dart';
 import 'qr_scan.dart';
 import 'package:flutter/services.dart';
@@ -45,12 +46,11 @@ class _IpCameraDialogState extends State<IpCameraDialog> {
   Future<void> _onScanQrCode() async {
     final result = await QrScanDialog.showQrScanDialog(context);
     if (result != null) {
-      print('Scanned QR code: $result');
       setState(() {
         _qrCode = result;
       });
     } else {
-      print('QR scan cancelled');
+      Log.d('QR scan cancelled');
     }
   }
 
@@ -74,9 +74,9 @@ class _IpCameraDialogState extends State<IpCameraDialog> {
         if (await camDir.exists()) {
           try {
             await camDir.delete(recursive: true);
-            print('Deleted camera folder: ${camDir.path}');
+            Log.d('onAddCamera() - Deleted camera folder: ${camDir.path}');
           } catch (e) {
-            print('Error deleting folder: $e');
+            Log.e('onAddCamera() - Error deleting folder: $e');
           }
         }
       }
@@ -89,11 +89,9 @@ class _IpCameraDialogState extends State<IpCameraDialog> {
 
         result["qrCode"] = _qrCode ?? 'not scanned';
         result["cameraIp"] = cameraIp;
-        print(result);
 
         Navigator.of(context).pop<Map<String, Object>>(result);
       } else {
-        print("Error: Set already contains camera name.");
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Please use a unique name for the camera")),
         );

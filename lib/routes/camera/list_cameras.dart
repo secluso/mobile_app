@@ -4,6 +4,7 @@ import 'view_camera.dart';
 import 'new/show_new_camera_options.dart';
 import 'package:privastead_flutter/database/entities.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
+import 'package:privastead_flutter/utilities/logger.dart';
 import 'package:privastead_flutter/keys.dart';
 import '../../objectbox.g.dart';
 import 'package:flutter/services.dart';
@@ -344,9 +345,9 @@ class CamerasPageState extends State<CamerasPage> with WidgetsBindingObserver {
     if (await camDir.exists()) {
       try {
         await camDir.delete(recursive: true);
-        print('Deleted camera folder: ${camDir.path}');
+        Log.d('Deleted camera folder: ${camDir.path}');
       } catch (e) {
-        print('Error deleting folder: $e');
+        Log.e('Error deleting folder: $e');
       }
     }
 
@@ -356,9 +357,9 @@ class CamerasPageState extends State<CamerasPage> with WidgetsBindingObserver {
     if (await camDirPending.exists()) {
       try {
         await camDirPending.delete(recursive: true);
-        print('Deleted camera waiting folder: ${camDirPending.path}');
+        Log.d('Deleted camera waiting folder: ${camDirPending.path}');
       } catch (e) {
-        print('Error deleting folder: $e');
+        Log.e('Error deleting folder: $e');
       }
     }
 
@@ -446,7 +447,7 @@ class CamerasPageState extends State<CamerasPage> with WidgetsBindingObserver {
         _thumbCache[cameraName] = bytes; // save even null
         return bytes;
       } on Exception catch (e) {
-        debugPrint('Thumbnail error for $cameraName: $e');
+        Log.e('Error - $cameraName: $e');
         _thumbCache[cameraName] = null;
         return null;
       }

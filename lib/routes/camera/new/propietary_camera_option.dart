@@ -1,14 +1,15 @@
+import 'package:privastead_flutter/src/rust/api.dart';
+import 'package:privastead_flutter/utilities/camera_util.dart';
+import 'package:privastead_flutter/utilities/logger.dart';
+import 'proprietary_camera_waiting.dart';
+import 'package:privastead_flutter/keys.dart';
+
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:privastead_flutter/src/rust/api.dart';
 import 'qr_scan.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:privastead_flutter/keys.dart';
 import 'dart:io' show Platform, Directory;
-import 'dart:typed_data';
-import 'package:privastead_flutter/utilities/camera_util.dart';
-import 'proprietary_camera_waiting.dart';
 import 'package:path/path.dart' as p;
 
 /// Popup: User connects to camera's Wi-Fi hotspot.
@@ -62,7 +63,7 @@ class _ProprietaryCameraConnectDialogState
           : MethodChannel("privastead.com/android/wifi");
 
   Future<void> _connectToCamera() async {
-    print("Connecting to wifi");
+    Log.d("Entered method");
     setState(() {
       _connectivityError = false;
       _isConnecting = true;
@@ -72,7 +73,7 @@ class _ProprietaryCameraConnectDialogState
         'connectToWifi',
         <String, dynamic>{'ssid': "Privastead", 'password': '12345678'},
       );
-      print("First result from Wifi Connect Attempt: $result");
+      Log.d("First result from Wifi Connect Attempt: $result");
 
       if (result == "connected") {
         if (Platform.isIOS) {
@@ -81,7 +82,7 @@ class _ProprietaryCameraConnectDialogState
             'connectToWifi',
             <String, dynamic>{'ssid': "Privastead", 'password': '12345678'},
           );
-          print("Secondary result from Wifi Connect Attempt: $result");
+          Log.d("iOS secondary result from Wifi Connect Attempt: $result");
         }
 
         // Do an additional ping to the camera to ensure connectivity.
@@ -103,7 +104,7 @@ class _ProprietaryCameraConnectDialogState
             });
           }
         } catch (e) {
-          print('error $e');
+          Log.e(e);
           if (!_isConnected) {
             setState(() {
               _connectivityError = true;
@@ -112,7 +113,6 @@ class _ProprietaryCameraConnectDialogState
           }
         }
       } else {
-        print("Other case!");
         if (!_isConnected) {
           setState(() {
             _connectivityError = true;
@@ -121,7 +121,7 @@ class _ProprietaryCameraConnectDialogState
         }
       }
     } on PlatformException catch (e) {
-      print("Got platform exception.");
+      Log.e("Platform exception - $e");
       if (!_isConnected) {
         setState(() {
           _connectivityError = true;
@@ -271,12 +271,11 @@ class _ProprietaryCameraInfoDialogState
   Future<void> _qrScan() async {
     final result = await QrScanDialog.showQrScanDialog(context);
     if (result != null) {
-      print('User scanned: $result');
       setState(() {
         _qrCode = result;
       });
     } else {
-      print('User canceled scanning.');
+      Log.d('qrScan() - User canceled scanning.');
     }
   }
 
@@ -298,15 +297,14 @@ class _ProprietaryCameraInfoDialogState
       if (await camDir.exists()) {
         try {
           await camDir.delete(recursive: true);
-          print('Deleted camera folder: ${camDir.path}');
+          Log.d('Deleted camera folder: ${camDir.path}');
         } catch (e) {
-          print('Error deleting folder: $e');
+          Log.e('Error deleting folder: $e');
         }
       }
     }
 
     if (existingCameraSet.contains(cameraName.toLowerCase())) {
-      print("Error: Set already contains camera name.");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Please use a unique name for the camera")),
       );
@@ -326,12 +324,12 @@ class _ProprietaryCameraInfoDialogState
 
     res.then((t) async {
       if (Platform.isAndroid) {
-        print("Attempting to wifi disconnect");
+        Log.d("Android native - Attempting to wifi disconnect");
         final platform = MethodChannel("privastead.com/android/wifi");
         final result = await platform.invokeMethod<String>(
           'disconnectFromWifi',
         );
-        print("Result from disconnection: $result");
+        Log.d("Android native - Result from disconnection: $result");
       }
 
       // Add the camera to a temporary whitelist for FCM

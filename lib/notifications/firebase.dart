@@ -9,6 +9,7 @@ import 'package:privastead_flutter/notifications/notifications.dart';
 import 'package:privastead_flutter/notifications/scheduler.dart';
 import 'package:privastead_flutter/routes/camera/new/proprietary_camera_waiting.dart';
 import 'package:privastead_flutter/utilities/http_client.dart';
+import 'package:privastead_flutter/utilities/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../keys.dart';
 //TODO: import 'package:wakelock_plus/wakelock_plus.dart';
@@ -207,12 +208,11 @@ class PushNotificationService {
           if (decodedJson.containsKey("type")) {
             var type = decodedJson['type'];
             if (type == "wifi_success") {
-              print(
+              Log.d(
                 "Got successful wifi FCM notification for camera $cameraName, $response",
               );
 
               var timestamp = decodedJson['timestamp'];
-              print("Timestamp = $timestamp");
               var date = new DateTime.fromMillisecondsSinceEpoch(timestamp);
 
               ProprietaryCameraWaitingDialog.completePairingForCamera(
@@ -220,10 +220,14 @@ class PushNotificationService {
                 date,
               );
             } else {
-              print("Error: Unknown JSON message type: $type");
+              Log.e(
+                "PushNotificationService - Error: Unknown JSON message type: $type",
+              );
             }
           } else {
-            print("Error: JSON FCM message didn't contain type key");
+            Log.e(
+              "PushNotificationService - Error: JSON FCM message didn't contain type key",
+            );
           }
         } on FormatException catch (_) {
           if (response == 'Download') {

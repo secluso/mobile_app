@@ -14,18 +14,20 @@ import 'package:privastead_flutter/database/app_stores.dart';
 import 'package:privastead_flutter/database/entities.dart';
 import 'package:privastead_flutter/notifications/pending_processor.dart';
 import 'package:privastead_flutter/database/migration_runner.dart';
+import 'package:privastead_flutter/utilities/logger.dart';
 import 'dart:ui';
 import 'dart:isolate';
 
 final ReceivePort _mainReceivePort = ReceivePort();
 
 void main() async {
-  print("Start");
+  Log.init();
+  Log.i('main() started');
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  print("After intiialize app");
+  Log.d("After intiialize app");
   await RustLib.init();
-  print("After rust lib init");
+  Log.d("After rust lib init");
   await AppStores.init();
   await runMigrations();
   await DownloadScheduler.init();
@@ -34,8 +36,8 @@ void main() async {
   QueueProcessor.instance.signalNewFile();
 
   createLogStream().listen((event) {
-    print(
-      '[${event.level}] ${event.tag}: ${event.msg} (rust_time=${event.timeMillis})',
+    Log.d(
+      'Rust Log: [${event.level}] ${event.tag}: ${event.msg} (rust_time=${event.timeMillis})',
     );
   });
 
@@ -54,7 +56,7 @@ void main() async {
 
   // Load saved dark mode state before starting the app
   bool isDarkMode = await ThemeProvider.loadThemePreference();
-  print("Loaded darkTheme value: $isDarkMode");
+  Log.d("Loaded darkTheme value: $isDarkMode");
 
   runApp(
     MultiProvider(
@@ -83,7 +85,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   Future<void> _initPrefs() async {
-    print("Initializing prefs");
+    Log.d("Initializing prefs");
     prefs = await SharedPreferences.getInstance();
     PushNotificationService.tryUploadIfNeeded(false);
   }
@@ -91,7 +93,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      print("Resuming work");
+      Log.i("App Lifecycle State set to RESUMED");
       PushNotificationService.tryUploadIfNeeded(false);
       _initAllCameras();
       QueueProcessor.instance

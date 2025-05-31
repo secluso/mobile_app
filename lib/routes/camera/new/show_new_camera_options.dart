@@ -1,11 +1,10 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:privastead_flutter/routes/camera/list_cameras.dart';
 import 'propietary_camera_option.dart';
 import 'ip_camera_option.dart';
 import 'package:privastead_flutter/utilities/camera_util.dart';
+import 'package:privastead_flutter/utilities/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:privastead_flutter/keys.dart';
 import 'package:privastead_flutter/database/entities.dart';
@@ -50,9 +49,9 @@ class ShowNewCameraOptions extends StatelessWidget {
 
   /// Navigates to IP camera setup page
   void _navigateToIPCamera(BuildContext context) async {
-    print("Before show IP camera flow");
+    Log.d("Before show IP camera flow");
     final result = await IpCameraDialog.showIpCameraPopup(context);
-    print("After (IP camera navigation start)");
+    Log.d("After (IP camera navigation start)");
     if (result != null) {
       final cameraName = result["cameraName"]! as String;
       final res = addCamera(
@@ -77,9 +76,7 @@ class ShowNewCameraOptions extends StatelessWidget {
           );
         }
       });
-      print("After IP camera flow");
-    } else {
-      print("User cancelled Proprietary camera setup");
+      Log.d("After IP camera flow");
     }
   }
 

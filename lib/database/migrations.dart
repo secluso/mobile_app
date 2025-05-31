@@ -1,3 +1,4 @@
+import 'package:privastead_flutter/utilities/logger.dart';
 import 'package:privastead_flutter/database/entities.dart';
 import 'app_stores.dart';
 
@@ -21,9 +22,9 @@ final List<Migration> migrations = [
 
     if (patched.isNotEmpty) {
       cameraBox.putMany(patched);
-      print("[Migration] Fixed ${patched.length} null unreadMessages values.");
+      Log.d("Fixed ${patched.length} null unreadMessages values.");
     } else {
-      print("[Migration] No null unreadMessages values found.");
+      Log.d("No null unreadMessages values found.");
     }
   },
 ];

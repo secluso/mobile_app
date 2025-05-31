@@ -12,6 +12,7 @@ import '../../objectbox.g.dart';
 import 'package:privastead_flutter/database/entities.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
+import 'package:privastead_flutter/utilities/logger.dart';
 import 'dart:io';
 import 'package:intl/intl.dart';
 
@@ -148,9 +149,8 @@ class _CameraViewPageState extends State<CameraViewPage> {
         if (await file.exists()) {
           try {
             await file.delete();
-            print('Deleted video file: $videoPath');
           } catch (e) {
-            print('Error deleting file $videoPath: $e');
+            Log.e('Error deleting file $videoPath: $e');
           }
         }
       }
@@ -176,7 +176,7 @@ class _CameraViewPageState extends State<CameraViewPage> {
 
   void _deleteOne(Video v, int index) async {
     if (v.received) {
-      print("Deleting video file from documents");
+      Log.d("Deleting one video file from documents");
       final dir = await getApplicationDocumentsDirectory();
       final videoPath = '${dir.path}/camera_dir_${v.camera}/${v.video}';
       final file = File(videoPath);
@@ -184,12 +184,11 @@ class _CameraViewPageState extends State<CameraViewPage> {
       if (await file.exists()) {
         try {
           await file.delete();
-          print('Deleted video file: $videoPath');
         } catch (e) {
-          print('Error deleting file: $e');
+          Log.e('Error deleting file: $e');
         }
       } else {
-        print('Video file not found: $videoPath');
+        Log.d('Video file not found: $videoPath');
       }
     }
 
@@ -417,7 +416,7 @@ class _CameraViewPageState extends State<CameraViewPage> {
   Future<Widget> _thumbPlaceholder(String cameraName, String videoFile) async {
     if (Platform.isAndroid) {
       // For android, I skipped the thumbnail generation due to replacement of this mechanism with a frame from the camera's internal sent separately going to be used in the future
-      print("Returning android placeholder");
+      Log.d("Returning android placeholder");
       return SizedBox(
         width: 80,
         height: 80,
@@ -437,8 +436,6 @@ class _CameraViewPageState extends State<CameraViewPage> {
         "/" +
         videoFile;
 
-    print("Full video path: $fullVideoPath");
-
     final file = File(fullVideoPath);
     if (!await file.exists()) {
       return Container(
@@ -449,7 +446,7 @@ class _CameraViewPageState extends State<CameraViewPage> {
       );
     }
 
-    print("[Thumbnail] Generating thumbnail... 2");
+    Log.d("[Thumbnail] Generating thumbnail... 2");
 
     var thumbnailData = null;
     try {
@@ -460,10 +457,10 @@ class _CameraViewPageState extends State<CameraViewPage> {
       );
       thumbnailData = bytes!;
     } on PlatformException catch (e) {
-      debugPrint('Thumbnail error: ${e.code} – ${e.message}');
+      Log.e('Thumbnail error: ${e.code} – ${e.message}');
     }
 
-    print("[Thumbnail] Done generating thumbnail");
+    Log.d("Done generating thumbnail");
 
     return SizedBox(
       width: 80,

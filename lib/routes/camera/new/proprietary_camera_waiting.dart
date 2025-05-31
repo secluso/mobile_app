@@ -8,6 +8,7 @@ import 'package:privastead_flutter/src/rust/api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:privastead_flutter/keys.dart';
 import 'package:privastead_flutter/routes/camera/list_cameras.dart';
+import 'package:privastead_flutter/utilities/logger.dart';
 import 'package:path/path.dart' as p;
 
 class ProprietaryCameraWaitingDialog extends StatefulWidget {
@@ -27,7 +28,7 @@ class ProprietaryCameraWaitingDialog extends StatefulWidget {
   static _ProprietaryCameraWaitingDialogState? _currentState;
 
   static void completePairingForCamera(String name, DateTime timestamp) {
-    print("Called complete pairing for camera");
+    Log.d("Called complete pairing for camera");
     final state = _currentState;
     if (state == null) return;
     final now = DateTime.now();
@@ -68,7 +69,7 @@ class _ProprietaryCameraWaitingDialogState
 
   void _onPairingConfirmed() async {
     if (!mounted || _pairingCompleted) return;
-    print("Completed pairing");
+    Log.d("Entered method");
     _pairingCompleted = true;
 
     final SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -106,9 +107,9 @@ class _ProprietaryCameraWaitingDialogState
     if (await camDir.exists()) {
       try {
         await camDir.delete(recursive: true);
-        print('Deleted camera folder: ${camDir.path}');
+        Log.d('Deleted camera folder: ${camDir.path}');
       } catch (e) {
-        print('Error deleting folder: $e');
+        Log.e('Error deleting folder: $e');
       }
     }
 

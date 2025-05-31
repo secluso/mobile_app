@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
+import 'package:privastead_flutter/utilities/logger.dart';
 
 final FlutterLocalNotificationsPlugin _notifs =
     FlutterLocalNotificationsPlugin();
@@ -65,7 +66,7 @@ Future<void> showMotionNotification({
 
   // Cross-platform wrapper
   final details = NotificationDetails(android: androidDetails, iOS: iosDetails);
-  print("Sent notification!");
+  Log.d("Sent notification!");
 
   await _notifs.show(
     DateTime.now().millisecondsSinceEpoch ~/ 1000, // unique id
@@ -84,14 +85,16 @@ Future<void> _ensureNotificationPermissions() async {
               AndroidFlutterLocalNotificationsPlugin
             >();
 
-    print("Requesting notification permissions");
+    Log.d(
+      "ensureNotificationPermissions() - Requesting notification permissions",
+    );
     // Android 13+ runtime permission
     final granted = (await androidPlugin?.areNotificationsEnabled()) ?? true;
-    print("Previously granted: $granted");
+    Log.d("ensureNotificationPermissions() - Previously granted: $granted");
     if (!granted) await androidPlugin?.requestNotificationsPermission();
     final granted_after =
         (await androidPlugin?.areNotificationsEnabled()) ?? true;
-    print("Now granted: $granted_after");
+    Log.d("ensureNotificationPermissions() - Now granted: $granted_after");
   } else if (Platform.isIOS) {
     await _notifs
         .resolvePlatformSpecificImplementation<

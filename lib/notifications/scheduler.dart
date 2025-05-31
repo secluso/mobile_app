@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:privastead_flutter/notifications/download_task.dart';
+import 'package:privastead_flutter/utilities/logger.dart';
 import 'package:workmanager/workmanager.dart';
 
 const String _bgTaskId = 'com.privastead.task'; // Matches Info.plist
@@ -10,7 +11,7 @@ const int _maxRetries = 5;
 @pragma('vm:entry-point')
 void callbackDispatcher() {
   Workmanager().executeTask((taskId, inputData) async {
-    print("Running task in background");
+    Log.d("Running task in background");
     final camera = inputData?['camera'] as String? ?? 'Unknown';
     final retry = inputData?['retry'] as int? ?? 0;
 
@@ -18,7 +19,7 @@ void callbackDispatcher() {
       final ok = await doWork(camera);
 
       if (!ok && retry < _maxRetries) {
-        print("Retrying due to failure (and < than max retries)");
+        Log.d("Retrying due to failure (and < than max retries)");
         final nextRetry = retry + 1;
         final delayMin = nextRetry * nextRetry * 15;
 
@@ -35,7 +36,7 @@ void callbackDispatcher() {
 
       return ok; // Intreprets true=success, false=retry
     } else {
-      print(
+      Log.i(
         'TODO: Incorporate special startup behavior to fetch all cameras in crash scenario.',
       );
       return true;
@@ -51,7 +52,7 @@ class DownloadScheduler {
     if (_isInit) return;
     _isInit = true;
 
-    print("DownloadScheduler: Initializing");
+    Log.d("DownloadScheduler: Initializing");
 
     await Workmanager().initialize(
       callbackDispatcher,
@@ -73,7 +74,7 @@ class DownloadScheduler {
   //TODO: Say that we put our scheduled task 15 minutes in the future. What happens if we somehow complete it before then? What if, another notif comes through, but we can't read it yet since we haven't decoded this one...
   /// Attempts now, else queues BG task.
   static Future<void> scheduleVideoDownload(String camera) async {
-    print("Scheduling video download for $camera");
+    Log.d("Scheduling video download for $camera");
     // Try right now if network policy allows
     final List<ConnectivityResult> connectivityResult =
         await (Connectivity().checkConnectivity());
@@ -81,16 +82,16 @@ class DownloadScheduler {
     final cell = connectivityResult.contains(ConnectivityResult.mobile);
     final allowCellular = true; // TODO: load from settings
 
-    print("Network statuses: wifi = $wifi, cell = $cell");
+    Log.d("Network statuses: wifi = $wifi, cell = $cell");
     // TODO: We can't do work now in Android due to the ObjectBox error where we can't double instantiate (as Android background work doesn't hold the lock that the main process does, so it can't touch the database)
     if (Platform.isIOS && (wifi || (cell && allowCellular))) {
-      print("Trying to do work now for $camera");
+      Log.d("Trying to do work now for $camera");
       final ok = await doWork(camera);
       if (ok) return; // Success in foreground
       // Else, fall through to queue
     }
 
-    print("Continuing to queue one 15 min task for $camera");
+    Log.d("Continuing to queue one 15 min task for $camera");
 
     // Enqueue ONE BG task (15-min rule on iOS)
     await Workmanager().cancelByUniqueName(_bgTaskId); // ensure none pending

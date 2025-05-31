@@ -5,6 +5,7 @@ import 'package:privastead_flutter/utilities/http_client.dart';
 import 'package:privastead_flutter/src/rust/api.dart';
 import 'package:privastead_flutter/routes/app_drawer.dart';
 import 'package:privastead_flutter/src/rust/frb_generated.dart';
+import 'package:privastead_flutter/utilities/logger.dart';
 import 'package:path/path.dart' as p;
 import 'dart:io';
 import 'dart:ui';
@@ -34,7 +35,7 @@ class RustBridgeHelper {
 }
 
 Future<bool> doWork(String cameraName) async {
-  print("DownloadTask: Starting to work");
+  Log.d("Starting to work");
 
   // TODO: Should we wait for downloadingMotionVideos to be false before continuing? Is this meant to be a spinlock?
   var prefs = await SharedPreferences.getInstance();
@@ -61,7 +62,7 @@ Future<bool> retrieveVideos(String cameraName) async {
   var successes = 0;
 
   while (true) {
-    print(
+    Log.d(
       "Trying to download video for epoch $epoch with $cameraName and encVideo$epoch",
     );
     var result = await HttpClientService.instance.downloadVideo(
@@ -71,21 +72,19 @@ Future<bool> retrieveVideos(String cameraName) async {
     );
 
     if (result.isSuccess) {
-      print("Success!");
+      Log.d("Success!");
       var file = result.value!;
-      print(file);
-      print(file.path);
       var decFileName = await decryptVideo(
         cameraName: cameraName,
         encFilename: file.path,
       );
-      print("Dec file name = $decFileName");
+      Log.d("Dec file name = $decFileName");
 
       if (decFileName != "Error") {
         await file
             .delete(); // TODO: Should we delete it if there's an error..? If we do, we need to skip an epoch (which would require returning true or something custom perhaps)
 
-        print("Received 100%");
+        Log.d("Received 100%");
 
         final baseDir = await getApplicationDocumentsDirectory();
 
@@ -121,7 +120,7 @@ Future<bool> retrieveVideos(String cameraName) async {
 
       epoch += 1;
     } else {
-      print("Failed here");
+      Log.e("Failed here");
       // We keep trying until hitting an error. Allows us to catch up on epochs.
       break;
     }

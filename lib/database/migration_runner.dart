@@ -1,6 +1,7 @@
 import 'app_stores.dart';
 import 'migrations.dart';
 import 'entities.dart';
+import 'package:privastead_flutter/utilities/logger.dart';
 
 Future<void> runMigrations() async {
   final metaBox = AppStores.instance.cameraStore.box<Meta>();
@@ -10,7 +11,7 @@ Future<void> runMigrations() async {
   if (metas.length == 0) {
     meta = Meta(dbVersion: 0);
     metaBox.put(meta);
-    print("Migrations: Assuming legacy user. Performing all migrations");
+    Log.d("Assuming legacy user. Performing all migrations");
   } else {
     meta = metas.first;
   }
@@ -18,16 +19,16 @@ Future<void> runMigrations() async {
   final currentVersion = meta.dbVersion;
   final latestVersion = migrations.length;
   for (int i = currentVersion; i < latestVersion; i++) {
-    print("[Migration] Applying migration ${i + 1}...");
+    Log.d("Applying migration ${i + 1}...");
     await migrations[i]();
     meta.dbVersion = i + 1;
     metaBox.put(meta);
-    print("[Migration] Updated DB version to ${meta.dbVersion}");
+    Log.d("Updated DB version to ${meta.dbVersion}");
   }
 
   if (currentVersion == latestVersion) {
-    print("[Migration] Already up to date. No migrations needed.");
+    Log.d("Already up to date. No migrations needed.");
   } else {
-    print("[Migration] Migrations complete.");
+    Log.d("Migrations complete.");
   }
 }

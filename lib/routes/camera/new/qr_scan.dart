@@ -47,7 +47,6 @@ class _QrScanDialogState extends State<QrScanDialog> {
 
     for (final barcode in barcodes) {
       final rawBytes = barcode.rawBytes;
-      print('Fetched raw bytes from QR code: $rawBytes');
       final rawBytesLen = rawBytes?.length;
       if (rawBytes != null && rawBytes.isNotEmpty) {
         if (rawBytesLen == PrefKeys.numCameraSecretBytes) {

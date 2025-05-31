@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';
@@ -9,8 +7,9 @@ import 'package:privastead_flutter/utilities/http_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:privastead_flutter/utilities/camera_util.dart';
 import 'package:privastead_flutter/utilities/byte_player_view.dart';
+import 'package:privastead_flutter/utilities/logger.dart';
 
-//TODO: Create iOS native code for this as well
+//TODO: Create iOS native code for this
 
 class LivestreamPage extends StatefulWidget {
   final String cameraName;
@@ -40,11 +39,11 @@ class _LivestreamPageState extends State<LivestreamPage> {
   }
 
   Future<void> _startLivestream() async {
-    debugPrint('[LS] startLivestream()');
+    Log.d('Entered method');
 
     final prefs = await SharedPreferences.getInstance();
     while (prefs.getBool(PrefKeys.downloadingMotionVideos) ?? false) {
-      debugPrint('[LS] waiting for motion-video download to finish…');
+      Log.d('Waiting for motion-video download to finish…');
       await Future.delayed(const Duration(seconds: 1));
     }
 
@@ -54,11 +53,11 @@ class _LivestreamPageState extends State<LivestreamPage> {
 
     await startRes.fold(
       (_) async {
-        debugPrint('[LS] livestreamStart OK – launching native player');
+        Log.d('Launching native player');
         try {
           _streamId = await ByteStreamPlayer.createStream();
 
-          debugPrint('[LS] native queue id = $_streamId');
+          Log.d('Native queue id = $_streamId');
         } catch (e) {
           _fail('Could not start native player: $e');
           return;
@@ -71,13 +70,13 @@ class _LivestreamPageState extends State<LivestreamPage> {
         _startChunkPump();
       },
       (err) async {
-        _fail('livestreamStart failed: $err');
+        _fail('Failed: $err');
       },
     );
   }
 
   Future<bool> _retrieveAndApplyCommitMsg() async {
-    debugPrint('[LS] fetch commit msg (chunk 0)…');
+    Log.d('Fetch commit msg (chunk 0)…');
     int attempt = 0;
 
     while (true) {
@@ -95,16 +94,16 @@ class _LivestreamPageState extends State<LivestreamPage> {
 
           if (!updated) {
             _fail('Could not apply commit message');
-          } 
+          }
           return true;
         },
         (err) async {
-          debugPrint('[LS] commit attempt $attempt error: $err');
+          Log.d('Commit attempt $attempt error: $err');
           return false;
         },
       );
       if (ok) {
-        debugPrint('[LS] commit applied');
+        Log.d('Commit applied');
         return true;
       }
       if (++attempt > 5) {
@@ -117,7 +116,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
 
   // bytes to queue action
   Future<void> _startChunkPump() async {
-    debugPrint('[LS] start chunk pump');
+    Log.d('Start chunk pump');
     int chunk = 1;
     final id = _streamId!;
 
@@ -138,15 +137,15 @@ class _LivestreamPageState extends State<LivestreamPage> {
             final first16 = dec
                 .take(16)
                 .map((b) => b.toRadixString(16).padLeft(2, '0'));
-            debugPrint('[LS] first 16 bytes: $first16');
+            Log.d('First 16 bytes: $first16');
           }
 
           await ByteStreamPlayer.push(id, dec);
-          debugPrint('[LS] pushed chunk $chunk (${dec.length} B)');
+          Log.d('Pushed chunk $chunk (${dec.length} B)');
           chunk++;
         },
         (err) async {
-          debugPrint('[LS] chunk $chunk error: $err');
+          Log.d('Chunk $chunk error: $err');
           // TODO: At some point, we should stop trying to find more chunks... show user an error. Also, what if a user closes out of the page? This continues on.
         },
       );
@@ -154,7 +153,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
       await Future.delayed(const Duration(milliseconds: 300));
     }
 
-    debugPrint('[LS] pump exited');
+    Log.d('Pump exited');
   }
 
   //finish / error
@@ -164,18 +163,16 @@ class _LivestreamPageState extends State<LivestreamPage> {
       await ByteStreamPlayer.push(id, Uint8List(0)); // EOF
       await ByteStreamPlayer.finish(id);
 
-      await HttpClientService.instance.livestreamEnd(
-        widget.cameraName,
-      );
+      await HttpClientService.instance.livestreamEnd(widget.cameraName);
 
-      debugPrint('[LS] finishNativeStream complete');
+      Log.d('Completed method');
 
       // TODO: Save the video to the database
     }
   }
 
   void _fail(String msg) {
-    debugPrint('[LS] fail - $msg');
+    Log.e('Livestream fail - $msg');
     setState(() {
       hasFailed = true;
       _errMsg = msg;

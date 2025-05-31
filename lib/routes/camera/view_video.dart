@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path/path.dart' as p;
 import 'package:gal/gal.dart';
+import 'package:privastead_flutter/utilities/logger.dart';
 
 class VideoViewPage extends StatefulWidget {
   final String videoTitle;
@@ -41,7 +42,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
     final dir = await getApplicationDocumentsDirectory();
     var cam = widget.cameraName;
     _videoPath = p.join(dir.path, "camera_dir_$cam", widget.videoTitle);
-    print("found path: $_videoPath");
+    Log.d("Found path: $_videoPath");
     _controller = VideoPlayerController.file(File(_videoPath));
 
     await _controller.initialize();
@@ -57,7 +58,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
   }
 
   Future<void> _downloadVideo() async {
-    print("Requested video download");
+    Log.d("Requested video download");
     final videoFile = File(_videoPath);
     if (!await videoFile.exists()) {
       ScaffoldMessenger.of(
@@ -78,7 +79,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
             );
           })
           .onGrantedCallback(() async {
-            print("Granted permission to photos");
+            Log.d("Granted permission to photos");
 
             try {
               await Gal.putVideo(videoFile.path);

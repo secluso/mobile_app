@@ -11,6 +11,7 @@ import 'package:privastead_flutter/notifications/firebase.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
 import 'package:privastead_flutter/database/entities.dart';
 import 'package:privastead_flutter/utilities/camera_util.dart';
+import 'package:privastead_flutter/utilities/logger.dart';
 
 class ServerPage extends StatefulWidget {
   @override
@@ -51,20 +52,15 @@ class _ServerPageState extends State<ServerPage> {
       return;
     }
 
-    //TODO: Check if scanned first?
     Uint8List decodedCredentials = base64Decode(credentials!);
-    print(decodedCredentials);
-    final len = decodedCredentials.length;
-    print(len);
-
     try {
       String credentialsString = utf8.decode(decodedCredentials);
 
       // TODO: Check how this handles on failure... bad QR code
       if (credentialsString.length != PrefKeys.credentialsLength) {
         var len = credentialsString.length;
-        print(
-          "ERROR: User credentials should be 28 characters. Current is $len",
+        Log.e(
+          "Server Page Save: User credentials should be 28 characters. Current is $len",
         );
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -92,11 +88,9 @@ class _ServerPageState extends State<ServerPage> {
       await prefs.setString(PrefKeys.serverPassword, serverPassword);
       await prefs.setString('credentials', credentials!);
 
-      print("Before try upload");
-
+      Log.d("Before try upload");
       await PushNotificationService.tryUploadIfNeeded(true);
-
-      print("After try upload");
+      Log.d("After try upload");
 
       setState(() {
         hasSynced = true;
@@ -175,7 +169,6 @@ class _ServerPageState extends State<ServerPage> {
                 if (_ipController.text.isNotEmpty) {
                   setState(() {
                     credentials = base64Encode(scannedData);
-                    print(credentials);
                     serverIp = _ipController.text;
                   });
                   _isDialogOpen.value = false;
@@ -326,7 +319,7 @@ class _ServerPageState extends State<ServerPage> {
                                 if (barcodes.isNotEmpty) {
                                   for (final barcode in barcodes) {
                                     final rawBytes = barcode.rawBytes;
-                                    print(
+                                    Log.d(
                                       'Fetched raw bytes from QR code: $rawBytes',
                                     );
                                     if (rawBytes != null &&
