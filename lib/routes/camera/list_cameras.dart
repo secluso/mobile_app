@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:privastead_flutter/src/rust/api.dart';
 import 'view_camera.dart';
 import 'new/show_new_camera_options.dart';
 import 'package:privastead_flutter/database/entities.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
+import 'package:privastead_flutter/keys.dart';
 import '../../objectbox.g.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
@@ -309,8 +312,17 @@ class CamerasPageState extends State<CamerasPage> with WidgetsBindingObserver {
   }
 
   Future<void> deleteCamera(String cameraName) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await deregisterCamera(cameraName: cameraName);
+
     final cameraBox = AppStores.instance.cameraStore.box<Camera>();
     final videoBox = AppStores.instance.videoStore.box<Video>();
+
+    prefs.setBool("first_time_" + cameraName, false);
+
+    var existingCameraSet = prefs.getStringList(PrefKeys.cameraSet) ?? [];
+    existingCameraSet.remove(cameraName);
+    await prefs.setStringList(PrefKeys.cameraSet, existingCameraSet);
 
     // Remove camera from DB
     final query = cameraBox.query(Camera_.name.equals(cameraName)).build();
@@ -360,7 +372,10 @@ class CamerasPageState extends State<CamerasPage> with WidgetsBindingObserver {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Deleted "$cameraName"'),
+          content: Text(
+            'Deleted "$cameraName"',
+            style: TextStyle(color: Colors.white),
+          ),
           backgroundColor: Colors.red[700],
           behavior: SnackBarBehavior.floating,
         ),

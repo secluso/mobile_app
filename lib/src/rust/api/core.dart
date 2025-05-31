@@ -44,10 +44,10 @@ Future<String> decryptVideo({
   encryptedFilename: encryptedFilename,
 );
 
-Future<String> decryptFcmTimestamp({
+Future<String> decryptFcmMessage({
   required OptionBoxClients clients,
   required List<int> message,
-}) => RustLib.instance.api.crateApiCoreDecryptFcmTimestamp(
+}) => RustLib.instance.api.crateApiCoreDecryptFcmMessage(
   clients: clients,
   message: message,
 );

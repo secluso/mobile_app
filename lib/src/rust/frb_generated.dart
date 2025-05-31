@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.9.0';
 
   @override
-  int get rustContentHash => 320663204;
+  int get rustContentHash => 429739323;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -109,12 +109,12 @@ abstract class RustLibApi extends BaseApi {
 
   Stream<LogEntry> crateApiLoggerCreateLogStream();
 
-  Future<String> crateApiDecryptFcmTimestamp({
+  Future<String> crateApiDecryptFcmMessage({
     required String cameraName,
     required List<int> data,
   });
 
-  Future<String> crateApiCoreDecryptFcmTimestamp({
+  Future<String> crateApiCoreDecryptFcmMessage({
     required OptionBoxClients clients,
     required List<int> message,
   });
@@ -507,7 +507,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "create_log_stream", argNames: ["s"]);
 
   @override
-  Future<String> crateApiDecryptFcmTimestamp({
+  Future<String> crateApiDecryptFcmMessage({
     required String cameraName,
     required List<int> data,
   }) {
@@ -528,21 +528,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiDecryptFcmTimestampConstMeta,
+        constMeta: kCrateApiDecryptFcmMessageConstMeta,
         argValues: [cameraName, data],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiDecryptFcmTimestampConstMeta =>
-      const TaskConstMeta(
-        debugName: "decrypt_fcm_timestamp",
-        argNames: ["cameraName", "data"],
-      );
+  TaskConstMeta get kCrateApiDecryptFcmMessageConstMeta => const TaskConstMeta(
+    debugName: "decrypt_fcm_message",
+    argNames: ["cameraName", "data"],
+  );
 
   @override
-  Future<String> crateApiCoreDecryptFcmTimestamp({
+  Future<String> crateApiCoreDecryptFcmMessage({
     required OptionBoxClients clients,
     required List<int> message,
   }) {
@@ -566,16 +565,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_AnyhowException,
         ),
-        constMeta: kCrateApiCoreDecryptFcmTimestampConstMeta,
+        constMeta: kCrateApiCoreDecryptFcmMessageConstMeta,
         argValues: [clients, message],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiCoreDecryptFcmTimestampConstMeta =>
+  TaskConstMeta get kCrateApiCoreDecryptFcmMessageConstMeta =>
       const TaskConstMeta(
-        debugName: "decrypt_fcm_timestamp",
+        debugName: "decrypt_fcm_message",
         argNames: ["clients", "message"],
       );
 

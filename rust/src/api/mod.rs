@@ -29,7 +29,7 @@ pub fn initialize_camera(camera_name: String, file_dir: String, first_time: bool
             Err(_e) => return false,
         };
     } else {
-        println!("CLIENTS map not initialized!");
+        info!("CLIENTS map not initialized!");
     }
     false
 }
@@ -49,7 +49,7 @@ pub fn deregister_camera(camera_name: String) {
                         crate::api::core::deregister(&mut *client_guard);
                     }
                     Err(poisoned) => {
-                        eprintln!("Mutex for {} was poisoned. Recovering.", camera_name);
+                        info!("Mutex for {} was poisoned. Recovering.", camera_name);
                         let mut client_guard = poisoned.into_inner();
                         crate::api::core::deregister(&mut *client_guard);
                     }
@@ -57,13 +57,13 @@ pub fn deregister_camera(camera_name: String) {
             } // client_guard is dropped here
 
             if map.remove(&camera_name).is_none() {
-                eprintln!("Failed to remove {} from clients map", camera_name);
+                info!("Failed to remove {} from clients map", camera_name);
             }
         } else {
-            eprintln!("No client found for camera {}", camera_name);
+            info!("No client found for camera {}", camera_name);
         }
     } else {
-        eprintln!("CLIENTS map not initialized!");
+        info!("CLIENTS map not initialized!");
     }
 }
 
@@ -85,7 +85,7 @@ pub fn decrypt_video(_camera_name: String, enc_filename: String) -> String {
             }
         }
     } else {
-        println!("CLIENTS map not initialized!");
+        info!("CLIENTS map not initialized!");
         return "Error!".to_string();
     }
 }
@@ -118,7 +118,7 @@ pub fn flutter_add_camera(
             password,
         );
     } else {
-        println!("CLIENTS map not initialized!");
+        info!("CLIENTS map not initialized!");
     }
 
     false
@@ -162,7 +162,7 @@ pub fn ping_proprietary_device(camera_ip: String) -> bool {
 
 
 #[flutter_rust_bridge::frb]
-pub fn decrypt_fcm_timestamp(_camera_name: String, data: Vec<u8>) -> String {
+pub fn decrypt_fcm_message(_camera_name: String, data: Vec<u8>) -> String {
     let mut clients_map = CLIENTS.lock().unwrap();
     if let Some(map) = clients_map.as_mut() {
         let client_entry = map
@@ -170,17 +170,17 @@ pub fn decrypt_fcm_timestamp(_camera_name: String, data: Vec<u8>) -> String {
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        match crate::api::core::decrypt_fcm_timestamp(&mut *client_guard, data) {
+        match crate::api::core::decrypt_fcm_message(&mut *client_guard, data) {
             Ok(timestamp) => {
                 return timestamp;
             }
             Err(e) => {
-                println!("Error: {}", e);
+                info!("Error: {}", e);
                 return "Error!".to_string();
             }
         }
     } else {
-        println!("CLIENTS map not initialized!");
+        info!("CLIENTS map not initialized!");
         return "Error!".to_string();
     }
 }
@@ -199,12 +199,12 @@ pub fn get_motion_group_name(_camera_name: String) -> String {
                 return motion_group_name;
             }
             Err(e) => {
-                println!("Error: {}", e);
+                info!("Error: {}", e);
                 return "Error!".to_string();
             }
         }
     } else {
-        println!("CLIENTS map not initialized!");
+        info!("CLIENTS map not initialized!");
         return "Error!".to_string();
     }
 }
@@ -223,12 +223,12 @@ pub fn livestream_update(_camera_name: String, msg: Vec<u8>) -> bool {
                 return true;
             }
             Err(e) => {
-                println!("Error: {}", e);
+                info!("Error: {}", e);
                 return false;
             }
         }
     } else {
-        println!("CLIENTS map not initialized!");
+        info!("CLIENTS map not initialized!");
         false
     }
 }
@@ -245,14 +245,14 @@ pub fn livestream_decrypt(_camera_name: String, data: Vec<u8>, expected_chunk_nu
         let ret = match crate::api::core::livestream_decrypt(&mut *client_guard, data, expected_chunk_number) {
             Ok(dec_data) => dec_data,
             Err(e) => {
-                println!("Error: {}", e);
+                info!("Error: {}", e);
                 vec![]
             }
         };
 
         ret
     } else {
-        println!("CLIENTS map not initialized!");
+        info!("CLIENTS map not initialized!");
         vec![]
     }
 }
@@ -272,12 +272,12 @@ pub fn get_livestream_group_name(_camera_name: String) -> String {
                 return livestream_group_name;
             }
             Err(e) => {
-                println!("Error: {}", e);
+                info!("Error: {}", e);
                 return "Error!".to_string();
             }
         }
     } else {
-        println!("CLIENTS map not initialized!");
+        info!("CLIENTS map not initialized!");
         return "Error!".to_string();
     }
 }

@@ -43,7 +43,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.9.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 320663204;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 429739323;
 
 // Section: executor
 
@@ -310,7 +310,7 @@ fn wire__crate__api__logger__create_log_stream_impl(
         },
     )
 }
-fn wire__crate__api__decrypt_fcm_timestamp_impl(
+fn wire__crate__api__decrypt_fcm_message_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -318,7 +318,7 @@ fn wire__crate__api__decrypt_fcm_timestamp_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "decrypt_fcm_timestamp",
+            debug_name: "decrypt_fcm_message",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -337,7 +337,7 @@ fn wire__crate__api__decrypt_fcm_timestamp_impl(
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
-                    let output_ok = Result::<_, ()>::Ok(crate::api::decrypt_fcm_timestamp(
+                    let output_ok = Result::<_, ()>::Ok(crate::api::decrypt_fcm_message(
                         api__camera_name,
                         api_data,
                     ))?;
@@ -347,7 +347,7 @@ fn wire__crate__api__decrypt_fcm_timestamp_impl(
         },
     )
 }
-fn wire__crate__api__core__decrypt_fcm_timestamp_impl(
+fn wire__crate__api__core__decrypt_fcm_message_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -355,7 +355,7 @@ fn wire__crate__api__core__decrypt_fcm_timestamp_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "decrypt_fcm_timestamp",
+            debug_name: "decrypt_fcm_message",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -396,7 +396,7 @@ fn wire__crate__api__core__decrypt_fcm_timestamp_impl(
                             }
                         }
                         let mut api_clients_guard = api_clients_guard.unwrap();
-                        let output_ok = crate::api::core::decrypt_fcm_timestamp(
+                        let output_ok = crate::api::core::decrypt_fcm_message(
                             &mut *api_clients_guard,
                             api_message,
                         )?;
@@ -1493,8 +1493,8 @@ fn pde_ffi_dispatcher_primary_impl(
         ),
         5 => wire__crate__api__core__add_camera_impl(port, ptr, rust_vec_len, data_len),
         6 => wire__crate__api__logger__create_log_stream_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__decrypt_fcm_timestamp_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__core__decrypt_fcm_timestamp_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__decrypt_fcm_message_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__core__decrypt_fcm_message_impl(port, ptr, rust_vec_len, data_len),
         9 => wire__crate__api__decrypt_video_impl(port, ptr, rust_vec_len, data_len),
         10 => wire__crate__api__core__decrypt_video_impl(port, ptr, rust_vec_len, data_len),
         11 => wire__crate__api__core__deregister_impl(port, ptr, rust_vec_len, data_len),

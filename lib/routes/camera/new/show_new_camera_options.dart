@@ -5,12 +5,11 @@ import 'propietary_camera_option.dart';
 import 'ip_camera_option.dart';
 import 'package:privastead_flutter/utilities/camera_util.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:io' show Platform;
+import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:privastead_flutter/keys.dart';
 import 'package:privastead_flutter/database/entities.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
-import '../../../objectbox.g.dart';
 
 //TODO: We need to have a check that checks if they've entered the server options, and if not, tell them to do so to avoid any weird errors
 // TODO: Make the transtiion from adding a camera to be more smooth. There shouldn't be a delay between the addition -> complete setup (might confuse user)
@@ -19,70 +18,13 @@ class ShowNewCameraOptions extends StatelessWidget {
   const ShowNewCameraOptions({super.key});
 
   /// Navigates to the proprietary (QR) camera setup page.
-  /// We return the scannedResult back to the previous page if present.
   Future<void> _navigateToProprietaryCamera(BuildContext context) async {
-    print("Before show proprietary camera flow");
-    final result =
-        await ProprietaryCameraConnectDialog.showProprietaryCameraSetupFlow(
-          context,
-        );
-
-    print("After (Proprietary camera flow)");
-    if (result != null) {
-      // fmt: "cameraName": cameraName, "wifiSsid": wifiSsid, "wifiPassword": wifiPassword,  "qrCode": _qrCode ?? 'not scanned',
-      String cameraName = result["cameraName"]! as String;
-      final res = addCamera(
-        cameraName,
-        PrefKeys.proprietaryCameraIp,
-        List<int>.from(result["qrCode"]! as Uint8List),
-        true,
-        result["wifiSsid"]! as String,
-        result["wifiPassword"]! as String,
-      );
-
-      res.then((t) async {
-        print("Got 2 $t");
-
-        if (t) {
-          final SharedPreferences prefs = await SharedPreferences.getInstance();
-          prefs.setBool("first_time_" + cameraName, true);
-
-          if (Platform.isAndroid) {
-            print("Attempting to wifi disconnect");
-            final platform = MethodChannel("privastead.com/android/wifi");
-            final result = await platform.invokeMethod<String>(
-              'disconnectFromWifi',
-            );
-            print("Result from disconnection: $result");
-          }
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Working on adding camera...")),
-          );
-
-          processAddCamera(cameraName);
-
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => CamerasPage()),
-          ); // Navigate back.
-        } else {
-          // Display an error message...
-          Navigator.of(context).pop(); //Empty = error...
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text("Failed to add camera due to internal error"),
-            ),
-          );
-        }
-      });
-      print("After");
-    } else {
-      debugPrint("User cancelled Proprietary camera setup");
-    }
+    await ProprietaryCameraConnectDialog.showProprietaryCameraSetupFlow(
+      context,
+    );
   }
 
-  void processAddCamera(String cameraName) async {
+  void processAddIpCamera(String cameraName) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     prefs.setBool("first_time_" + cameraName, true);
 
@@ -122,13 +64,9 @@ class ShowNewCameraOptions extends StatelessWidget {
         '',
       );
 
-      // Disconnect from WiFi if on Android
-
-      res.then((t) async {
-        print("Got 2 $t");
-
-        if (t) {
-          processAddCamera(cameraName);
+      res.then((success) async {
+        if (success) {
+          processAddIpCamera(cameraName);
         } else {
           // Display an error message...
           Navigator.of(context).pop(); //Empty = error...
@@ -139,9 +77,9 @@ class ShowNewCameraOptions extends StatelessWidget {
           );
         }
       });
-      print("After");
+      print("After IP camera flow");
     } else {
-      debugPrint("User cancelled Proprietary camera setup");
+      print("User cancelled Proprietary camera setup");
     }
   }
 

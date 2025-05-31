@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:privastead_flutter/src/rust/api.dart';
 import 'qr_scan.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:privastead_flutter/keys.dart';
-import 'dart:io' show Platform;
-import 'package:permission_handler/permission_handler.dart';
+import 'dart:io' show Platform, Directory;
+import 'dart:typed_data';
+import 'package:privastead_flutter/utilities/camera_util.dart';
+import 'proprietary_camera_waiting.dart';
+import 'package:path/path.dart' as p;
 
 /// Popup: User connects to camera's Wi-Fi hotspot.
-/// TODO: This isn't setup yet for Android.
-/// Plan for Android: Use native code to interact with Android's WifiNetworkSpecifier builder. We can request the user to easily join a local network. Drawback: May need temp location permissions.
 class ProprietaryCameraConnectDialog extends StatefulWidget {
   const ProprietaryCameraConnectDialog({super.key});
 
@@ -52,44 +54,18 @@ class _ProprietaryCameraConnectDialogState
     extends State<ProprietaryCameraConnectDialog> {
   bool _isConnected = false;
   bool _connectivityError = false;
+  bool _isConnecting = false;
 
   final platform =
       Platform.isIOS
           ? MethodChannel("privastead.com/wifi")
           : MethodChannel("privastead.com/android/wifi");
 
-  Future<void> requestPermissions() async {
-    await Permission.locationWhenInUse
-        .onDeniedCallback(() {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Unable to save due to denied access to location'),
-              backgroundColor: Colors.red[700],
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        })
-        .onGrantedCallback(() async {
-          print("Granted permission to location");
-        })
-        .onPermanentlyDeniedCallback(() {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Unable to pair due to permanently denied access to location',
-              ),
-              backgroundColor: Colors.red[700],
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        })
-        .request();
-  }
-
   Future<void> _connectToCamera() async {
     print("Connecting to wifi");
     setState(() {
       _connectivityError = false;
+      _isConnecting = true;
     });
     try {
       final result = await platform.invokeMethod<String>(
@@ -99,8 +75,6 @@ class _ProprietaryCameraConnectDialogState
       print("First result from Wifi Connect Attempt: $result");
 
       if (result == "connected") {
-        //TODO: Show 'connecting' status
-
         if (Platform.isIOS) {
           //Connect again to ensure no awkward errors (not sure why this occurs sometimes)
           final result = await platform.invokeMethod<String>(
@@ -113,29 +87,47 @@ class _ProprietaryCameraConnectDialogState
         // Do an additional ping to the camera to ensure connectivity.
         // We expect the same IP for all Raspberry Pi Cameras
         try {
-          requestPermissions();
-
           bool connected = await pingProprietaryDevice(
             cameraIp: PrefKeys.proprietaryCameraIp,
           );
           if (!connected) {
             setState(() {
               _connectivityError = true;
+              _isConnecting = false;
             });
           } else {
             setState(() {
               _connectivityError = false;
               _isConnected = true;
+              _isConnecting = false;
             });
           }
         } catch (e) {
           print('error $e');
+          if (!_isConnected) {
+            setState(() {
+              _connectivityError = true;
+              _isConnecting = false;
+            });
+          }
         }
       } else {
         print("Other case!");
+        if (!_isConnected) {
+          setState(() {
+            _connectivityError = true;
+            _isConnecting = false;
+          });
+        }
       }
     } on PlatformException catch (e) {
       print("Got platform exception.");
+      if (!_isConnected) {
+        setState(() {
+          _connectivityError = true;
+          _isConnecting = false;
+        });
+      }
     }
   }
 
@@ -154,6 +146,8 @@ class _ProprietaryCameraConnectDialogState
     final statusText =
         _isConnected
             ? 'Connected to the camera.'
+            : _isConnecting
+            ? 'Attempting connection...'
             : _connectivityError
             ? "Error connecting. Try again"
             : 'Not connected to the camera.';
@@ -217,7 +211,10 @@ class _ProprietaryCameraConnectDialogState
                   statusText,
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
-                    color: _isConnected ? Colors.green : Colors.red,
+                    color:
+                        _isConnecting
+                            ? Colors.orange
+                            : (_isConnected ? Colors.green : Colors.red),
                   ),
                 ),
               ],
@@ -225,7 +222,7 @@ class _ProprietaryCameraConnectDialogState
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed:
-                  _isConnected
+                  _isConnected || _isConnecting
                       ? null
                       : () {
                         _connectToCamera();
@@ -290,6 +287,24 @@ class _ProprietaryCameraInfoDialogState
     var existingCameraSet =
         sharedPreferences.getStringList(PrefKeys.cameraSet) ?? [];
 
+    // Reset these as they are no longer needed.
+    if (sharedPreferences.containsKey(PrefKeys.waitingAdditionalCamera)) {
+      await deregisterCamera(cameraName: cameraName);
+      sharedPreferences.remove(PrefKeys.waitingAdditionalCamera);
+      sharedPreferences.remove(PrefKeys.waitingAdditionalCameraTime);
+
+      final docsDir = await getApplicationDocumentsDirectory();
+      final camDir = Directory(p.join(docsDir.path, 'camera_dir_$cameraName'));
+      if (await camDir.exists()) {
+        try {
+          await camDir.delete(recursive: true);
+          print('Deleted camera folder: ${camDir.path}');
+        } catch (e) {
+          print('Error deleting folder: $e');
+        }
+      }
+    }
+
     if (existingCameraSet.contains(cameraName.toLowerCase())) {
       print("Error: Set already contains camera name.");
       ScaffoldMessenger.of(context).showSnackBar(
@@ -299,17 +314,48 @@ class _ProprietaryCameraInfoDialogState
     }
     final wifiSsid = _wifiSsidController.text.trim();
     final wifiPassword = _wifiPasswordController.text;
-    // We return a map of camera data
-    Map<String, Object> result = new Map();
-    result["cameraName"] = cameraName;
-    result["wifiSsid"] = wifiSsid;
-    result["wifiPassword"] = wifiPassword;
-    result["qrCode"] = _qrCode ?? 'not scanned';
-    result["type"] = "proprietary";
 
-    print(result);
+    final res = addCamera(
+      cameraName,
+      PrefKeys.proprietaryCameraIp,
+      List<int>.from(_qrCode!),
+      true,
+      wifiSsid,
+      wifiPassword,
+    );
 
-    Navigator.of(context).pop<Map<String, Object>>(result);
+    res.then((t) async {
+      if (Platform.isAndroid) {
+        print("Attempting to wifi disconnect");
+        final platform = MethodChannel("privastead.com/android/wifi");
+        final result = await platform.invokeMethod<String>(
+          'disconnectFromWifi',
+        );
+        print("Result from disconnection: $result");
+      }
+
+      // Add the camera to a temporary whitelist for FCM
+      await sharedPreferences.setString(
+        PrefKeys.waitingAdditionalCamera,
+        cameraName,
+      );
+      await sharedPreferences.setInt(
+        PrefKeys.waitingAdditionalCameraTime,
+        DateTime.now().millisecondsSinceEpoch,
+      );
+
+      await showDialog<Map<String, Object>>(
+        context: context,
+        barrierDismissible: false,
+        builder:
+            (ctx) => ProprietaryCameraWaitingDialog(
+              cameraName: cameraName,
+              wifiSsid: wifiSsid,
+              wifiPassword: wifiPassword,
+              qrCode: _qrCode!,
+            ),
+      );
+    });
   }
 
   @override

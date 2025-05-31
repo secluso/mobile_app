@@ -124,7 +124,7 @@ class _QrScanDialogState extends State<QrScanDialog> {
               padding: EdgeInsets.symmetric(horizontal: 16),
               child: Text(
                 "Align the QR code inside the frame to scan.",
-                style: TextStyle(fontSize: 16, color: Colors.black87),
+                style: TextStyle(fontSize: 16),
                 textAlign: TextAlign.center,
               ),
             ),

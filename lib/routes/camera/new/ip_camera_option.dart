@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:privastead_flutter/src/rust/api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:privastead_flutter/keys.dart';
 import 'qr_scan.dart';
 import 'package:flutter/services.dart';
+import 'dart:io' show Directory;
+import 'package:path/path.dart' as p;
 
 class IpCameraDialog extends StatefulWidget {
   const IpCameraDialog({super.key});
@@ -55,8 +59,28 @@ class _IpCameraDialogState extends State<IpCameraDialog> {
     final cameraIp = _cameraIpController.text.trim();
 
     try {
-      // Optional: save to SharedPreferences or DB if needed
       final prefs = await SharedPreferences.getInstance();
+
+      // Reset these as they are no longer needed.
+      if (prefs.containsKey(PrefKeys.waitingAdditionalCamera)) {
+        await deregisterCamera(cameraName: cameraName);
+        prefs.remove(PrefKeys.waitingAdditionalCamera);
+        prefs.remove(PrefKeys.waitingAdditionalCameraTime);
+
+        final docsDir = await getApplicationDocumentsDirectory();
+        final camDir = Directory(
+          p.join(docsDir.path, 'camera_dir_$cameraName'),
+        );
+        if (await camDir.exists()) {
+          try {
+            await camDir.delete(recursive: true);
+            print('Deleted camera folder: ${camDir.path}');
+          } catch (e) {
+            print('Error deleting folder: $e');
+          }
+        }
+      }
+
       final existingCameraSet = prefs.getStringList(PrefKeys.cameraSet) ?? [];
       if (!existingCameraSet.contains(cameraName)) {
         Map<String, Object> result = new Map();

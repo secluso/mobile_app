@@ -46,10 +46,10 @@ Future<bool> flutterAddCamera({
 Future<bool> pingProprietaryDevice({required String cameraIp}) =>
     RustLib.instance.api.crateApiPingProprietaryDevice(cameraIp: cameraIp);
 
-Future<String> decryptFcmTimestamp({
+Future<String> decryptFcmMessage({
   required String cameraName,
   required List<int> data,
-}) => RustLib.instance.api.crateApiDecryptFcmTimestamp(
+}) => RustLib.instance.api.crateApiDecryptFcmMessage(
   cameraName: cameraName,
   data: data,
 );

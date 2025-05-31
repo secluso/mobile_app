@@ -1,5 +1,3 @@
-import 'dart:collection';
-
 import 'package:flutter/material.dart';
 import 'package:privastead_flutter/notifications/scheduler.dart';
 import 'package:privastead_flutter/src/rust/frb_generated.dart';
@@ -9,9 +7,9 @@ import 'routes/home_page.dart';
 import "routes/theme_provider.dart";
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'notifications/firebase_options.dart';
+import 'package:privastead_flutter/notifications/firebase_options.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'notifications/firebase.dart';
+import 'package:privastead_flutter/notifications/firebase.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
 import 'package:privastead_flutter/database/entities.dart';
 import 'package:privastead_flutter/notifications/pending_processor.dart';
@@ -59,8 +57,10 @@ void main() async {
   print("Loaded darkTheme value: $isDarkMode");
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => ThemeProvider(isDarkMode),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider(isDarkMode)),
+      ],
       child: MyApp(),
     ),
   );

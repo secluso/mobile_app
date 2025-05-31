@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:privastead_flutter/notifications/notifications.dart';
 import 'package:privastead_flutter/notifications/scheduler.dart';
+import 'package:privastead_flutter/routes/camera/new/proprietary_camera_waiting.dart';
 import 'package:privastead_flutter/utilities/http_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../keys.dart';
@@ -158,7 +159,7 @@ class PushNotificationService {
 
   // Core notification processing method
   Future<void> _process(Map<String, dynamic> data) async {
-    print("Before!");
+    print("Core notification processing method entered");
     final encoded = data['body'];
     if (encoded == null) return;
 
@@ -168,42 +169,81 @@ class PushNotificationService {
     //  await WakelockPlus.enable(); // TODO: Make this optional depending on if it's called from background processing
 
     try {
-      print("ATP - 1");
       final Uint8List bytes = base64Decode(encoded);
-      print(bytes);
       final List<String> cameraSet =
-          prefs.getStringList(PrefKeys.cameraSet) ?? const [];
-      print(cameraSet);
+          prefs.getStringList(PrefKeys.cameraSet) ?? [];
+
+      // If we have a waiting FCM camera within the last minute, we allow it to pass through.
+      if (prefs.containsKey(PrefKeys.waitingAdditionalCamera) &&
+          !cameraSet.contains(
+            prefs.getString(PrefKeys.waitingAdditionalCamera),
+          )) {
+        var time = prefs.getInt(PrefKeys.waitingAdditionalCameraTime);
+        var currentTime = DateTime.now().millisecondsSinceEpoch;
+        if (time != null) {
+          var diff = time - currentTime;
+          if (diff <= 60000) {
+            cameraSet.add(prefs.getString(PrefKeys.waitingAdditionalCamera)!);
+          }
+        }
+      }
+
+      print('Pre-existing camera set: $cameraSet');
 
       final bool needNotification =
           prefs.getBool('saved_need_notification_state') ?? true;
 
+      // TODO: what happens if we have an invalid name?
       for (final cameraName in cameraSet) {
         print("Starting to iterate $cameraName");
-        final String response = await decryptFcmTimestamp(
+        final String response = await decryptFcmMessage(
           cameraName: cameraName,
           data: bytes,
         );
 
-        print("Response is $response");
+        print("Decoded response is: $response");
+        try {
+          final decodedJson = jsonDecode(response) as Map<String, dynamic>;
+          if (decodedJson.containsKey("type")) {
+            var type = decodedJson['type'];
+            if (type == "wifi_success") {
+              print(
+                "Got successful wifi FCM notification for camera $cameraName, $response",
+              );
 
-        if (response == 'Download') {
-          final bool useMobile = prefs.getBool('use_mobile_state') ?? false;
+              var timestamp = decodedJson['timestamp'];
+              print("Timestamp = $timestamp");
+              var date = new DateTime.fromMillisecondsSinceEpoch(timestamp);
 
-          final status = await Connectivity().checkConnectivity();
-          final bool isMetered = status == ConnectivityResult.mobile;
-          final bool isRestricted = false;
-
-          if (!isMetered || (useMobile && !isRestricted)) {
-            await DownloadScheduler.scheduleVideoDownload(cameraName);
+              ProprietaryCameraWaitingDialog.completePairingForCamera(
+                cameraName,
+                date,
+              );
+            } else {
+              print("Error: Unknown JSON message type: $type");
+            }
+          } else {
+            print("Error: JSON FCM message didn't contain type key");
           }
-        } else if (response != 'Error' && response != 'None') {
-          //TODO: Figure out if (needNotification) {
-          showMotionNotification(cameraName: cameraName, timestamp: response);
+        } on FormatException catch (_) {
+          if (response == 'Download') {
+            final bool useMobile = prefs.getBool('use_mobile_state') ?? false;
 
-          // TODO: I removed the pending to repository addition for Android because it's not possible to init ObjectBox in the background handler (as Android requires). Find alternate solution maybe. Not sure this is needed anymore (as we don't want to show users pending videos in cases of failure)
-          if (Platform.isIOS) {
-            await addPendingToRepository(cameraName, response);
+            final status = await Connectivity().checkConnectivity();
+            final bool isMetered = status == ConnectivityResult.mobile;
+            final bool isRestricted = false;
+
+            if (!isMetered || (useMobile && !isRestricted)) {
+              await DownloadScheduler.scheduleVideoDownload(cameraName);
+            }
+          } else if (response != 'Error!' && response != 'None') {
+            //TODO: Figure out if (needNotification) {
+            showMotionNotification(cameraName: cameraName, timestamp: response);
+
+            // TODO: I removed the pending to repository addition for Android because it's not possible to init ObjectBox in the background handler (as Android requires). Find alternate solution maybe. Not sure this is needed anymore (as we don't want to show users pending videos in cases of failure)
+            if (Platform.isIOS) {
+              await addPendingToRepository(cameraName, response);
+            }
           }
         }
       }

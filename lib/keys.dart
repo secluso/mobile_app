@@ -8,6 +8,8 @@ class PrefKeys {
   static const serverPassword = "server_password";
   static const downloadingMotionVideos = "downloading_motion_videos";
   static const cameraNameKey = "camera_name_key";
+  static const waitingAdditionalCamera = "waiting_additional_camera";
+  static const waitingAdditionalCameraTime = "waiting_additional_camera_time";
 
   static const proprietaryCameraIp = "10.42.0.1";
   static const numCameraSecretBytes =
