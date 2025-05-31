@@ -8,9 +8,34 @@ const String _bgTaskId = 'com.privastead.task'; // Matches Info.plist
 const String _workerName = 'download_worker'; // free-form tag
 const int _maxRetries = 5;
 
+class OneOffHelper {
+  static bool _initialized = false;
+
+  static Future<void>? _initFuture;
+
+  /// Call this to avoid double-initialize in Android in the entry-point
+  static Future<void> ensureInitialized() {
+    if (_initialized) {
+      return Future.value();
+    }
+
+    _initFuture ??= _doInit();
+    return _initFuture!;
+  }
+
+  static Future<void> _doInit() async {
+    Log.init();
+    _initialized = true;
+  }
+}
+
 @pragma('vm:entry-point')
 void callbackDispatcher() {
   Workmanager().executeTask((taskId, inputData) async {
+    if (Platform.isAndroid) {
+      OneOffHelper.ensureInitialized();
+    }
+
     Log.d("Running task in background");
     final camera = inputData?['camera'] as String? ?? 'Unknown';
     final retry = inputData?['retry'] as int? ?? 0;

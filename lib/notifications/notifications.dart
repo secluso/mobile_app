@@ -85,16 +85,14 @@ Future<void> _ensureNotificationPermissions() async {
               AndroidFlutterLocalNotificationsPlugin
             >();
 
-    Log.d(
-      "ensureNotificationPermissions() - Requesting notification permissions",
-    );
+    Log.d("Requesting notification permissions");
     // Android 13+ runtime permission
     final granted = (await androidPlugin?.areNotificationsEnabled()) ?? true;
-    Log.d("ensureNotificationPermissions() - Previously granted: $granted");
+    Log.d("Previously granted notification status: $granted");
     if (!granted) await androidPlugin?.requestNotificationsPermission();
     final granted_after =
         (await androidPlugin?.areNotificationsEnabled()) ?? true;
-    Log.d("ensureNotificationPermissions() - Now granted: $granted_after");
+    Log.d("Now granted notification status: $granted_after");
   } else if (Platform.isIOS) {
     await _notifs
         .resolvePlatformSpecificImplementation<

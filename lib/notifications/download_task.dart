@@ -35,15 +35,15 @@ class RustBridgeHelper {
 }
 
 Future<bool> doWork(String cameraName) async {
-  Log.d("Starting to work");
-
   // TODO: Should we wait for downloadingMotionVideos to be false before continuing? Is this meant to be a spinlock?
-  var prefs = await SharedPreferences.getInstance();
-  await prefs.setBool(PrefKeys.downloadingMotionVideos, true);
 
   if (Platform.isAndroid) {
     await RustBridgeHelper.ensureInitialized();
   }
+  var prefs = await SharedPreferences.getInstance();
+  await prefs.setBool(PrefKeys.downloadingMotionVideos, true);
+
+  Log.d("Starting to work");
 
   bool result = await retrieveVideos(cameraName);
 

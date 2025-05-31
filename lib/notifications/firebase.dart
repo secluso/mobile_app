@@ -42,6 +42,7 @@ class RustBridgeHelper {
   }
 
   static Future<void> _doInit() async {
+    Log.init();
     await RustLib.init();
     _initialized = true;
   }
@@ -220,17 +221,14 @@ class PushNotificationService {
                 date,
               );
             } else {
-              Log.e(
-                "PushNotificationService - Error: Unknown JSON message type: $type",
-              );
+              Log.e("Error: Unknown JSON message type: $type");
             }
           } else {
-            Log.e(
-              "PushNotificationService - Error: JSON FCM message didn't contain type key",
-            );
+            Log.e("Error: JSON FCM message didn't contain type key");
           }
-        } on FormatException catch (_) {
+        } catch (_) {
           if (response == 'Download') {
+            Log.d("Downloading video");
             final bool useMobile = prefs.getBool('use_mobile_state') ?? false;
 
             final status = await Connectivity().checkConnectivity();
@@ -241,6 +239,7 @@ class PushNotificationService {
               await DownloadScheduler.scheduleVideoDownload(cameraName);
             }
           } else if (response != 'Error!' && response != 'None') {
+            Log.d("Showing motion notification");
             //TODO: Figure out if (needNotification) {
             showMotionNotification(cameraName: cameraName, timestamp: response);
 
