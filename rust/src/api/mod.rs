@@ -126,7 +126,6 @@ pub fn flutter_add_camera(
 
 #[flutter_rust_bridge::frb(init)]
 pub fn init_app() {
-    flutter_rust_bridge::setup_default_user_utils();
     logger::rust_set_up();
     info!("Setup logging correctly!");
 

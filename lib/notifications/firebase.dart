@@ -68,7 +68,7 @@ class PushNotificationService {
   bool _notifReady = false;
 
   Future<void> init() async {
-    print("Initializing PushNotificationService");
+    Log.d("Initializing PushNotificationService");
 
     // Local notifications (heads‑up for motion + download complete)
     await _notifications.initialize(
@@ -99,7 +99,7 @@ class PushNotificationService {
     //FCM streams
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
     FirebaseMessaging.onMessage.listen((RemoteMessage msg) {
-      print('onMessage');
+      Log.d('onMessage');
       _handleMessage(msg);
     });
 
@@ -112,7 +112,7 @@ class PushNotificationService {
         (Platform.isIOS &&
             await FirebaseMessaging.instance.getAPNSToken() != null)) {
       final tok = await FirebaseMessaging.instance.getToken();
-      print("Set FCM token to $tok");
+      Log.d("Set FCM token to $tok");
       if (tok != null) await _updateToken(tok);
     }
   }
@@ -125,14 +125,14 @@ class PushNotificationService {
 
     if (token.isEmpty) {
       var android = Platform.isAndroid;
-      print("Attempting to capture token $android");
+      Log.d("Attempting to capture token $android");
       if (Platform.isAndroid ||
           (Platform.isIOS &&
               await FirebaseMessaging.instance.getAPNSToken() != null)) {
-        print("Entered capturing area");
+        Log.d("Entered capturing area");
 
         final tok = await FirebaseMessaging.instance.getToken();
-        print("Set FCM token to $tok");
+        Log.d("Set FCM token to $tok");
         if (tok != null) {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString(PrefKeys.fcmToken, tok);
@@ -143,16 +143,16 @@ class PushNotificationService {
     }
 
     if (credentials.isEmpty || token.isEmpty || (!force && !needUpdate)) {
-      print("Skipping update");
+      Log.d("Skipping update");
       return;
     }
 
     final result = await HttpClientService.instance.uploadFcmToken(token);
     if (result.isSuccess) {
       prefs.setBool(PrefKeys.needUpdateFcmToken, false);
-      debugPrint('[FCM] token re‑uploaded');
+      Log.d('[FCM] token re‑uploaded');
     } else {
-      debugPrint('[FCM] token upload failed');
+      Log.d('[FCM] token upload failed');
     }
   }
 
@@ -161,11 +161,11 @@ class PushNotificationService {
 
   // Core notification processing method
   Future<void> _process(Map<String, dynamic> data) async {
-    print("Core notification processing method entered");
+    Log.d("Core notification processing method entered");
     final encoded = data['body'];
     if (encoded == null) return;
 
-    print("Got a message");
+    Log.d("Got a message");
 
     final prefs = await SharedPreferences.getInstance();
     //  await WakelockPlus.enable(); // TODO: Make this optional depending on if it's called from background processing
@@ -190,20 +190,20 @@ class PushNotificationService {
         }
       }
 
-      print('Pre-existing camera set: $cameraSet');
+      Log.d('Pre-existing camera set: $cameraSet');
 
       final bool needNotification =
           prefs.getBool('saved_need_notification_state') ?? true;
 
       // TODO: what happens if we have an invalid name?
       for (final cameraName in cameraSet) {
-        print("Starting to iterate $cameraName");
+        Log.d("Starting to iterate $cameraName");
         final String response = await decryptFcmMessage(
           cameraName: cameraName,
           data: bytes,
         );
 
-        print("Decoded response is: $response");
+        Log.d("Decoded response is: $response");
         try {
           final decodedJson = jsonDecode(response) as Map<String, dynamic>;
           if (decodedJson.containsKey("type")) {
@@ -251,7 +251,7 @@ class PushNotificationService {
         }
       }
     } finally {
-      print("After processing");
+      Log.d("After processing");
       // await WakelockPlus.disable(); TODO: Fix above wakelock depending on foreground or not
     }
   }

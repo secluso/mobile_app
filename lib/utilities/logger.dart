@@ -2,6 +2,13 @@ import 'package:flutter/foundation.dart';
 import 'package:logger/logger.dart';
 import 'package:intl/intl.dart';
 
+class LogMessage {
+  final dynamic value;
+  final String customLocation;
+
+  LogMessage(this.value, {this.customLocation = ""});
+}
+
 class Log {
   static void init() {
     _logger = Logger(
@@ -10,13 +17,25 @@ class Log {
     );
   }
 
-  static void d(dynamic msg) => _logger.d(msg, stackTrace: StackTrace.current);
+  static void d(dynamic msg, {String customLocation = ""}) => _logger.d(
+    LogMessage(msg, customLocation: customLocation),
+    stackTrace: StackTrace.current,
+  );
 
-  static void i(dynamic msg) => _logger.i(msg, stackTrace: StackTrace.current);
+  static void i(dynamic msg, {String customLocation = ""}) => _logger.i(
+    LogMessage(msg, customLocation: customLocation),
+    stackTrace: StackTrace.current,
+  );
 
-  static void w(dynamic msg) => _logger.w(msg, stackTrace: StackTrace.current);
+  static void w(dynamic msg, {String customLocation = ""}) => _logger.w(
+    LogMessage(msg, customLocation: customLocation),
+    stackTrace: StackTrace.current,
+  );
 
-  static void e(dynamic msg) => _logger.e(msg, stackTrace: StackTrace.current);
+  static void e(dynamic msg, {String customLocation = ""}) => _logger.e(
+    LogMessage(msg, customLocation: customLocation),
+    stackTrace: StackTrace.current,
+  );
 
   static late final Logger _logger;
 }
@@ -34,15 +53,29 @@ class _OneLinePrinter extends LogPrinter {
     Level.error: 'E',
     Level.fatal: 'F',
   };
-
   @override
   List<String> log(LogEvent event) {
     final _time = DateFormat('HH:mm:ss.SSS');
     final ts = _time.format(DateTime.now());
     final tag = _levelMap[event.level] ?? '?';
-    final loc = debugMode ? _callerLocation() : ''; // file:line:col
-    final pad = debugMode && loc.isNotEmpty ? ' ' : '';
-    return ['$ts [$tag] $loc$pad→ ${event.message}'];
+
+    dynamic actualMessage = event.message;
+    dynamic customLocation = "";
+
+    if (event.message is LogMessage) {
+      final logMsg = event.message as LogMessage;
+      customLocation = logMsg.customLocation;
+      actualMessage = logMsg.value;
+    }
+
+    // We don't need to show line numbers in debug mode.
+    final loc =
+        !debugMode
+            ? ""
+            : (customLocation == "" ? _callerLocation() : customLocation);
+    final pad = loc.isNotEmpty ? ' ' : '';
+
+    return ['$ts [$tag] $loc$pad→ $actualMessage'];
   }
 
   // Grab first stack-frame outside logger / flutter internals.

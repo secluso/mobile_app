@@ -27,6 +27,23 @@ void main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   Log.d("After intiialize app");
   await RustLib.init();
+  createLogStream().listen((event) {
+    var level = event.level;
+    var tag = event.tag; // Represents the calling file
+
+    // We filter out OpenMLS as we don't need OpenMLS logging leaking data (although this shouldn't be a risk regardless due to release only allowing info and above in logging)
+    if (tag.contains("openmls")) {
+      return;
+    }
+
+    if (level == 0 || level == 1) {
+      Log.d(event.msg, customLocation: event.tag);
+    } else if (level == 2) {
+      Log.i(event.msg, customLocation: event.tag);
+    } else {
+      Log.e(event.msg, customLocation: event.tag);
+    }
+  });
   Log.d("After rust lib init");
   await AppStores.init();
   await runMigrations();
@@ -34,12 +51,6 @@ void main() async {
 
   QueueProcessor.instance.start();
   QueueProcessor.instance.signalNewFile();
-
-  createLogStream().listen((event) {
-    Log.d(
-      'Rust Log: [${event.level}] ${event.tag}: ${event.msg} (rust_time=${event.timeMillis})',
-    );
-  });
 
   _mainReceivePort.listen((message) {
     if (message == 'signal_new_file') {

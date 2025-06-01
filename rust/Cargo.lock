@@ -1703,13 +1703,11 @@ dependencies = [
 name = "rust_lib_privastead_flutter"
 version = "0.1.0"
 dependencies = [
- "android_logger",
  "bincode",
  "flutter_rust_bridge",
  "lazy_static",
  "log",
  "once_cell",
- "oslog",
  "parking_lot",
  "privastead-client-lib",
  "privastead-client-server-lib",
