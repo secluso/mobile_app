@@ -17,15 +17,16 @@ simplelog="0.12.2"
 time="0.3.41"
 serde_json="1.0.140"
 log = { version="0.4.27", features=["kv"] }
+anyhow = "^1.0.64" # Locked to this version due to flutter_rust_bridge usage in app
 
 [dependencies.privastead-client-lib]
 git = "https://github.com/privastead/privastead"
-rev = "9752b5e"  # specific commit
+rev = "d09cb13"  # specific commit
 package = "privastead-client-lib"
 
 [dependencies.privastead-client-server-lib]
 git = "https://github.com/privastead/privastead"
-rev = "9752b5e"
+rev = "d09cb13"
 package = "privastead-client-server-lib"
 
 [lints.rust]

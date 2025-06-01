@@ -124,12 +124,12 @@ fn perform_pairing_handshake(
     stream: &mut TcpStream,
     app_key_packages: KeyPackages,
     secret: [u8; pairing::NUM_SECRET_BYTES],
-) -> io::Result<KeyPackages> {
+) -> anyhow::Result<KeyPackages> {
     let pairing = pairing::App::new(secret, app_key_packages);
     let app_msg = pairing.generate_msg_to_camera();
     write_varying_len(stream, &app_msg)?;
     let camera_msg = read_varying_len(stream)?;
-    let camera_key_packages = pairing.process_camera_msg(camera_msg);
+    let camera_key_packages = pairing.process_camera_msg(camera_msg)?;
 
     Ok(camera_key_packages)
 }
@@ -168,7 +168,7 @@ fn pair_with_camera(
     camera_name: &str,
     users: &mut [User; NUM_CLIENTS],
     secret: [u8; pairing::NUM_SECRET_BYTES],
-) -> io::Result<()> {
+) -> anyhow::Result<()> {
     for mut user in users {
         let app_key_packages = user.key_packages();
 

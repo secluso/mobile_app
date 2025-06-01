@@ -305,55 +305,32 @@ class _ProprietaryCameraInfoDialogState
     }
 
     if (existingCameraSet.contains(cameraName.toLowerCase())) {
+      FocusManager.instance.primaryFocus?.unfocus();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Please use a unique name for the camera")),
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(
+            "Please use a unique name for the camera",
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
       );
       return;
     }
     final wifiSsid = _wifiSsidController.text.trim();
     final wifiPassword = _wifiPasswordController.text;
 
-    final res = addCamera(
-      cameraName,
-      PrefKeys.proprietaryCameraIp,
-      List<int>.from(_qrCode!),
-      true,
-      wifiSsid,
-      wifiPassword,
+    await showDialog<Map<String, Object>>(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (ctx) => ProprietaryCameraWaitingDialog(
+            cameraName: cameraName,
+            wifiSsid: wifiSsid,
+            wifiPassword: wifiPassword,
+            qrCode: _qrCode!,
+          ),
     );
-
-    res.then((t) async {
-      if (Platform.isAndroid) {
-        Log.d("Android native - Attempting to wifi disconnect");
-        final platform = MethodChannel("privastead.com/android/wifi");
-        final result = await platform.invokeMethod<String>(
-          'disconnectFromWifi',
-        );
-        Log.d("Android native - Result from disconnection: $result");
-      }
-
-      // Add the camera to a temporary whitelist for FCM
-      await sharedPreferences.setString(
-        PrefKeys.waitingAdditionalCamera,
-        cameraName,
-      );
-      await sharedPreferences.setInt(
-        PrefKeys.waitingAdditionalCameraTime,
-        DateTime.now().millisecondsSinceEpoch,
-      );
-
-      await showDialog<Map<String, Object>>(
-        context: context,
-        barrierDismissible: false,
-        builder:
-            (ctx) => ProprietaryCameraWaitingDialog(
-              cameraName: cameraName,
-              wifiSsid: wifiSsid,
-              wifiPassword: wifiPassword,
-              qrCode: _qrCode!,
-            ),
-      );
-    });
   }
 
   @override

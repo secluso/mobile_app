@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
 import 'package:privastead_flutter/database/entities.dart';
@@ -9,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:privastead_flutter/keys.dart';
 import 'package:privastead_flutter/routes/camera/list_cameras.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
+import 'package:privastead_flutter/utilities/camera_util.dart';
 import 'package:path/path.dart' as p;
 
 class ProprietaryCameraWaitingDialog extends StatefulWidget {
@@ -47,24 +49,72 @@ class _ProprietaryCameraWaitingDialogState
     extends State<ProprietaryCameraWaitingDialog> {
   bool _timedOut = false;
   bool _pairingCompleted = false;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
     ProprietaryCameraWaitingDialog._currentState = this;
-
-    // Timer for timeout
-    Future.delayed(const Duration(seconds: 30), () {
-      if (mounted && !_pairingCompleted) {
-        setState(() => _timedOut = true);
-      }
-    });
+    _startInitialPairing();
   }
 
   @override
   void dispose() {
     ProprietaryCameraWaitingDialog._currentState = null;
     super.dispose();
+  }
+
+  void _startInitialPairing() async {
+    setState(() {
+      _errorMessage = null;
+      _timedOut = false;
+      _pairingCompleted = false;
+    });
+
+    try {
+      final success = await addCamera(
+        widget.cameraName,
+        PrefKeys.proprietaryCameraIp,
+        List<int>.from(widget.qrCode),
+        true,
+        widget.wifiSsid,
+        widget.wifiPassword,
+      );
+
+      if (!success) {
+        setState(
+          () => _errorMessage = "Failed to send pairing data to camera.",
+        );
+        return;
+      }
+
+      if (Platform.isAndroid) {
+        try {
+          const platform = MethodChannel("privastead.com/android/wifi");
+          await platform.invokeMethod<String>('disconnectFromWifi');
+        } catch (e) {
+          Log.w("WiFi disconnect failed: $e");
+        }
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        PrefKeys.waitingAdditionalCamera,
+        widget.cameraName,
+      );
+      await prefs.setInt(
+        PrefKeys.waitingAdditionalCameraTime,
+        DateTime.now().millisecondsSinceEpoch,
+      );
+
+      Future.delayed(const Duration(seconds: 30), () {
+        if (mounted && !_pairingCompleted) {
+          setState(() => _timedOut = true);
+        }
+      });
+    } catch (e) {
+      setState(() => _errorMessage = "Unexpected error: $e");
+    }
   }
 
   void _onPairingConfirmed() async {
@@ -97,6 +147,16 @@ class _ProprietaryCameraWaitingDialogState
   void _onRetry() async {
     var cameraName = widget.cameraName;
 
+    // We don't know for sure if they'll try again or not.
+    if (Platform.isAndroid) {
+      try {
+        const platform = MethodChannel("privastead.com/android/wifi");
+        await platform.invokeMethod<String>('disconnectFromWifi');
+      } catch (e) {
+        Log.w("WiFi disconnect failed: $e");
+      }
+    }
+
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await deregisterCamera(cameraName: cameraName);
     prefs.remove(PrefKeys.waitingAdditionalCamera);
@@ -124,132 +184,153 @@ class _ProprietaryCameraWaitingDialogState
     _onPairingConfirmed();
   }
 
+  Widget _buildWaitingView() => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      const CircularProgressIndicator(),
+      const SizedBox(height: 20),
+      Text(
+        "Waiting for camera to confirm pairing...",
+        style: Theme.of(
+          context,
+        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+        textAlign: TextAlign.center,
+      ),
+      const SizedBox(height: 12),
+      Text(
+        "Please do not leave the app.",
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: Colors.redAccent),
+      ),
+    ],
+  );
+
+  Widget _buildTimeoutView() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        'No response from camera',
+        style: Theme.of(
+          context,
+        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        'The camera didn’t confirm pairing within 30 seconds. Please verify the Wi-Fi details below and try again.',
+        style: Theme.of(context).textTheme.bodyMedium,
+      ),
+      const SizedBox(height: 12),
+      Material(
+        elevation: 1,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'SSID:  ${widget.wifiSsid}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              Text(
+                'PW:     ${widget.wifiPassword}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      ),
+      const SizedBox(height: 16),
+      Text(
+        'Continuing without confirmation may leave the camera in an incomplete state.',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Theme.of(context).colorScheme.error,
+        ),
+      ),
+      const SizedBox(height: 20),
+      FilledButton(onPressed: _onRetry, child: const Text("Try Again")),
+      const SizedBox(height: 12),
+      OutlinedButton(
+        onPressed: () async {
+          final proceed = await showDialog<bool>(
+            context: context,
+            builder:
+                (_) => AlertDialog(
+                  title: const Text("Proceed without confirmation?"),
+                  content: const Text(
+                    "If the camera hasn't actually paired, it may not work correctly. Are you sure?",
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text("Cancel"),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text("Continue"),
+                    ),
+                  ],
+                ),
+          );
+          if (proceed == true) _onContinueAnyway();
+        },
+        child: const Text("Continue Anyway"),
+      ),
+    ],
+  );
+
+  Widget _buildSuccessView() => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      const Icon(Icons.check_circle, color: Colors.green, size: 60),
+      const SizedBox(height: 20),
+      Text(
+        'Camera successfully paired!',
+        style: Theme.of(
+          context,
+        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+        textAlign: TextAlign.center,
+      ),
+    ],
+  );
+
+  Widget _buildErrorView() => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      const Icon(Icons.error_outline, color: Colors.redAccent, size: 60),
+      const SizedBox(height: 16),
+      Text(
+        _errorMessage ?? 'An unknown error occurred.',
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: Theme.of(context).colorScheme.error,
+        ),
+        textAlign: TextAlign.center,
+      ),
+      const SizedBox(height: 20),
+      FilledButton(onPressed: () => _onRetry(), child: const Text("Back")),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              "Connecting to Camera...",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            if (_timedOut) ...[
-              SizedBox(height: 16),
-              Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceVariant,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'No response from camera',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'The camera didn’t confirm pairing within 30 seconds.\n\n'
-                      'Please verify the Wi-Fi details below and try again.',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 12),
-                    Material(
-                      elevation: 1,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'SSID:  ${widget.wifiSsid}',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                            Text(
-                              'PW:     ${widget.wifiPassword}',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Continuing without confirmation may leave the camera in an '
-                      'incomplete state. We recommend fixing the connection and retrying.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    Column(
-                      children: [
-                        FilledButton(
-                          onPressed: _onRetry,
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size.fromHeight(48),
-                          ),
-                          child: const Text('Try Again'),
-                        ),
-                        const SizedBox(height: 12),
-                        OutlinedButton(
-                          onPressed: () async {
-                            final proceed = await showDialog<bool>(
-                              context: context,
-                              builder:
-                                  (ctx) => AlertDialog(
-                                    title: const Text(
-                                      'Proceed without confirmation?',
-                                    ),
-                                    content: const Text(
-                                      'If the camera hasn’t actually paired, it may not '
-                                      'work correctly. Are you sure you want to continue?',
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed:
-                                            () => Navigator.of(ctx).pop(false),
-                                        child: const Text('Cancel'),
-                                      ),
-                                      FilledButton(
-                                        onPressed:
-                                            () => Navigator.of(ctx).pop(true),
-                                        child: const Text('Continue'),
-                                      ),
-                                    ],
-                                  ),
-                            );
-                            if (proceed == true) _onContinueAnyway();
-                          },
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(48),
-                          ),
-                          child: const Text('Continue Anyway'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ] else ...[
-              const SizedBox(height: 12),
-              Text(
-                'Please do not leave the app while pairing.',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: Colors.red[300]),
-              ),
-            ],
-          ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 320),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child:
+                _errorMessage != null
+                    ? _buildErrorView()
+                    : _pairingCompleted
+                    ? _buildSuccessView()
+                    : _timedOut
+                    ? _buildTimeoutView()
+                    : _buildWaitingView(),
+          ),
         ),
       ),
     );

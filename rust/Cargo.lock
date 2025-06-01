@@ -1487,8 +1487,9 @@ dependencies = [
 [[package]]
 name = "privastead-client-lib"
 version = "0.1.0"
-source = "git+https://github.com/privastead/privastead?rev=9752b5e#9752b5e3a4b507fabf71cf777d0bc0bfff8bcc85"
+source = "git+https://github.com/privastead/privastead?rev=d09cb13#d09cb138ec3f61a0eec1f38d558f7ca66d4c7a21"
 dependencies = [
+ "anyhow",
  "bincode",
  "docopt",
  "ds-lib",
@@ -1510,7 +1511,7 @@ dependencies = [
 [[package]]
 name = "privastead-client-server-lib"
 version = "0.1.0"
-source = "git+https://github.com/privastead/privastead?rev=9752b5e#9752b5e3a4b507fabf71cf777d0bc0bfff8bcc85"
+source = "git+https://github.com/privastead/privastead?rev=d09cb13#d09cb138ec3f61a0eec1f38d558f7ca66d4c7a21"
 dependencies = [
  "rand",
 ]
@@ -1703,6 +1704,7 @@ dependencies = [
 name = "rust_lib_privastead_flutter"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "bincode",
  "flutter_rust_bridge",
  "lazy_static",

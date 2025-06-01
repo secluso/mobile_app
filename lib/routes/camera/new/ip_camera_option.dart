@@ -3,6 +3,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:privastead_flutter/src/rust/api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
+import 'package:privastead_flutter/routes/camera/new/ip_camera_waiting.dart';
 import 'package:privastead_flutter/keys.dart';
 import 'qr_scan.dart';
 import 'package:flutter/services.dart';
@@ -74,9 +75,9 @@ class _IpCameraDialogState extends State<IpCameraDialog> {
         if (await camDir.exists()) {
           try {
             await camDir.delete(recursive: true);
-            Log.d('onAddCamera() - Deleted camera folder: ${camDir.path}');
+            Log.d('Deleted camera folder: ${camDir.path}');
           } catch (e) {
-            Log.e('onAddCamera() - Error deleting folder: $e');
+            Log.e('Error deleting folder: $e');
           }
         }
       }
@@ -90,17 +91,31 @@ class _IpCameraDialogState extends State<IpCameraDialog> {
         result["qrCode"] = _qrCode ?? 'not scanned';
         result["cameraIp"] = cameraIp;
 
-        Navigator.of(context).pop<Map<String, Object>>(result);
+        await CameraSetupStatusDialog.show(context, result);
       } else {
+        FocusManager.instance.primaryFocus?.unfocus();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Please use a unique name for the camera")),
+          SnackBar(
+            backgroundColor: Colors.red,
+            content: Text(
+              "Please use a unique name for the camera",
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
         );
         return;
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text("Failed to add camera: $e")));
+      FocusManager.instance.primaryFocus?.unfocus();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(
+            "Failed to add camera: $e",
+            style: TextStyle(color: Colors.red),
+          ),
+        ),
+      );
     }
   }
 

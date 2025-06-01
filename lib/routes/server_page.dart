@@ -46,8 +46,15 @@ class _ServerPageState extends State<ServerPage> {
 
   Future<void> _saveServerSettings() async {
     if (serverIp == null || serverIp!.isEmpty) {
+      FocusManager.instance.primaryFocus?.unfocus();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Please enter a valid server IP.")),
+        SnackBar(
+          backgroundColor: Colors.red,
+          content: Text(
+            "Please enter a valid server IP.",
+            style: TextStyle(color: Colors.white),
+          ),
+        ),
       );
       return;
     }
@@ -111,7 +118,11 @@ class _ServerPageState extends State<ServerPage> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Potentially invalid QR code. Please try again"),
+          backgroundColor: Colors.red,
+          content: Text(
+            "Potentially invalid QR code. Please try again",
+            style: TextStyle(color: Colors.white),
+          ),
         ),
       );
       return;
