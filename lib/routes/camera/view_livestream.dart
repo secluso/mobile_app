@@ -23,6 +23,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
   bool isStreaming = false;
   bool hasFailed = false;
   String _errMsg = '';
+  double? _aspectRatio;
 
   int? _streamId;
 
@@ -30,12 +31,20 @@ class _LivestreamPageState extends State<LivestreamPage> {
   void initState() {
     super.initState();
     _startLivestream();
+    _fetchAspectRatio();
   }
 
   @override
   void dispose() {
     _finishNativeStream();
     super.dispose();
+  }
+
+  Future<void> _fetchAspectRatio() async {
+    //TODO: get the actual width and height from the native player and set the right aspect ratio
+    setState(() {
+      _aspectRatio = 16 / 9;
+    });
   }
 
   Future<void> _startLivestream() async {
@@ -191,45 +200,40 @@ class _LivestreamPageState extends State<LivestreamPage> {
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Center(
-        child:
-            hasFailed
-                ? Text(
-                  'Failed:\n$_errMsg',
-                  style: const TextStyle(color: Colors.red, fontSize: 15),
-                  textAlign: TextAlign.center,
-                )
-                : isStreaming
+        child: hasFailed
+            ? Text(
+                'Failed:\n$_errMsg',
+                style: const TextStyle(color: Colors.red, fontSize: 15),
+                textAlign: TextAlign.center,
+              )
+            : isStreaming
                 ? Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Native player
-                    SizedBox(
-                      width: 320,
-                      height: 180,
-                      child: Container(
-                        width: 320,
-                        height: 180,
-                        child: BytePlayerView(streamId: _streamId!),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text('Live', style: TextStyle(color: Colors.white)),
-                  ],
-                )
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_aspectRatio != null)
+                        AspectRatio(
+                          aspectRatio: _aspectRatio!,
+                          child: BytePlayerView(streamId: _streamId!),
+                        )
+                      else
+                        const CircularProgressIndicator(),
+                      const SizedBox(height: 12),
+                      const Text('Live', style: TextStyle(color: Colors.white)),
+                    ],
+                  )
                 : const CircularProgressIndicator(),
       ),
-      floatingActionButton:
-          isStreaming
-              ? FloatingActionButton(
-                backgroundColor: Colors.redAccent,
-                child: const Icon(Icons.stop),
-                onPressed: () {
-                  setState(() => isStreaming = false);
-                  _finishNativeStream();
-                  Navigator.pop(context);
-                },
-              )
-              : null,
+      floatingActionButton: isStreaming
+          ? FloatingActionButton(
+              backgroundColor: Colors.redAccent,
+              child: const Icon(Icons.stop),
+              onPressed: () {
+                setState(() => isStreaming = false);
+                _finishNativeStream();
+                Navigator.pop(context);
+              },
+            )
+          : null,
     );
   }
 }
