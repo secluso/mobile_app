@@ -46,6 +46,11 @@ class _VideoViewPageState extends State<VideoViewPage> {
     _controller = VideoPlayerController.file(File(_videoPath));
 
     await _controller.initialize();
+    await _controller.setLooping(true);
+    _controller.addListener(() {
+      if (mounted) setState(() {});
+    });
+    _controller.play();
     setState(() {
       _initialized = true;
     });
@@ -126,30 +131,194 @@ class _VideoViewPageState extends State<VideoViewPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          widget.visibleVideoTitle,
-          style: TextStyle(color: Colors.white),
+      appBar: isLandscape
+          ? null
+          : AppBar(
+              title: Text(
+                widget.visibleVideoTitle,
+                style: const TextStyle(color: Colors.white),
+              ),
+              iconTheme: const IconThemeData(color: Colors.white),
+              backgroundColor: const Color.fromARGB(255, 27, 114, 60),
+            ),
+      body: _initialized
+          ? isLandscape
+              ? _buildLandscapePlayer()
+              : _buildPortraitContent()
+          : const Center(child: CircularProgressIndicator()),
+    );
+  }
+
+  Widget _buildLandscapePlayer() {
+    return Stack(
+      children: [
+        Center(
+          child: AspectRatio(
+            aspectRatio: _controller.value.aspectRatio,
+            child: VideoPlayer(_controller),
+          ),
         ),
-        iconTheme: const IconThemeData(color: Colors.white),
-        backgroundColor: const Color.fromARGB(255, 27, 114, 60),
-      ),
-      body: Center(
+        // Progress bar & time
+        Positioned(
+          left: 16,
+          right: 16,
+          bottom: 80,
+          child: Column(
+            children: [
+              VideoProgressIndicator(
+                _controller,
+                allowScrubbing: false,
+                colors: const VideoProgressColors(
+                  playedColor: Color.fromARGB(255, 27, 114, 60),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 4),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _formatDuration(_controller.value.position),
+                    style: const TextStyle(fontSize: 12, color: Colors.white),
+                  ),
+                  Text(
+                    _formatDuration(_controller.value.duration),
+                    style: const TextStyle(fontSize: 12, color: Colors.white),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        // Playback controls
+        Align(
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 24),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.replay_5),
+                  iconSize: 36,
+                  color: Colors.white,
+                  onPressed: () {
+                    final current = _controller.value.position;
+                    final newPosition = current - const Duration(seconds: 5);
+                    _controller.seekTo(
+                      newPosition >= Duration.zero ? newPosition : Duration.zero,
+                    );
+                  },
+                ),
+                const SizedBox(width: 24),
+                IconButton(
+                  icon: Icon(
+                    _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
+                  ),
+                  iconSize: 44,
+                  color: Colors.white,
+                  onPressed: _togglePlayPause,
+                ),
+                const SizedBox(width: 24),
+                IconButton(
+                  icon: const Icon(Icons.forward_5),
+                  iconSize: 36,
+                  color: Colors.white,
+                  onPressed: () {
+                    final current = _controller.value.position;
+                    final max = _controller.value.duration;
+                    final newPosition = current + const Duration(seconds: 5);
+                    _controller.seekTo(newPosition <= max ? newPosition : max);
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPortraitContent() {
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            if (_initialized)
-              AspectRatio(
-                aspectRatio: _controller.value.aspectRatio,
-                child: VideoPlayer(_controller),
-              )
-            else
-              const Padding(
-                padding: EdgeInsets.all(32),
-                child: CircularProgressIndicator(),
+            AspectRatio(
+              aspectRatio: _controller.value.aspectRatio,
+              child: VideoPlayer(_controller),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                children: [
+                  VideoProgressIndicator(
+                    _controller,
+                    colors: const VideoProgressColors(
+                      playedColor: Color.fromARGB(255, 27, 114, 60),
+                    ),
+                    allowScrubbing: false,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _formatDuration(_controller.value.position),
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      Text(
+                        _formatDuration(_controller.value.duration),
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.replay_5),
+                        iconSize: 36,
+                        onPressed: () {
+                          final current = _controller.value.position;
+                          final newPosition = current - const Duration(seconds: 5);
+                          _controller.seekTo(
+                            newPosition >= Duration.zero ? newPosition : Duration.zero,
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 24),
+                      IconButton(
+                        icon: Icon(
+                          _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
+                        ),
+                        iconSize: 44,
+                        onPressed: _togglePlayPause,
+                      ),
+                      const SizedBox(width: 24),
+                      IconButton(
+                        icon: const Icon(Icons.forward_5),
+                        iconSize: 36,
+                        onPressed: () {
+                          final current = _controller.value.position;
+                          final max = _controller.value.duration;
+                          final newPosition = current + const Duration(seconds: 5);
+                          _controller.seekTo(
+                            newPosition <= max ? newPosition : max,
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ],
               ),
+            ),
             const SizedBox(height: 24),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -160,28 +329,22 @@ class _VideoViewPageState extends State<VideoViewPage> {
             ),
             if (widget.canDownload)
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: ElevatedButton(
                   onPressed: _downloadVideo,
-                  child: const Text("Download Video"),
+                  child: const Text("Save Video to Gallery"),
                 ),
               ),
           ],
         ),
       ),
-
-      floatingActionButton:
-          _initialized
-              ? FloatingActionButton(
-                onPressed: _togglePlayPause,
-                child: Icon(
-                  _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
-                ),
-              )
-              : null,
     );
+  }
+
+  String _formatDuration(Duration position) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final minutes = twoDigits(position.inMinutes.remainder(60));
+    final seconds = twoDigits(position.inSeconds.remainder(60));
+    return "${position.inHours > 0 ? '${twoDigits(position.inHours)}:' : ''}$minutes:$seconds";
   }
 }
