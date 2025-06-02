@@ -115,19 +115,33 @@ class DownloadScheduler {
 
     // Adds the camera to the waiting list if not already in there.
     if (await lock(PrefKeys.cameraWaitingLock)) {
-      var sharedPref = await SharedPreferences.getInstance();
-      if (sharedPref.containsKey(PrefKeys.downloadCameraQueue)) {
-        var currentCameraList = sharedPref.getStringList(
-          PrefKeys.downloadCameraQueue,
-        );
-        if (!currentCameraList!.contains(camera)) {
-          currentCameraList.add(camera);
+      Log.d("Adding to queue for $camera");
+      try {
+        var sharedPref = SharedPreferencesAsync();
+        if (await sharedPref.containsKey(PrefKeys.downloadCameraQueue)) {
+          var currentCameraList = await sharedPref.getStringList(
+            PrefKeys.downloadCameraQueue,
+          );
+          if (!currentCameraList!.contains(camera)) {
+            Log.d("Added to pre-existing list for $camera");
+            currentCameraList.add(camera);
+            await sharedPref.setStringList(
+              PrefKeys.downloadCameraQueue,
+              currentCameraList,
+            );
+          } else {
+            Log.d("List already contained $camera");
+          }
+        } else {
+          Log.d("Created new string list for $camera");
+          await sharedPref.setStringList(PrefKeys.downloadCameraQueue, [
+            camera,
+          ]);
         }
-      } else {
-        sharedPref.setStringList(PrefKeys.downloadCameraQueue, [camera]);
+      } finally {
+        // Ensure it's unlocked.
+        await unlock(PrefKeys.cameraWaitingLock);
       }
-
-      await unlock(PrefKeys.cameraWaitingLock);
     } else {
       Log.e("Failed to acquire motion lock");
     }

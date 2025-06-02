@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:privastead_flutter/notifications/notifications.dart';
 import 'package:privastead_flutter/notifications/scheduler.dart';
@@ -236,7 +235,9 @@ class PushNotificationService {
             final bool isRestricted = false;
 
             if (!isMetered || (useMobile && !isRestricted)) {
-              await DownloadScheduler.scheduleVideoDownload(cameraName);
+              DownloadScheduler.scheduleVideoDownload(
+                cameraName,
+              ); // Don't await, as the lock may freeze this up
             }
           } else if (response != 'Error!' && response != 'None') {
             Log.d("Showing motion notification");

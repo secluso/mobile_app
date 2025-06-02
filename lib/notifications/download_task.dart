@@ -44,7 +44,7 @@ Future<bool> doWorkNonBackground(String cameraName) async {
 
   if (await lock(PrefKeys.genericDownloadTaskLock)) {
     try {
-      var prefs = await SharedPreferences.getInstance();
+      var prefs = SharedPreferencesAsync();
       await prefs.setBool(
         PrefKeys.downloadingMotionVideos,
         true,
@@ -76,26 +76,36 @@ Future<bool> doWorkBackground() async {
   }
   Log.d("Starting to work");
 
-  var prefs = await SharedPreferences.getInstance();
-  if (!prefs.containsKey(PrefKeys.downloadCameraQueue) &&
-      !prefs.containsKey(PrefKeys.backupDownloadCameraQueue)) {
+  // Perform an initial check (before lock)
+  var prefs = SharedPreferencesAsync();
+  if (!await prefs.containsKey(PrefKeys.downloadCameraQueue) &&
+      !await prefs.containsKey(PrefKeys.backupDownloadCameraQueue)) {
     Log.e("There are no pref keys to base off of.");
     return true;
   }
 
   if (await lock(PrefKeys.genericDownloadTaskLock)) {
     try {
+      var prefs = SharedPreferencesAsync();
       if (await lock(PrefKeys.cameraWaitingLock)) {
-        await prefs.setBool(
-          PrefKeys.downloadingMotionVideos,
-          true,
-        ); // Restrict livestreaming.
-
-        var downloadCameraQueue = prefs.getStringList(
-          PrefKeys.downloadCameraQueue,
-        );
+        var downloadCameraQueue;
         try {
-          var backupDownloadCameraQueue = prefs.getStringList(
+          // Secondary check after locking
+          if (!await prefs.containsKey(PrefKeys.downloadCameraQueue) &&
+              !await prefs.containsKey(PrefKeys.backupDownloadCameraQueue)) {
+            Log.e("There are no pref keys to base off of.");
+            return true;
+          }
+
+          downloadCameraQueue = await prefs.getStringList(
+            PrefKeys.downloadCameraQueue,
+          );
+          await prefs.setBool(
+            PrefKeys.downloadingMotionVideos,
+            true,
+          ); // Restrict livestreaming.
+
+          var backupDownloadCameraQueue = await prefs.getStringList(
             PrefKeys.backupDownloadCameraQueue,
           );
           if (downloadCameraQueue == null) {
@@ -109,11 +119,13 @@ Future<bool> doWorkBackground() async {
                     .union(backupDownloadCameraQueue.toSet())
                     .toList();
           }
-          prefs.setStringList(
+
+          // Await these, so that they don't run outside the lock.
+          await prefs.setStringList(
             PrefKeys.backupDownloadCameraQueue,
             downloadCameraQueue!, // This cannot be null.
           ); // Create a backup of the current list.
-          prefs.remove(
+          await prefs.remove(
             PrefKeys.downloadCameraQueue,
           ); // Delete the existing list, so that we know any new entries from this point will require an additional download later
         } finally {
@@ -121,99 +133,105 @@ Future<bool> doWorkBackground() async {
           await unlock(PrefKeys.cameraWaitingLock);
           Log.d("Released lock");
         }
+        if (downloadCameraQueue != null) {
+          // What if we have uneven cameras within the batch? Say we have 6 cameras. Three have 10 videos to download. Three have 1. It seems best to associate them when batching, but we randomize currently.
+          var batchSize = PrefKeys.downloadBatchSize;
+          var batchedQueue = batch(downloadCameraQueue, batchSize);
+          Log.d("Batched Queue List: $batchedQueue");
 
-        // What if we have uneven cameras within the batch? Say we have 6 cameras. Three have 10 videos to download. Three have 1. It seems best to associate them when batching, but we randomize currently.
-        var batchSize = PrefKeys.downloadBatchSize;
-        var batchedQueue = batch(downloadCameraQueue, batchSize);
-        Log.d("Batched Queue List: $batchedQueue");
+          var retrieveResults = [];
+          for (int i = 1; i <= batchedQueue.length; i++) {
+            var currentSet = batchedQueue[i - 1];
+            Log.d("Batch #$i = $currentSet");
 
-        var retrieveResults = [];
-        for (int i = 1; i <= batchedQueue.length; i++) {
-          var currentSet = batchedQueue[i - 1];
-          Log.d("Batch #$i = $currentSet");
+            // Queue all of the current batch
+            var currentFutures = [];
+            for (int j = 0; j < currentSet.length; j++) {
+              currentFutures.add(
+                retrieveVideos(currentSet[j]),
+              ); // This is an async function, so it'll run all of these in parallel
+            }
 
-          // Queue all of the current batch
-          var currentFutures = [];
-          for (int j = 0; j < currentSet.length; j++) {
-            currentFutures.add(
-              retrieveVideos(currentSet[j]),
-            ); // This is an async function, so it'll run all of these in parallel
+            Log.d("Awaiting batch completion");
+            // Wait for all of the current batch to complete.
+            for (int j = 0; j < currentSet.length; j++) {
+              retrieveResults.add(await currentFutures[j]);
+            }
+            Log.d("Batch completed");
           }
 
-          Log.d("Awaiting batch completion");
-          // Wait for all of the current batch to complete.
-          for (int j = 0; j < currentSet.length; j++) {
-            retrieveResults.add(await currentFutures[j]);
-          }
-          Log.d("Batch completed");
-        }
+          // Track if at least one was successful, and if we had a single failure or not.
+          var oneSuccessful = false;
+          var allSuccessful = true;
 
-        // Track if at least one was successful, and if we had a single failure or not.
-        var oneSuccessful = false;
-        var allSuccessful = true;
+          await lock(
+            PrefKeys.cameraWaitingLock,
+          ); // TODO: I'm not sure what to do if this is false. Is it even possible for it to be false? It's blocking.
 
-        await lock(
-          PrefKeys.cameraWaitingLock,
-        ); // TODO: I'm not sure what to do if this is false. Is it even possible for it to be false? It's blocking.
-
-        try {
-          var downloadQueueCopy = List<String>.from(downloadCameraQueue);
-          for (int i = 0; i < batchedQueue.length; i++) {
-            for (int j = 0; j < batchedQueue[i].length; j++) {
-              var index = i * batchSize + j;
-              if (retrieveResults[index]) {
-                oneSuccessful = true;
-                var cameraName =
-                    downloadQueueCopy[index]; // Work from a clone to avoid self-modification
-                downloadCameraQueue.remove(cameraName);
-              } else {
-                allSuccessful =
-                    false; // We m aintain a queue of ones that still need to be processed.
+          try {
+            var downloadQueueCopy = List<String>.from(downloadCameraQueue);
+            for (int i = 0; i < batchedQueue.length; i++) {
+              for (int j = 0; j < batchedQueue[i].length; j++) {
+                var index = i * batchSize + j;
+                if (retrieveResults[index]) {
+                  oneSuccessful = true;
+                  var cameraName =
+                      downloadQueueCopy[index]; // Work from a clone to avoid self-modification
+                  downloadCameraQueue.remove(cameraName);
+                } else {
+                  allSuccessful =
+                      false; // We m aintain a queue of ones that still need to be processed.
+                }
               }
             }
+
+            Log.d("After queue cleanup");
+
+            // Merge the failed list and ones that still need updates.
+            if (await prefs.containsKey(PrefKeys.downloadCameraQueue)) {
+              Log.d("Merging lists together");
+              List<String> updatedList =
+                  (await prefs.getStringList(
+                    PrefKeys.downloadCameraQueue,
+                  ))!; // This cannot be null
+              downloadCameraQueue =
+                  downloadCameraQueue
+                      .toSet()
+                      .union(updatedList.toSet())
+                      .toList();
+            } else {
+              Log.d("Prefs did not contain new updates");
+            }
+
+            // Set the new list to be scheduled next time,
+            await prefs.setStringList(
+              PrefKeys.downloadCameraQueue,
+              downloadCameraQueue,
+            );
+            await prefs.remove(PrefKeys.backupDownloadCameraQueue);
+            await prefs.setBool(
+              PrefKeys.downloadingMotionVideos,
+              false,
+            ); // Allow livestreaming to continue.
+          } finally {
+            await unlock(
+              PrefKeys.cameraWaitingLock,
+            ); // Always ensure this unlocks.
           }
 
-          Log.d("After queue cleanup");
-
-          // Merge the failed list and ones that still need updates.
-          if (prefs.containsKey(PrefKeys.downloadCameraQueue)) {
-            Log.d("Merging lists together");
-            List<String> updatedList =
-                prefs.getStringList(
-                  PrefKeys.downloadCameraQueue,
-                )!; // This cannot be null
-            downloadCameraQueue =
-                downloadCameraQueue.toSet().union(updatedList.toSet()).toList();
+          // If at least one succeeded, we know we need to potentially update the camera list.
+          if (oneSuccessful) {
+            Log.d("Signaling for camera list update");
+            QueueProcessor.instance.signalNewFile();
           }
 
-          // Set the new list to be scheduled next time,
-          await prefs.setStringList(
-            PrefKeys.downloadCameraQueue,
-            downloadCameraQueue,
-          );
-          await prefs.remove(PrefKeys.backupDownloadCameraQueue);
-          await prefs.setBool(
-            PrefKeys.downloadingMotionVideos,
-            false,
-          ); // Allow livestreaming to continue.
-        } finally {
-          await unlock(
-            PrefKeys.cameraWaitingLock,
-          ); // Always ensure this unlocks.
+          // If some didn't succeed, we need to schedule another task to run later.
+          // Additionally, there's a chance we could have more now from merging with the new list.
+          // False means we retry the task again later
+          var currentState = allSuccessful && downloadCameraQueue.length == 0;
+          Log.d("Returning $currentState, all successful = $allSuccessful");
+          return currentState;
         }
-
-        // If at least one succeeded, we know we need to potentially update the camera list.
-        if (oneSuccessful) {
-          Log.d("Signaling for cameral list update");
-          QueueProcessor.instance.signalNewFile();
-        }
-
-        // If some didn't succeed, we need to schedule another task to run later.
-        // Additionally, there's a chance we could have more now from merging with the new list.
-        // False means we retry the task again later
-        var currentState = allSuccessful && downloadCameraQueue.length == 0;
-        Log.d("Returning $currentState, all successful = $allSuccessful");
-        return currentState;
       } else {
         Log.e("Failed to acquire motion lock");
       }
