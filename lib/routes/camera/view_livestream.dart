@@ -229,7 +229,6 @@ class _LivestreamPageState extends State<LivestreamPage> {
               child: const Icon(Icons.stop),
               onPressed: () {
                 setState(() => isStreaming = false);
-                _finishNativeStream();
                 Navigator.pop(context);
               },
             )
