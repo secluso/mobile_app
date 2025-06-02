@@ -8,6 +8,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:privastead_flutter/utilities/camera_util.dart';
 import 'package:privastead_flutter/utilities/byte_player_view.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
+import 'package:privastead_flutter/database/entities.dart';
+import 'package:privastead_flutter/database/app_stores.dart';
+import 'package:privastead_flutter/routes/camera/view_camera.dart';
+import 'dart:io';
+import '../../objectbox.g.dart';
 
 //TODO: Create iOS native code for this
 
@@ -24,8 +31,8 @@ class _LivestreamPageState extends State<LivestreamPage> {
   bool hasFailed = false;
   String _errMsg = '';
   double? _aspectRatio;
-
   int? _streamId;
+  bool _needToCreateFile = true;
 
   @override
   void initState() {
@@ -128,17 +135,19 @@ class _LivestreamPageState extends State<LivestreamPage> {
     Log.d('Start chunk pump');
     int chunk = 1;
     final id = _streamId!;
+    final String cameraName = widget.cameraName;
+    File? _videoFile;
 
     while (isStreaming) {
       final res = await HttpClientService.instance.livestreamRetrieve(
-        cameraName: widget.cameraName,
+        cameraName: cameraName,
         chunkNumber: chunk,
       );
 
       await res.fold(
         (enc) async {
           final dec = await livestreamDecryptApi(
-            cameraName: widget.cameraName,
+            cameraName: cameraName,
             encData: enc,
             expectedChunkNumber: BigInt.from(chunk),
           );
@@ -151,6 +160,74 @@ class _LivestreamPageState extends State<LivestreamPage> {
 
           await ByteStreamPlayer.push(id, dec);
           Log.d('Pushed chunk $chunk (${dec.length} B)');
+
+          if (_needToCreateFile) {
+            final baseDir = await getApplicationDocumentsDirectory();
+
+            final int timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+            final String videoName = 'video_$timestamp.mp4';
+            final filePath = p.join(
+              baseDir.path,
+              'camera_dir_$cameraName',
+              videoName,
+            );
+
+            final parentDir = Directory(p.dirname(filePath));
+            if (!await parentDir.exists()) {
+              await parentDir.create(recursive: true);
+            }
+
+            _videoFile = File(filePath);
+            await _videoFile!.writeAsBytes(dec, mode: FileMode.writeOnly);
+
+            // TODO: The rest of the code here is almost identical to the code in pending_processor.dart
+            final box = AppStores.instance.videoStore.box<Video>();
+            var video = Video(cameraName, videoName, true, false);
+            box.put(video);
+
+            final cameraBox = AppStores.instance.cameraStore.box<Camera>();
+            final cameraQuery =
+                cameraBox.query(Camera_.name.equals(cameraName)).build();
+
+            final foundCamera = cameraQuery.findFirst();
+            cameraQuery.close();
+
+            if (foundCamera == null) {
+              Log.e(
+                "Camera entity is null in database. This shouldn't be possible. Camera: $cameraName Video: $videoName",
+              );
+            } else {
+              if (!foundCamera.unreadMessages) {
+                Log.d("Setting camera $cameraName to have unreadMessages = true");
+                foundCamera.unreadMessages = true;
+                cameraBox.put(foundCamera);
+              } else {
+                Log.d("Camera was already set on unreadMessages = true");
+              }
+
+              if (globalCameraViewPageState?.mounted == true &&
+                  globalCameraViewPageState?.widget.cameraName == cameraName) {
+                globalCameraViewPageState?.reloadVideos();
+              } else if (globalCameraViewPageState?.mounted == false) {
+                Log.d("Not reloading current camera page - not mounted");
+              } else {
+                final currentPage = globalCameraViewPageState?.widget.cameraName;
+                Log.d(
+                  "Not reloading current camera page - name doesn't match. $currentPage, $cameraName",
+                );
+              }
+            }
+
+            _needToCreateFile = false;
+          } else {
+            if (_videoFile != null) {
+              await _videoFile!.writeAsBytes(dec, mode: FileMode.writeOnlyAppend);
+            } else {
+              // Should not happen
+              Log.d('Livestream video file not created');
+            }
+          }
+
           chunk++;
         },
         (err) async {
