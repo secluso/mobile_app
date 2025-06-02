@@ -1,5 +1,6 @@
 pub mod core;
 pub mod logger;
+pub mod lock_manager;
 
 use crate::api::core::Clients;
 

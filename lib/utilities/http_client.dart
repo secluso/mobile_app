@@ -61,7 +61,7 @@ class HttpClientService {
       }
 
       final motionGroup = await _motionGroupName(cameraName);
-      Log.d("Motion Group: $motionGroup");
+      Log.d("Camera Name: $cameraName, Motion Group: $motionGroup");
       final url = Uri.parse('http://$serverIp:8080/$motionGroup/$epoch');
       final headers = await _basicAuthHeaders(username!, password!);
 
@@ -95,7 +95,7 @@ class HttpClientService {
         );
       }
 
-      Log.d("Success downloading");
+      Log.d("Success downloading for camera $cameraName");
 
       return Result.success(file);
     } catch (e) {

@@ -24,7 +24,6 @@ void main() async {
   Log.init();
   Log.i('main() started');
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   Log.d("After intiialize app");
   await RustLib.init();
   createLogStream().listen((event) {
@@ -46,7 +45,12 @@ void main() async {
   });
   Log.d("After rust lib init");
   await AppStores.init();
-  await runMigrations();
+  await runMigrations(); // Must run right after App Store initialization
+
+  _initAllCameras(); // Must come after App Store and Rust Lib initialization
+
+  // We wait to initialize Firebase and the download scheduler until our cameras have been initialized
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await DownloadScheduler.init();
 
   QueueProcessor.instance.start();
@@ -79,6 +83,16 @@ void main() async {
   );
 }
 
+Future<void> _initAllCameras() async {
+  final box = AppStores.instance.cameraStore.box<Camera>();
+
+  final allCameras = box.getAll();
+  for (var camera in allCameras) {
+    // TODO: Check if false, perhaps there's some weird error we might need to look into...
+    await connect(camera.name);
+  }
+}
+
 class MyApp extends StatefulWidget {
   @override
   State<MyApp> createState() => _MyAppState();
@@ -92,7 +106,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _initPrefs();
-    _initAllCameras();
   }
 
   Future<void> _initPrefs() async {
@@ -106,19 +119,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       Log.i("App Lifecycle State set to RESUMED");
       PushNotificationService.tryUploadIfNeeded(false);
-      _initAllCameras();
+      _initAllCameras(); // I'm not sure if this is necessary or not. It could be good to periodically check for initialization though.
       QueueProcessor.instance
           .signalNewFile(); // Try to process any new uploads now
-    }
-  }
-
-  Future<void> _initAllCameras() async {
-    final box = AppStores.instance.cameraStore.box<Camera>();
-
-    final allCameras = box.getAll();
-    for (var camera in allCameras) {
-      // TODO: Check if false, perhaps there's some weird error we might need to look into...
-      await connect(camera.name);
     }
   }
 

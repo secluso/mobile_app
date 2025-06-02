@@ -6,6 +6,7 @@ import 'package:privastead_flutter/src/rust/api.dart';
 import 'package:privastead_flutter/routes/app_drawer.dart';
 import 'package:privastead_flutter/src/rust/frb_generated.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
+import 'package:privastead_flutter/utilities/lock.dart';
 import 'package:path/path.dart' as p;
 import 'dart:io';
 import 'dart:ui';
@@ -34,32 +35,220 @@ class RustBridgeHelper {
   }
 }
 
-Future<bool> doWork(String cameraName) async {
+Future<bool> doWorkNonBackground(String cameraName) async {
   // TODO: Should we wait for downloadingMotionVideos to be false before continuing? Is this meant to be a spinlock?
 
   if (Platform.isAndroid) {
     await RustBridgeHelper.ensureInitialized();
   }
-  var prefs = await SharedPreferences.getInstance();
-  await prefs.setBool(PrefKeys.downloadingMotionVideos, true);
 
+  if (await lock(PrefKeys.genericDownloadTaskLock)) {
+    try {
+      var prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(
+        PrefKeys.downloadingMotionVideos,
+        true,
+      ); // Restrict livestreaming
+      Log.d("Starting to work in non-background mode");
+
+      bool result = await retrieveVideos(cameraName);
+
+      await prefs.setBool(PrefKeys.downloadingMotionVideos, false);
+      QueueProcessor.instance.signalNewFile();
+      return result;
+    } finally {
+      await unlock(
+        PrefKeys.genericDownloadTaskLock,
+      ); // Always ensure this unlocks, even on exceptions
+    }
+  } else {
+    Log.e("Failed to acquire generic download task lock");
+    return false;
+  }
+
+  return true;
+}
+
+Future<bool> doWorkBackground() async {
+  // TODO: We should also create synchronization between any motion download (if we were to have some sort of download from the main)
+  if (Platform.isAndroid) {
+    await RustBridgeHelper.ensureInitialized();
+  }
   Log.d("Starting to work");
 
-  bool result = await retrieveVideos(cameraName);
+  var prefs = await SharedPreferences.getInstance();
+  if (!prefs.containsKey(PrefKeys.downloadCameraQueue) &&
+      !prefs.containsKey(PrefKeys.backupDownloadCameraQueue)) {
+    Log.e("There are no pref keys to base off of.");
+    return true;
+  }
 
-  await prefs.setBool(PrefKeys.downloadingMotionVideos, false);
-  QueueProcessor.instance.signalNewFile();
+  if (await lock(PrefKeys.genericDownloadTaskLock)) {
+    try {
+      if (await lock(PrefKeys.cameraWaitingLock)) {
+        await prefs.setBool(
+          PrefKeys.downloadingMotionVideos,
+          true,
+        ); // Restrict livestreaming.
 
+        var downloadCameraQueue = prefs.getStringList(
+          PrefKeys.downloadCameraQueue,
+        );
+        try {
+          var backupDownloadCameraQueue = prefs.getStringList(
+            PrefKeys.backupDownloadCameraQueue,
+          );
+          if (downloadCameraQueue == null) {
+            downloadCameraQueue =
+                backupDownloadCameraQueue; // Replace the existing queue with the pre-existing backup.
+          } else if (backupDownloadCameraQueue != null) {
+            // Merge the two queues (without duplicates by using sets)
+            downloadCameraQueue =
+                downloadCameraQueue
+                    .toSet()
+                    .union(backupDownloadCameraQueue.toSet())
+                    .toList();
+          }
+          prefs.setStringList(
+            PrefKeys.backupDownloadCameraQueue,
+            downloadCameraQueue!, // This cannot be null.
+          ); // Create a backup of the current list.
+          prefs.remove(
+            PrefKeys.downloadCameraQueue,
+          ); // Delete the existing list, so that we know any new entries from this point will require an additional download later
+        } finally {
+          // Ensure this always unlocks
+          await unlock(PrefKeys.cameraWaitingLock);
+          Log.d("Released lock");
+        }
+
+        // What if we have uneven cameras within the batch? Say we have 6 cameras. Three have 10 videos to download. Three have 1. It seems best to associate them when batching, but we randomize currently.
+        var batchSize = PrefKeys.downloadBatchSize;
+        var batchedQueue = batch(downloadCameraQueue, batchSize);
+        Log.d("Batched Queue List: $batchedQueue");
+
+        var retrieveResults = [];
+        for (int i = 1; i <= batchedQueue.length; i++) {
+          var currentSet = batchedQueue[i - 1];
+          Log.d("Batch #$i = $currentSet");
+
+          // Queue all of the current batch
+          var currentFutures = [];
+          for (int j = 0; j < currentSet.length; j++) {
+            currentFutures.add(
+              retrieveVideos(currentSet[j]),
+            ); // This is an async function, so it'll run all of these in parallel
+          }
+
+          Log.d("Awaiting batch completion");
+          // Wait for all of the current batch to complete.
+          for (int j = 0; j < currentSet.length; j++) {
+            retrieveResults.add(await currentFutures[j]);
+          }
+          Log.d("Batch completed");
+        }
+
+        // Track if at least one was successful, and if we had a single failure or not.
+        var oneSuccessful = false;
+        var allSuccessful = true;
+
+        await lock(
+          PrefKeys.cameraWaitingLock,
+        ); // TODO: I'm not sure what to do if this is false. Is it even possible for it to be false? It's blocking.
+
+        try {
+          var downloadQueueCopy = List<String>.from(downloadCameraQueue);
+          for (int i = 0; i < batchedQueue.length; i++) {
+            for (int j = 0; j < batchedQueue[i].length; j++) {
+              var index = i * batchSize + j;
+              if (retrieveResults[index]) {
+                oneSuccessful = true;
+                var cameraName =
+                    downloadQueueCopy[index]; // Work from a clone to avoid self-modification
+                downloadCameraQueue.remove(cameraName);
+              } else {
+                allSuccessful =
+                    false; // We m aintain a queue of ones that still need to be processed.
+              }
+            }
+          }
+
+          Log.d("After queue cleanup");
+
+          // Merge the failed list and ones that still need updates.
+          if (prefs.containsKey(PrefKeys.downloadCameraQueue)) {
+            Log.d("Merging lists together");
+            List<String> updatedList =
+                prefs.getStringList(
+                  PrefKeys.downloadCameraQueue,
+                )!; // This cannot be null
+            downloadCameraQueue =
+                downloadCameraQueue.toSet().union(updatedList.toSet()).toList();
+          }
+
+          // Set the new list to be scheduled next time,
+          await prefs.setStringList(
+            PrefKeys.downloadCameraQueue,
+            downloadCameraQueue,
+          );
+          await prefs.remove(PrefKeys.backupDownloadCameraQueue);
+          await prefs.setBool(
+            PrefKeys.downloadingMotionVideos,
+            false,
+          ); // Allow livestreaming to continue.
+        } finally {
+          await unlock(
+            PrefKeys.cameraWaitingLock,
+          ); // Always ensure this unlocks.
+        }
+
+        // If at least one succeeded, we know we need to potentially update the camera list.
+        if (oneSuccessful) {
+          Log.d("Signaling for cameral list update");
+          QueueProcessor.instance.signalNewFile();
+        }
+
+        // If some didn't succeed, we need to schedule another task to run later.
+        // Additionally, there's a chance we could have more now from merging with the new list.
+        // False means we retry the task again later
+        var currentState = allSuccessful && downloadCameraQueue.length == 0;
+        Log.d("Returning $currentState, all successful = $allSuccessful");
+        return currentState;
+      } else {
+        Log.e("Failed to acquire motion lock");
+      }
+    } finally {
+      await unlock(
+        PrefKeys.genericDownloadTaskLock,
+      ); // Always ensure this unlocks, even on exceptions
+    }
+  } else {
+    Log.e("Failed to acquire generic download task lock");
+  }
+
+  return false;
+}
+
+/// Separate a long list into batches of size batchSize
+List<List<T>> batch<T>(List<T> items, int batchSize) {
+  List<List<T>> result = [];
+  for (var i = 0; i < items.length; i += batchSize) {
+    result.add(
+      items.sublist(
+        i,
+        i + batchSize > items.length ? items.length : i + batchSize,
+      ),
+    );
+  }
   return result;
 }
 
 //TODO: What if we miss a notification and don't get one for a long time? Should we occasionally query? What about if the user is in the app without any notifications?
 
 Future<bool> retrieveVideos(String cameraName) async {
+  Log.d("Entered for $cameraName");
   var sharedPref = await SharedPreferences.getInstance();
   var epoch = sharedPref.getInt("epoch$cameraName") ?? 2;
-
-  var successes = 0;
 
   while (true) {
     Log.d(
@@ -113,7 +302,6 @@ Future<bool> retrieveVideos(String cameraName) async {
         );
         port?.send('signal_new_file');
 
-        successes++;
         camerasPageKey.currentState?.invalidateThumbnail(cameraName);
         sharedPref.setInt("epoch$cameraName", epoch + 1);
       }
@@ -126,6 +314,6 @@ Future<bool> retrieveVideos(String cameraName) async {
     }
   }
 
-  if (successes >= 1) return true;
-  return false;
+  Log.d("Finished downloading for $cameraName");
+  return true; // TODO: We may wish to utilize a check in the future on if something truly failed that could be retried, so this is left here as an architecture to make that happen
 }

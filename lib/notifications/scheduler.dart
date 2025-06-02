@@ -1,12 +1,14 @@
 import 'dart:io' show Platform;
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:privastead_flutter/keys.dart';
 import 'package:privastead_flutter/notifications/download_task.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
+import 'package:privastead_flutter/utilities/lock.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 
 const String _bgTaskId = 'com.privastead.task'; // Matches Info.plist
 const String _workerName = 'download_worker'; // free-form tag
-const int _maxRetries = 5;
 
 class OneOffHelper {
   static bool _initialized = false;
@@ -36,34 +38,28 @@ void callbackDispatcher() {
       OneOffHelper.ensureInitialized();
     }
 
-    Log.d("Running task in background");
-    final camera = inputData?['camera'] as String? ?? 'Unknown';
     final retry = inputData?['retry'] as int? ?? 0;
+    Log.d("Running task in background (iteration #$retry)");
 
-    if (camera != 'Unknown') {
-      final ok = await doWork(camera);
+    final ok = await doWorkBackground();
 
-      if (!ok && retry < _maxRetries) {
-        Log.d("Retrying due to failure (and < than max retries)");
-        final nextRetry = retry + 1;
-        final delayMin = nextRetry * nextRetry * 15;
+    if (!ok) {
+      Log.d("Retrying due to failure / new entries");
+      final nextRetry = retry + 1;
+      final delayMin = nextRetry * nextRetry * 15;
 
-        await Workmanager().registerOneOffTask(
-          _bgTaskId,
-          _workerName,
-          inputData: {'camera': camera, 'retry': nextRetry},
-          existingWorkPolicy: ExistingWorkPolicy.replace,
-          constraints: Constraints(networkType: NetworkType.connected),
-          initialDelay:
-              Platform.isIOS ? Duration(minutes: delayMin) : Duration.zero,
-        );
-      }
-
+      await Workmanager().registerOneOffTask(
+        _bgTaskId,
+        _workerName,
+        inputData: {'retry': nextRetry},
+        existingWorkPolicy: ExistingWorkPolicy.replace,
+        constraints: Constraints(networkType: NetworkType.connected),
+        initialDelay:
+            Platform.isIOS ? Duration(minutes: delayMin) : Duration.zero,
+      );
       return ok; // Intreprets true=success, false=retry
     } else {
-      Log.i(
-        'TODO: Incorporate special startup behavior to fetch all cameras in crash scenario.',
-      );
+      // no new camera entries, everything succeeded... we can stop scheduling now
       return true;
     }
   });
@@ -85,10 +81,10 @@ class DownloadScheduler {
     ); // debug mode only on android
 
     // Send one BG task so force-quit users recover on next launch
-    // IMPORTANT TODO: We need to feed a camera name, or this will always fail. Should we loop through all cameras, as this is only at startup? Should we make then a special option?
     await Workmanager().registerOneOffTask(
       _bgTaskId,
       _workerName,
+      inputData: {'retry': 0},
       existingWorkPolicy: ExistingWorkPolicy.replace,
       constraints: Constraints(networkType: NetworkType.connected),
       initialDelay:
@@ -96,7 +92,6 @@ class DownloadScheduler {
     );
   }
 
-  //TODO: Say that we put our scheduled task 15 minutes in the future. What happens if we somehow complete it before then? What if, another notif comes through, but we can't read it yet since we haven't decoded this one...
   /// Attempts now, else queues BG task.
   static Future<void> scheduleVideoDownload(String camera) async {
     Log.d("Scheduling video download for $camera");
@@ -111,25 +106,47 @@ class DownloadScheduler {
     // TODO: We can't do work now in Android due to the ObjectBox error where we can't double instantiate (as Android background work doesn't hold the lock that the main process does, so it can't touch the database)
     if (Platform.isIOS && (wifi || (cell && allowCellular))) {
       Log.d("Trying to do work now for $camera");
-      final ok = await doWork(camera);
+      final ok = await doWorkNonBackground(camera);
       if (ok) return; // Success in foreground
       // Else, fall through to queue
     }
 
     Log.d("Continuing to queue one 15 min task for $camera");
 
+    // Adds the camera to the waiting list if not already in there.
+    if (await lock(PrefKeys.cameraWaitingLock)) {
+      var sharedPref = await SharedPreferences.getInstance();
+      if (sharedPref.containsKey(PrefKeys.downloadCameraQueue)) {
+        var currentCameraList = sharedPref.getStringList(
+          PrefKeys.downloadCameraQueue,
+        );
+        if (!currentCameraList!.contains(camera)) {
+          currentCameraList.add(camera);
+        }
+      } else {
+        sharedPref.setStringList(PrefKeys.downloadCameraQueue, [camera]);
+      }
+
+      await unlock(PrefKeys.cameraWaitingLock);
+    } else {
+      Log.e("Failed to acquire motion lock");
+    }
+
     // Enqueue ONE BG task (15-min rule on iOS)
-    await Workmanager().cancelByUniqueName(_bgTaskId); // ensure none pending
-    // TODO: What happens if we have multiple cameras? Given we have the same background task ID for all, we might end up cancelling video download for an important camera
-    // TODO: We should probably adopt use only one task (for IOS anyway), but manage a pending queue in SharedPreferences or ObjectBox
-    await Workmanager().registerOneOffTask(
-      _bgTaskId,
-      _workerName,
-      inputData: {'camera': camera, 'retry': 0},
-      existingWorkPolicy: ExistingWorkPolicy.replace,
-      constraints: Constraints(networkType: NetworkType.connected),
-      initialDelay:
-          Platform.isIOS ? const Duration(minutes: 15) : Duration.zero,
-    );
+    // It's not an issue if this doesn't run due to a currently running task. The currently running task will see a new camera added and queue another from itself.
+    if (Platform.isIOS ||
+        (Platform.isAndroid &&
+            !await Workmanager().isScheduledByUniqueName(_bgTaskId))) {
+      await Workmanager().cancelByUniqueName(_bgTaskId); // ensure none pending
+      await Workmanager().registerOneOffTask(
+        _bgTaskId,
+        _workerName,
+        inputData: {'retry': 0},
+        existingWorkPolicy: ExistingWorkPolicy.replace,
+        constraints: Constraints(networkType: NetworkType.connected),
+        initialDelay:
+            Platform.isIOS ? const Duration(minutes: 15) : Duration.zero,
+      );
+    }
   }
 }

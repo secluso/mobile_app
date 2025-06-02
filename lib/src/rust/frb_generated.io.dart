@@ -5,6 +5,7 @@
 
 import 'api.dart';
 import 'api/core.dart';
+import 'api/lock_manager.dart';
 import 'api/logger.dart';
 import 'dart:async';
 import 'dart:convert';

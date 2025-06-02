@@ -1,5 +1,4 @@
 import 'package:privastead_flutter/src/rust/api.dart';
-import 'package:privastead_flutter/utilities/camera_util.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
 import 'proprietary_camera_waiting.dart';
 import 'package:privastead_flutter/keys.dart';
