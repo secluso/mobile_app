@@ -320,7 +320,9 @@ class CamerasPageState extends State<CamerasPage> with WidgetsBindingObserver {
     final videoBox = AppStores.instance.videoStore.box<Video>();
 
     await prefs.remove("first_time_" + cameraName);
-    await prefs.remove("epoch" + cameraName);
+
+    final SharedPreferencesAsync asyncPrefs = SharedPreferencesAsync();
+    await asyncPrefs.remove("epoch" + cameraName);
 
     var existingCameraSet = prefs.getStringList(PrefKeys.cameraSet) ?? [];
     existingCameraSet.remove(cameraName);

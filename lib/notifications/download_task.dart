@@ -263,8 +263,9 @@ List<List<T>> batch<T>(List<T> items, int batchSize) {
 
 Future<bool> retrieveVideos(String cameraName) async {
   Log.d("Entered for $cameraName");
-  var sharedPref = await SharedPreferences.getInstance();
-  var epoch = sharedPref.getInt("epoch$cameraName") ?? 2;
+  final SharedPreferencesAsync sharedPreferencesAsync =
+      SharedPreferencesAsync();
+  var epoch = (await sharedPreferencesAsync.getInt("epoch$cameraName")) ?? 2;
 
   while (true) {
     Log.d(
@@ -319,7 +320,7 @@ Future<bool> retrieveVideos(String cameraName) async {
         port?.send('signal_new_file');
 
         camerasPageKey.currentState?.invalidateThumbnail(cameraName);
-        sharedPref.setInt("epoch$cameraName", epoch + 1);
+        await sharedPreferencesAsync.setInt("epoch$cameraName", epoch + 1);
       }
 
       epoch += 1;

@@ -145,7 +145,7 @@ class DownloadScheduler {
         await unlock(PrefKeys.cameraWaitingLock);
       }
     } else {
-      Log.e("Failed to acquire motion lock");
+      Log.e("Failed to acquire motion lock OR didn't need to");
     }
 
     // Enqueue ONE BG task (15-min rule on iOS)
@@ -161,7 +161,10 @@ class DownloadScheduler {
         existingWorkPolicy: ExistingWorkPolicy.replace,
         constraints: Constraints(networkType: NetworkType.connected),
         initialDelay:
-            Platform.isIOS ? const Duration(minutes: 15) : Duration.zero,
+            Platform.isIOS
+                ? const Duration(minutes: 15)
+                : Duration
+                    .zero, // TODO: Increase from zero potentially for Android. We may want a tiny delay to recieve info about any new cameras needing updates (especially at startup)
       );
     }
   }

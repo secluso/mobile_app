@@ -83,7 +83,11 @@ class HttpClientService {
       if (motionGroup == "Error!") {
         continue;
       }
-      final int epoch = pref.getInt("epoch$cameraName") ?? 2;
+
+      final SharedPreferencesAsync sharedPreferencesAsync =
+          SharedPreferencesAsync();
+      final int epoch =
+          (await sharedPreferencesAsync.getInt("epoch$cameraName")) ?? 2;
 
       convertedCameraList.add(MotionPair(motionGroup, epoch));
       associatedNameToGroup[motionGroup] = cameraName;
