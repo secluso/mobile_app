@@ -56,6 +56,8 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     await RustBridgeHelper.ensureInitialized();
   }
 
+  Log.d("received message");
+
   await PushNotificationService.instance._process(message.data);
 }
 
@@ -64,7 +66,7 @@ class PushNotificationService {
   static final instance = PushNotificationService._();
 
   final _notifications = FlutterLocalNotificationsPlugin();
-  bool _notifReady = false;
+  //  bool _notifReady = false;
 
   Future<void> init() async {
     Log.d("Initializing PushNotificationService");
@@ -79,7 +81,7 @@ class PushNotificationService {
         // TODO: navigate to video list page using resp.payload
       },
     );
-    _notifReady = true;
+    //  _notifReady = true;
 
     // TODO: Does this clash with our "initLocalNotifications"?
     await FirebaseMessaging.instance.requestPermission(
@@ -151,6 +153,7 @@ class PushNotificationService {
       prefs.setBool(PrefKeys.needUpdateFcmToken, false);
       Log.d('[FCM] token re‑uploaded');
     } else {
+      prefs.setBool(PrefKeys.needUpdateFcmToken, true);
       Log.d('[FCM] token upload failed');
     }
   }
@@ -191,8 +194,8 @@ class PushNotificationService {
 
       Log.d('Pre-existing camera set: $cameraSet');
 
-      final bool needNotification =
-          prefs.getBool('saved_need_notification_state') ?? true;
+      //   final bool needNotification =
+      //       prefs.getBool('saved_need_notification_state') ?? true;
 
       // TODO: what happens if we have an invalid name?
       for (final cameraName in cameraSet) {
@@ -273,6 +276,7 @@ class PushNotificationService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(PrefKeys.fcmToken, token);
 
+    Log.d('[FCM] token re‑uploaded');
     Result<void> result = await HttpClientService.instance.uploadFcmToken(
       token,
     );

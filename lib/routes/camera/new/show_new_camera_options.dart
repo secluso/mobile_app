@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'propietary_camera_option.dart';
 import 'ip_camera_option.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
+import 'package:privastead_flutter/notifications/firebase.dart';
 import 'package:flutter/services.dart';
 
 //TODO: We need to have a check that checks if they've entered the server options, and if not, tell them to do so to avoid any weird errors
@@ -11,6 +12,7 @@ class ShowNewCameraOptions extends StatelessWidget {
 
   /// Navigates to the proprietary (QR) camera setup page.
   Future<void> _navigateToProprietaryCamera(BuildContext context) async {
+    PushNotificationService.tryUploadIfNeeded(true); //force
     await ProprietaryCameraConnectDialog.showProprietaryCameraSetupFlow(
       context,
     );
@@ -19,6 +21,7 @@ class ShowNewCameraOptions extends StatelessWidget {
   /// Navigates to IP camera setup page
   void _navigateToIPCamera(BuildContext context) async {
     Log.d("Before show IP camera flow");
+    PushNotificationService.tryUploadIfNeeded(true); //force
     await IpCameraDialog.showIpCameraPopup(context);
     Log.d("After (IP camera navigation start)");
   }

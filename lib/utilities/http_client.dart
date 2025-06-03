@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:privastead_flutter/keys.dart';
 import 'package:privastead_flutter/src/rust/api.dart';
+import 'package:privastead_flutter/utilities/http_entities.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'result.dart';
 import 'logger.dart';
@@ -21,10 +22,18 @@ class HttpClientService {
 
   Future<Map<String, String>> _basicAuthHeaders(
     String username,
-    String password,
-  ) async {
+    String password, {
+    bool jsonContent = false,
+  }) async {
     final credentials = base64Encode(utf8.encode('$username:$password'));
-    return {HttpHeaders.authorizationHeader: 'Basic $credentials'};
+    if (jsonContent) {
+      return {
+        HttpHeaders.authorizationHeader: 'Basic $credentials',
+        HttpHeaders.contentTypeHeader: 'application/json',
+      };
+    } else {
+      return {HttpHeaders.authorizationHeader: 'Basic $credentials'};
+    }
   }
 
   Future<Directory> _ensureCameraDir(String cameraName) async {
@@ -42,6 +51,74 @@ class HttpClientService {
 
   Future<String> _livestreamGroupName(String cameraName) async {
     return await getLivestreamGroupName(cameraName: cameraName);
+  }
+
+  /// bulk check the list of camera names against the server to check for updates
+  /// returns list of corresponding cameras that have available videos for download
+  Future<Result<List<String>>> bulkCheckAvailableCameras() async {
+    Log.d("Entered");
+    final pref = await SharedPreferences.getInstance();
+    if (!pref.containsKey(PrefKeys.cameraSet)) {
+      return Result.success([]);
+    }
+
+    final cameraNames = pref.getStringList(PrefKeys.cameraSet)!;
+    if (cameraNames.length == 0) {
+      return Result.success([]);
+    }
+
+    final serverIp = await _pref(PrefKeys.savedIp);
+    final username = await _pref(PrefKeys.serverUsername);
+    final password = await _pref(PrefKeys.serverPassword);
+
+    if ([serverIp, username, password].contains(null)) {
+      Log.d("Failed due to missing credentials");
+      return Result.failure(Exception('Missing server credentials'));
+    }
+
+    var associatedNameToGroup = {};
+    List<MotionPair> convertedCameraList = [];
+    for (final cameraName in cameraNames) {
+      final motionGroup = await _motionGroupName(cameraName);
+      if (motionGroup == "Error!") {
+        continue;
+      }
+      final int epoch = pref.getInt("epoch$cameraName") ?? 2;
+
+      convertedCameraList.add(MotionPair(motionGroup, epoch));
+      associatedNameToGroup[motionGroup] = cameraName;
+    }
+    Log.d("Association map: $associatedNameToGroup");
+
+    var jsonContent = jsonEncode(MotionPairs(convertedCameraList));
+    Log.d("JSON content: $jsonContent");
+    final url = Uri.parse('http://$serverIp:8080/bulkCheck');
+    final headers = await _basicAuthHeaders(
+      username!,
+      password!,
+      jsonContent: true,
+    );
+
+    // Video download action
+    final response = await http.post(url, headers: headers, body: jsonContent);
+    final responseBody =
+        response
+            .body; // Format is comma separated strings representing the associated motion groups
+    Log.d("Server response: $responseBody");
+
+    final List<String> listBody = responseBody.split(",");
+    final List<String> convertedToGroups = [];
+    if (responseBody.isNotEmpty) {
+      for (final groupName in listBody) {
+        if (groupName.isNotEmpty) {
+          Log.d("Iterating $groupName");
+          convertedToGroups.add(associatedNameToGroup[groupName]);
+        }
+      }
+    }
+    Log.d("Response from function: $convertedToGroups");
+
+    return Result.success(convertedToGroups);
   }
 
   /// saves as [fileName] then DELETEs the same URL.

@@ -104,7 +104,9 @@ class DownloadScheduler {
 
     Log.d("Network statuses: wifi = $wifi, cell = $cell");
     // TODO: We can't do work now in Android due to the ObjectBox error where we can't double instantiate (as Android background work doesn't hold the lock that the main process does, so it can't touch the database)
-    if (Platform.isIOS && (wifi || (cell && allowCellular))) {
+    if (!camera.isEmpty &&
+        Platform.isIOS &&
+        (wifi || (cell && allowCellular))) {
       Log.d("Trying to do work now for $camera");
       final ok = await doWorkNonBackground(camera);
       if (ok) return; // Success in foreground
@@ -114,7 +116,7 @@ class DownloadScheduler {
     Log.d("Continuing to queue one 15 min task for $camera");
 
     // Adds the camera to the waiting list if not already in there.
-    if (await lock(PrefKeys.cameraWaitingLock)) {
+    if (!camera.isEmpty && await lock(PrefKeys.cameraWaitingLock)) {
       Log.d("Adding to queue for $camera");
       try {
         var sharedPref = SharedPreferencesAsync();

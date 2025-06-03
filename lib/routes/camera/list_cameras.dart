@@ -319,7 +319,8 @@ class CamerasPageState extends State<CamerasPage> with WidgetsBindingObserver {
     final cameraBox = AppStores.instance.cameraStore.box<Camera>();
     final videoBox = AppStores.instance.videoStore.box<Video>();
 
-    prefs.setBool("first_time_" + cameraName, false);
+    await prefs.remove("first_time_" + cameraName);
+    await prefs.remove("epoch" + cameraName);
 
     var existingCameraSet = prefs.getStringList(PrefKeys.cameraSet) ?? [];
     existingCameraSet.remove(cameraName);

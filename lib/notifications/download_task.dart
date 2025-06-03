@@ -65,8 +65,6 @@ Future<bool> doWorkNonBackground(String cameraName) async {
     Log.e("Failed to acquire generic download task lock");
     return false;
   }
-
-  return true;
 }
 
 Future<bool> doWorkBackground() async {

@@ -15,6 +15,9 @@ import 'package:privastead_flutter/database/entities.dart';
 import 'package:privastead_flutter/notifications/pending_processor.dart';
 import 'package:privastead_flutter/database/migration_runner.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
+import 'package:privastead_flutter/utilities/http_client.dart';
+import 'package:privastead_flutter/utilities/lock.dart';
+import 'package:privastead_flutter/keys.dart';
 import 'dart:ui';
 import 'dart:isolate';
 
@@ -51,6 +54,14 @@ void main() async {
 
   // We wait to initialize Firebase and the download scheduler until our cameras have been initialized
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // If we face some kind of HTTP error, we don't want this to interrupt our flow
+  try {
+    await _checkForUpdates(); // Must come before download scheduler
+  } catch (e) {
+    Log.d("Caught error - $e");
+  }
+
   await DownloadScheduler.init();
 
   QueueProcessor.instance.start();
@@ -93,6 +104,57 @@ Future<void> _initAllCameras() async {
   }
 }
 
+/// Query server for cameras that have video updates and proceed to queue them for download
+Future<void> _checkForUpdates() async {
+  final cameraNamesResult =
+      await HttpClientService.instance.bulkCheckAvailableCameras();
+
+  if (cameraNamesResult.isFailure ||
+      (cameraNamesResult.isSuccess && cameraNamesResult.value!.isEmpty)) {
+    return;
+  }
+
+  var cameraNames = cameraNamesResult.value!;
+
+  // TODO: This is essentially a clone of my previous implementation in scheduler.dart
+  // Adds the camera to the waiting list if not already in there.
+  if (await lock(PrefKeys.cameraWaitingLock)) {
+    try {
+      Log.d("Adding to queue for $cameraNames");
+      var sharedPref = SharedPreferencesAsync();
+      for (final camera in cameraNames) {
+        if (await sharedPref.containsKey(PrefKeys.downloadCameraQueue)) {
+          var currentCameraList = await sharedPref.getStringList(
+            PrefKeys.downloadCameraQueue,
+          );
+          if (!currentCameraList!.contains(camera)) {
+            Log.d("Added to pre-existing list for $camera");
+            currentCameraList.add(camera);
+            await sharedPref.setStringList(
+              PrefKeys.downloadCameraQueue,
+              currentCameraList,
+            );
+          } else {
+            Log.d("List already contained $camera");
+          }
+        } else {
+          Log.d("Created new string list for $camera");
+          await sharedPref.setStringList(PrefKeys.downloadCameraQueue, [
+            camera,
+          ]);
+        }
+      }
+    } finally {
+      // Ensure it's unlocked.
+      await unlock(PrefKeys.cameraWaitingLock);
+    }
+  }
+
+  if (cameraNames.isNotEmpty) {
+    DownloadScheduler.scheduleVideoDownload(""); // Empty string means all.
+  }
+}
+
 class MyApp extends StatefulWidget {
   @override
   State<MyApp> createState() => _MyAppState();
@@ -120,6 +182,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       Log.i("App Lifecycle State set to RESUMED");
       PushNotificationService.tryUploadIfNeeded(false);
       _initAllCameras(); // I'm not sure if this is necessary or not. It could be good to periodically check for initialization though.
+      _checkForUpdates();
       QueueProcessor.instance
           .signalNewFile(); // Try to process any new uploads now
     }

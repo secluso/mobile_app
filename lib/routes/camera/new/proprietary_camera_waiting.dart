@@ -207,6 +207,7 @@ class _ProprietaryCameraWaitingDialogState
   );
 
   Widget _buildTimeoutView() => Column(
+    mainAxisSize: MainAxisSize.min,
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Text(
@@ -249,33 +250,44 @@ class _ProprietaryCameraWaitingDialogState
         ),
       ),
       const SizedBox(height: 20),
-      FilledButton(onPressed: _onRetry, child: const Text("Try Again")),
-      const SizedBox(height: 12),
-      OutlinedButton(
-        onPressed: () async {
-          final proceed = await showDialog<bool>(
-            context: context,
-            builder:
-                (_) => AlertDialog(
-                  title: const Text("Proceed without confirmation?"),
-                  content: const Text(
-                    "If the camera hasn't actually paired, it may not work correctly. Are you sure?",
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text("Cancel"),
-                    ),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      child: const Text("Continue"),
-                    ),
-                  ],
-                ),
-          );
-          if (proceed == true) _onContinueAnyway();
-        },
-        child: const Text("Continue Anyway"),
+      Row(
+        children: [
+          Expanded(
+            child: FilledButton(
+              onPressed: _onRetry,
+              child: const Text("Try Again"),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: OutlinedButton(
+              onPressed: () async {
+                final proceed = await showDialog<bool>(
+                  context: context,
+                  builder:
+                      (_) => AlertDialog(
+                        title: const Text("Proceed without confirmation?"),
+                        content: const Text(
+                          "If the camera hasn't actually paired, it may not work correctly. Are you sure?",
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text("Cancel"),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text("Continue"),
+                          ),
+                        ],
+                      ),
+                );
+                if (proceed == true) _onContinueAnyway();
+              },
+              child: const Text("Continue"),
+            ),
+          ),
+        ],
       ),
     ],
   );
@@ -316,22 +328,35 @@ class _ProprietaryCameraWaitingDialogState
   Widget build(BuildContext context) {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 320),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            child:
-                _errorMessage != null
-                    ? _buildErrorView()
-                    : _pairingCompleted
-                    ? _buildSuccessView()
-                    : _timedOut
-                    ? _buildTimeoutView()
-                    : _buildWaitingView(),
+      child: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 320),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child:
+                    _errorMessage != null
+                        ? _buildErrorView()
+                        : _pairingCompleted
+                        ? _buildSuccessView()
+                        : _timedOut
+                        ? _buildTimeoutView()
+                        : _buildWaitingView(),
+              ),
+            ),
           ),
-        ),
+          Positioned(
+            top: 8,
+            right: 8,
+            child: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.of(context).pop(),
+              splashRadius: 20,
+            ),
+          ),
+        ],
       ),
     );
   }
