@@ -87,7 +87,7 @@ class _CameraViewPageState extends State<CameraViewPage> {
             .query(Video_.camera.equals(widget.cameraName))
             .order(Video_.id, flags: Order.descending)
             .build()
-          ..limit = _offset;
+          ..limit = _pageSize;
 
     final newVideos = query.find();
     query.close();
@@ -172,6 +172,8 @@ class _CameraViewPageState extends State<CameraViewPage> {
         behavior: SnackBarBehavior.floating,
       ),
     );
+
+    reloadVideos();
   }
 
   void _deleteOne(Video v, int index) async {
@@ -310,7 +312,7 @@ class _CameraViewPageState extends State<CameraViewPage> {
                       );
                     }
                     final v = _videos[i];
-                    final status = v.received ? 'Received' : 'Pending';
+                    final videoType = v.motion ? 'Detected' : 'Livestream';
 
                     return Card(
                       margin: const EdgeInsets.symmetric(
@@ -353,7 +355,7 @@ class _CameraViewPageState extends State<CameraViewPage> {
                         subtitle: Row(
                           children: [
                             Text(
-                              'Status: $status',
+                              videoType,
                               style: const TextStyle(
                                 fontSize: 12,
                                 color: Colors.grey,
