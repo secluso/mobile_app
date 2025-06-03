@@ -63,32 +63,81 @@ class _LivestreamPageState extends State<LivestreamPage> {
       await Future.delayed(const Duration(seconds: 1));
     }
 
-    final startRes = await HttpClientService.instance.livestreamStart(
-      widget.cameraName,
+    for (int i = 0; i < 2; i++) {
+      final startRes = await HttpClientService.instance.livestreamStart(
+        widget.cameraName,
+      );
+
+      bool startSucceeded = false;
+      await startRes.fold(
+        (_) async {
+          Log.d('Launching native player');
+          try {
+            _streamId = await ByteStreamPlayer.createStream();
+
+            Log.d('Native queue id = $_streamId');
+          } catch (e) {
+            _fail('Could not start native player: $e');
+            return;
+          }
+
+          final cmOk = await _retrieveAndApplyCommitMsg();
+          if (!cmOk) return; // error handled inside
+
+          setState(() => isStreaming = true);
+          _startChunkPump();
+          startSucceeded = true;
+          return;
+        },
+        (err) async {
+          if (i == 1) {
+            _fail('Failed: $err');
+            return;
+          }
+        },
+      );
+
+      if (startSucceeded || i == 1) {
+        return;
+      }
+
+      // We get here when we get an error trying to start livestream.
+      // One possibility for the error is that there is a pending commit message (chunk 0)
+      // from a previous failed attempt on the server.
+      // In that case, we need to apply that and then try to start livestream again.
+      await _tryRetrieveAndApplyCommitMSg();
+    }
+  }
+
+  Future<bool> _tryRetrieveAndApplyCommitMSg() async {
+    final res = await HttpClientService.instance.livestreamRetrieve(
+      cameraName: widget.cameraName,
+      chunkNumber: 0,
     );
 
-    await startRes.fold(
-      (_) async {
-        Log.d('Launching native player');
-        try {
-          _streamId = await ByteStreamPlayer.createStream();
+    final ok = await res.fold(
+      (bytes) async {
+        final updated = await livestreamUpdateApi(
+          cameraName: widget.cameraName,
+          msg: bytes,
+        );
 
-          Log.d('Native queue id = $_streamId');
-        } catch (e) {
-          _fail('Could not start native player: $e');
-          return;
+        if (!updated) {
+          _fail('Could not apply commit message');
         }
-
-        final cmOk = await _retrieveAndApplyCommitMsg();
-        if (!cmOk) return; // error handled inside
-
-        setState(() => isStreaming = true);
-        _startChunkPump();
+        return true;
       },
       (err) async {
-        _fail('Failed: $err');
+        Log.d('Commit error: $err');
+        return false;
       },
     );
+    if (ok) {
+      Log.d('Commit applied');
+      return true;
+    }
+
+    return ok;
   }
 
   Future<bool> _retrieveAndApplyCommitMsg() async {
@@ -96,30 +145,8 @@ class _LivestreamPageState extends State<LivestreamPage> {
     int attempt = 0;
 
     while (true) {
-      final res = await HttpClientService.instance.livestreamRetrieve(
-        cameraName: widget.cameraName,
-        chunkNumber: 0,
-      );
-
-      final ok = await res.fold(
-        (bytes) async {
-          final updated = await livestreamUpdateApi(
-            cameraName: widget.cameraName,
-            msg: bytes,
-          );
-
-          if (!updated) {
-            _fail('Could not apply commit message');
-          }
-          return true;
-        },
-        (err) async {
-          Log.d('Commit attempt $attempt error: $err');
-          return false;
-        },
-      );
-      if (ok) {
-        Log.d('Commit applied');
+      final res = await _tryRetrieveAndApplyCommitMSg();
+      if (res == true) {
         return true;
       }
       if (++attempt > 5) {
