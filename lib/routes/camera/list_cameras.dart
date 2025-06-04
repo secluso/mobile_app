@@ -336,6 +336,7 @@ class CamerasPageState extends State<CamerasPage>
   }
 
   Future<void> deleteCamera(String cameraName) async {
+    //TODO: Remove from any waiting queues. Hold a lock for this to ensure no weird errors.
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await deregisterCamera(cameraName: cameraName);
 

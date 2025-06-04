@@ -26,7 +26,8 @@ class LivestreamPage extends StatefulWidget {
   State<LivestreamPage> createState() => _LivestreamPageState();
 }
 
-class _LivestreamPageState extends State<LivestreamPage> {
+class _LivestreamPageState extends State<LivestreamPage>
+    with WidgetsBindingObserver {
   bool isStreaming = false;
   bool hasFailed = false;
   String _errMsg = '';
@@ -35,16 +36,20 @@ class _LivestreamPageState extends State<LivestreamPage> {
   bool _needToCreateFile = true;
 
   late final MethodChannel _methodChannel;
+  AppLifecycleState?
+  _lastLifecycleState; // Store the lifecycle state that was last to ensure we don't cancel the livestream for screen rotation
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _startLivestream();
   }
 
   @override
   void dispose() {
     _finishNativeStream();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
@@ -129,6 +134,7 @@ class _LivestreamPageState extends State<LivestreamPage> {
 
         if (!updated) {
           _fail('Could not apply commit message');
+          return false;
         }
         return true;
       },
@@ -293,6 +299,36 @@ class _LivestreamPageState extends State<LivestreamPage> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    Log.i("Changed state to ${state.name}");
+    if (_lastLifecycleState != null) {
+      Log.i("last state was ${_lastLifecycleState!.name}");
+    }
+
+    if (state == AppLifecycleState.resumed) {
+      Log.i("App Lifecycle State set to RESUMED within livestream");
+
+      // Only pop if last state was in background (not screen rotation)
+      if (_lastLifecycleState == AppLifecycleState.paused ||
+          _lastLifecycleState == AppLifecycleState.hidden) {
+        if (mounted) {
+          setState(() => isStreaming = false);
+          Navigator.pop(context);
+        }
+      }
+    } else if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused) {
+      if (mounted) {
+        setState(() => isStreaming = false);
+      }
+    }
+
+    _lastLifecycleState = state;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
@@ -301,6 +337,14 @@ class _LivestreamPageState extends State<LivestreamPage> {
           isLandscape
               ? null
               : AppBar(
+                leading: IconButton(
+                  icon: Icon(Icons.arrow_back),
+                  onPressed: () {
+                    Log.i("Back button pressed");
+                    setState(() => isStreaming = false);
+                    Navigator.pop(context);
+                  },
+                ),
                 title: Text(
                   'Livestream - ${widget.cameraName}',
                   style: TextStyle(color: Colors.white),
