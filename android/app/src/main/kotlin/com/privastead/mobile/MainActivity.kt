@@ -164,7 +164,7 @@ class MainActivity : FlutterActivity() {
             .registry
             .registerViewFactory(
                 "byte_player_view",
-                BytePlayerViewFactory()
+                BytePlayerViewFactory(flutterEngine.dartExecutor.binaryMessenger)
             )
     }
 }

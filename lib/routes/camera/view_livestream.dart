@@ -34,24 +34,18 @@ class _LivestreamPageState extends State<LivestreamPage> {
   int? _streamId;
   bool _needToCreateFile = true;
 
+  late final MethodChannel _methodChannel;
+
   @override
   void initState() {
     super.initState();
     _startLivestream();
-    _fetchAspectRatio();
   }
 
   @override
   void dispose() {
     _finishNativeStream();
     super.dispose();
-  }
-
-  Future<void> _fetchAspectRatio() async {
-    //TODO: get the actual width and height from the native player and set the right aspect ratio
-    setState(() {
-      _aspectRatio = 16 / 9;
-    });
   }
 
   Future<void> _startLivestream() async {
@@ -74,8 +68,19 @@ class _LivestreamPageState extends State<LivestreamPage> {
           Log.d('Launching native player');
           try {
             _streamId = await ByteStreamPlayer.createStream();
-
             Log.d('Native queue id = $_streamId');
+            _methodChannel = MethodChannel('byte_player_view_$_streamId');
+            _methodChannel.setMethodCallHandler((call) async {
+              if (call.method == 'onAspectRatio') {
+                final ratio = call.arguments as double;
+                Log.d("Recieved aspect ratio $ratio");
+                if (ratio > 0 && mounted) {
+                  setState(() {
+                    _aspectRatio = ratio;
+                  });
+                }
+              }
+            });
           } catch (e) {
             _fail('Could not start native player: $e');
             return;
@@ -276,8 +281,6 @@ class _LivestreamPageState extends State<LivestreamPage> {
       await HttpClientService.instance.livestreamEnd(widget.cameraName);
 
       Log.d('Completed method');
-
-      // TODO: Save the video to the database
     }
   }
 
@@ -305,31 +308,53 @@ class _LivestreamPageState extends State<LivestreamPage> {
                 backgroundColor: const Color.fromARGB(255, 27, 114, 60),
                 iconTheme: const IconThemeData(color: Colors.white),
               ),
-      body: Center(
-        child:
-            hasFailed
-                ? Text(
+      body:
+          hasFailed
+              ? Center(
+                child: Text(
                   'Failed:\n$_errMsg',
                   style: const TextStyle(color: Colors.red, fontSize: 15),
                   textAlign: TextAlign.center,
-                )
-                : isStreaming
-                ? Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_aspectRatio != null)
-                      AspectRatio(
-                        aspectRatio: _aspectRatio!,
+                ),
+              )
+              : isStreaming
+              ? LayoutBuilder(
+                builder: (context, constraints) {
+                  final ratio =
+                      _aspectRatio ?? 16 / 9; // Default fallback ratio
+
+                  final screenWidth = constraints.maxWidth;
+                  final screenHeight = constraints.maxHeight;
+
+                  double videoWidth = screenWidth;
+                  double videoHeight = videoWidth / ratio;
+
+                  if (videoHeight > screenHeight) {
+                    videoHeight = screenHeight;
+                    videoWidth = videoHeight * ratio;
+                  }
+
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: videoWidth,
+                        height: videoHeight,
                         child: BytePlayerView(streamId: _streamId!),
-                      )
-                    else
-                      const CircularProgressIndicator(),
-                    const SizedBox(height: 12),
-                    const Text('Live', style: TextStyle(color: Colors.white)),
-                  ],
-                )
-                : const CircularProgressIndicator(),
-      ),
+                      ),
+                      Positioned(
+                        bottom: 24,
+                        child: const Text(
+                          'Live',
+                          style: TextStyle(color: Colors.white, fontSize: 16),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              )
+              : const Center(child: CircularProgressIndicator()),
+
       floatingActionButton:
           isStreaming
               ? FloatingActionButton(

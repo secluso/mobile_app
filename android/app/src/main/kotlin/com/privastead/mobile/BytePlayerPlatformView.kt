@@ -13,23 +13,29 @@ import androidx.core.view.isVisible
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import io.flutter.plugin.platform.PlatformView
+import io.flutter.plugin.common.BinaryMessenger
+import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.LinkedBlockingQueue
 
 class BytePlayerPlatformView(
     ctx: Context,
-    streamId: Int
+    streamId: Int,
+    messenger: BinaryMessenger
 ) : PlatformView {
 
     private val container: FrameLayout
     private val player: ExoPlayer
     private val spinner: ProgressBar
+    private val methodChannel: MethodChannel
 
     init {
+        methodChannel = MethodChannel(messenger, "byte_player_view_$streamId")
         Log.d("BytePV", "BytePlayerPlatformView ctor for stream $streamId")
 
         // Grab the shared byte‐queue
@@ -91,6 +97,19 @@ class BytePlayerPlatformView(
                 Log.d("BytePV", "first frame rendered")
                 spinner.isVisible = false
             }
+
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                val width = videoSize.width
+                val height = videoSize.height
+                val aspectRatio = width.toFloat() / height
+
+                Log.d("NativeStream", "Video size: $width x $height ($aspectRatio)")
+
+                // Send it to Flutter via MethodChannel or EventChannel
+                methodChannel.invokeMethod("onAspectRatio", aspectRatio)
+            }
+          
+
 
             override fun onPlayerError(error: PlaybackException) {
                 Log.e("BytePV", "PLAYER ERROR", error)
