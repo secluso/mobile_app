@@ -17,6 +17,9 @@ class ProprietaryCameraConnectDialog extends StatefulWidget {
 
   static bool pairingCompleted = false;
   static bool pairingInProgress = false;
+  static int _sessionCounter = 0;
+  static int currentSessionId = 0;
+  static int? boundSessionId;
 
   @override
   State<ProprietaryCameraConnectDialog> createState() =>
@@ -31,6 +34,7 @@ class ProprietaryCameraConnectDialog extends StatefulWidget {
   ) async {
     pairingCompleted = false;
     pairingInProgress = true;
+    currentSessionId = ++_sessionCounter;
 
     try {
       // Show connect dialog
@@ -52,6 +56,10 @@ class ProprietaryCameraConnectDialog extends StatefulWidget {
         builder: (ctx) => const ProprietaryCameraInfoDialog(),
       );
 
+      ProprietaryCameraConnectDialog.pairingCompleted = true;
+      ProprietaryCameraConnectDialog.boundSessionId = null;
+      ProprietaryCameraConnectDialog.pairingInProgress = false;
+
       // Returns null if user canceled or final data if user tapped "Add Camera"
       return infoResult;
     } finally {
@@ -68,10 +76,18 @@ class _ProprietaryCameraConnectDialogState
   bool _isConnecting = false;
   bool _exitingToNext = false;
 
+  late final int localSessionId;
+
   final platform =
       Platform.isIOS
           ? MethodChannel("privastead.com/wifi")
           : MethodChannel("privastead.com/android/wifi");
+
+  @override
+  void initState() {
+    super.initState();
+    localSessionId = ProprietaryCameraConnectDialog.currentSessionId;
+  }
 
   Future<void> _connectToCamera() async {
     Log.d("Entered method");
@@ -86,9 +102,21 @@ class _ProprietaryCameraConnectDialogState
       );
       Log.d("First result from Wifi Connect Attempt: $result");
 
+      if (result == "connected" &&
+          !ProprietaryCameraConnectDialog.pairingInProgress) {
+        try {
+          const platform = MethodChannel("privastead.com/android/wifi");
+          await platform.invokeMethod<String>('disconnectFromWifi');
+        } catch (e) {
+          Log.w("WiFi disconnect failed from InfoDialog: $e");
+        }
+
+        return;
+      }
+
       if (result == "connected") {
         if (Platform.isIOS) {
-          //Connect again to ensure no awkward errors (not sure why this occurs sometimes)
+          //Connect again to ensure no awkward errors (not sure why this occurs sometimes), should be instant
           final result = await platform.invokeMethod<String>(
             'connectToWifi',
             <String, dynamic>{'ssid': "Privastead", 'password': '12345678'},
@@ -102,17 +130,23 @@ class _ProprietaryCameraConnectDialogState
           bool connected = await pingProprietaryDevice(
             cameraIp: PrefKeys.proprietaryCameraIp,
           );
+          if (!mounted) return;
+
           if (!connected) {
             setState(() {
               _connectivityError = true;
               _isConnecting = false;
             });
           } else {
-            setState(() {
-              _connectivityError = false;
-              _isConnected = true;
-              _isConnecting = false;
-            });
+            if (localSessionId ==
+                ProprietaryCameraConnectDialog.currentSessionId) {
+              ProprietaryCameraConnectDialog.boundSessionId = localSessionId;
+              setState(() {
+                _connectivityError = false;
+                _isConnected = true;
+                _isConnecting = false;
+              });
+            }
           }
         } catch (e) {
           Log.e(e);
@@ -124,6 +158,7 @@ class _ProprietaryCameraConnectDialogState
           }
         }
       } else {
+        if (!mounted) return;
         if (!_isConnected) {
           setState(() {
             _connectivityError = true;
@@ -148,15 +183,16 @@ class _ProprietaryCameraConnectDialogState
 
     if (_isConnected &&
         Platform.isAndroid &&
+        ProprietaryCameraConnectDialog.boundSessionId == localSessionId &&
         !ProprietaryCameraConnectDialog.pairingCompleted &&
         !_exitingToNext) {
-      Log.d(
-        "Disconnecting from WiFi as proprietary pairing was ended prematurely",
-      );
+      Log.d("Disconnecting from WiFi (owned by session $localSessionId)");
       try {
         await platform.invokeMethod<String>('disconnectFromWifi');
       } catch (e) {
         Log.w("WiFi disconnect failed: $e");
+      } finally {
+        ProprietaryCameraConnectDialog.boundSessionId = null;
       }
     }
   }

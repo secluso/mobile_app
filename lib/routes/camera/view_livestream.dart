@@ -291,15 +291,20 @@ class _LivestreamPageState extends State<LivestreamPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'Livestream - ${widget.cameraName}',
-          style: TextStyle(color: Colors.white),
-        ),
-        backgroundColor: const Color.fromARGB(255, 27, 114, 60),
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
+      appBar:
+          isLandscape
+              ? null
+              : AppBar(
+                title: Text(
+                  'Livestream - ${widget.cameraName}',
+                  style: TextStyle(color: Colors.white),
+                ),
+                backgroundColor: const Color.fromARGB(255, 27, 114, 60),
+                iconTheme: const IconThemeData(color: Colors.white),
+              ),
       body: Center(
         child:
             hasFailed

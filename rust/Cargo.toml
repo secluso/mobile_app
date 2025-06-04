@@ -7,7 +7,6 @@ edition = "2021"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
-privastead-app-native = { path = "../../app_native" }
 flutter_rust_bridge = "=2.10.0"
 bincode = "1.2.1"
 rand="0.8"
@@ -18,6 +17,11 @@ simplelog="0.12.2"
 time="0.3.41"
 log = { version="0.4.27", features=["kv"] }
 fs2 = "0.4.3"
+
+[dependencies.privastead-app-native]
+git = "https://github.com/privastead/privastead"
+rev = "be51d4b"
+package = "privastead-app-native"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
