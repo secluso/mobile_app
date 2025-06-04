@@ -6,6 +6,7 @@ import 'package:privastead_flutter/database/entities.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
 import 'package:privastead_flutter/keys.dart';
+import 'package:privastead_flutter/main.dart';
 import '../../objectbox.g.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -261,7 +262,8 @@ class _CameraCardState extends State<CameraCard> {
   }
 }
 
-class CamerasPageState extends State<CamerasPage> with WidgetsBindingObserver {
+class CamerasPageState extends State<CamerasPage>
+    with WidgetsBindingObserver, RouteAware {
   final List<Map<String, dynamic>> cameras = [];
   final _ch = MethodChannel('privastead.com/thumbnail');
 
@@ -284,7 +286,6 @@ class CamerasPageState extends State<CamerasPage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _loadCamerasFromDatabase();
     CameraListNotifier.instance.refreshCallback = _loadCamerasFromDatabase;
 
     _pollingTimer = Timer.periodic(
@@ -294,10 +295,32 @@ class CamerasPageState extends State<CamerasPage> with WidgetsBindingObserver {
   }
 
   @override
+  void didPopNext() {
+    Log.d("Returned to list cameras [pop]");
+    _loadCamerasFromDatabase(); // Load this every time we enter the page.
+  }
+
+  @override
+  void didPush() {
+    Log.d('Returned to list cameras [push]');
+    _loadCamerasFromDatabase(); // Load this every time we enter the page.
+  }
+
+  @override
   void dispose() {
+    routeObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
     _pollingTimer?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final ModalRoute? route = ModalRoute.of(context);
+    if (route != null) {
+      routeObserver.subscribe(this, route);
+    }
   }
 
   @override

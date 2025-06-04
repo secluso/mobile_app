@@ -13,6 +13,7 @@ import 'package:privastead_flutter/database/entities.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
+import 'package:privastead_flutter/main.dart';
 import 'dart:io';
 import 'package:intl/intl.dart';
 
@@ -26,7 +27,7 @@ class CameraViewPage extends StatefulWidget {
   State<CameraViewPage> createState() => _CameraViewPageState();
 }
 
-class _CameraViewPageState extends State<CameraViewPage> {
+class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
   late Box<Video> _videoBox;
   final List<Video> _videos = [];
 
@@ -61,10 +62,31 @@ class _CameraViewPageState extends State<CameraViewPage> {
   @override
   void initState() {
     super.initState();
-    _markCameraRead();
-    _initDbAndFirstPage();
     globalCameraViewPageState = this;
     _scrollController.addListener(_maybeLoadNextPage);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final ModalRoute? route = ModalRoute.of(context);
+    if (route != null) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPopNext() {
+    Log.d("Returned to view camera [pop]");
+    _markCameraRead(); // Load this every time we enter the page.
+    _initDbAndFirstPage();
+  }
+
+  @override
+  void didPush() {
+    Log.d('Returned to view camera [push]');
+    _markCameraRead(); // Load this every time we enter the page.
+    _initDbAndFirstPage();
   }
 
   Future<void> _initDbAndFirstPage() async {
@@ -74,6 +96,7 @@ class _CameraViewPageState extends State<CameraViewPage> {
 
   @override
   void dispose() {
+    routeObserver.unsubscribe(this);
     _confetti.dispose();
     _scrollController.dispose();
     globalCameraViewPageState = null;

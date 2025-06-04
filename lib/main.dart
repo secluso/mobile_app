@@ -155,6 +155,9 @@ Future<void> _checkForUpdates() async {
   }
 }
 
+final RouteObserver<ModalRoute<void>> routeObserver =
+    RouteObserver<ModalRoute<void>>();
+
 class MyApp extends StatefulWidget {
   @override
   State<MyApp> createState() => _MyAppState();
@@ -200,6 +203,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
     return MaterialApp(
       title: 'Flutter Demo',
+      navigatorObservers: [routeObserver],
       theme: themeProvider.isDarkMode ? ThemeData.dark() : ThemeData.light(),
       home: HomePage(),
     );

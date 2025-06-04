@@ -224,21 +224,15 @@ class _LivestreamPageState extends State<LivestreamPage> {
                 "Camera entity is null in database. This shouldn't be possible. Camera: $cameraName Video: $videoName",
               );
             } else {
-              if (!foundCamera.unreadMessages) {
-                Log.d("Setting camera $cameraName to have unreadMessages = true");
-                foundCamera.unreadMessages = true;
-                cameraBox.put(foundCamera);
-              } else {
-                Log.d("Camera was already set on unreadMessages = true");
-              }
-
+              // Skip saving unreadMessages = true as they would've seen the livestream.
               if (globalCameraViewPageState?.mounted == true &&
                   globalCameraViewPageState?.widget.cameraName == cameraName) {
                 globalCameraViewPageState?.reloadVideos();
               } else if (globalCameraViewPageState?.mounted == false) {
                 Log.d("Not reloading current camera page - not mounted");
               } else {
-                final currentPage = globalCameraViewPageState?.widget.cameraName;
+                final currentPage =
+                    globalCameraViewPageState?.widget.cameraName;
                 Log.d(
                   "Not reloading current camera page - name doesn't match. $currentPage, $cameraName",
                 );
@@ -248,7 +242,10 @@ class _LivestreamPageState extends State<LivestreamPage> {
             _needToCreateFile = false;
           } else {
             if (_videoFile != null) {
-              await _videoFile!.writeAsBytes(dec, mode: FileMode.writeOnlyAppend);
+              await _videoFile!.writeAsBytes(
+                dec,
+                mode: FileMode.writeOnlyAppend,
+              );
             } else {
               // Should not happen
               Log.d('Livestream video file not created');
@@ -304,39 +301,41 @@ class _LivestreamPageState extends State<LivestreamPage> {
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: Center(
-        child: hasFailed
-            ? Text(
-                'Failed:\n$_errMsg',
-                style: const TextStyle(color: Colors.red, fontSize: 15),
-                textAlign: TextAlign.center,
-              )
-            : isStreaming
+        child:
+            hasFailed
+                ? Text(
+                  'Failed:\n$_errMsg',
+                  style: const TextStyle(color: Colors.red, fontSize: 15),
+                  textAlign: TextAlign.center,
+                )
+                : isStreaming
                 ? Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_aspectRatio != null)
-                        AspectRatio(
-                          aspectRatio: _aspectRatio!,
-                          child: BytePlayerView(streamId: _streamId!),
-                        )
-                      else
-                        const CircularProgressIndicator(),
-                      const SizedBox(height: 12),
-                      const Text('Live', style: TextStyle(color: Colors.white)),
-                    ],
-                  )
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_aspectRatio != null)
+                      AspectRatio(
+                        aspectRatio: _aspectRatio!,
+                        child: BytePlayerView(streamId: _streamId!),
+                      )
+                    else
+                      const CircularProgressIndicator(),
+                    const SizedBox(height: 12),
+                    const Text('Live', style: TextStyle(color: Colors.white)),
+                  ],
+                )
                 : const CircularProgressIndicator(),
       ),
-      floatingActionButton: isStreaming
-          ? FloatingActionButton(
-              backgroundColor: Colors.redAccent,
-              child: const Icon(Icons.stop),
-              onPressed: () {
-                setState(() => isStreaming = false);
-                Navigator.pop(context);
-              },
-            )
-          : null,
+      floatingActionButton:
+          isStreaming
+              ? FloatingActionButton(
+                backgroundColor: Colors.redAccent,
+                child: const Icon(Icons.stop),
+                onPressed: () {
+                  setState(() => isStreaming = false);
+                  Navigator.pop(context);
+                },
+              )
+              : null,
     );
   }
 }
