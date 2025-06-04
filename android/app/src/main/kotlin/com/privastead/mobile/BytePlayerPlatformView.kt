@@ -105,7 +105,7 @@ class BytePlayerPlatformView(
 
                 Log.d("NativeStream", "Video size: $width x $height ($aspectRatio)")
 
-                // Send it to Flutter via MethodChannel or EventChannel
+                // Send it to Flutter via MethodChannel
                 methodChannel.invokeMethod("onAspectRatio", aspectRatio)
             }
           

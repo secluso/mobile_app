@@ -6,6 +6,7 @@ import 'package:privastead_flutter/utilities/camera_util.dart';
 import 'routes/home_page.dart';
 import "routes/theme_provider.dart";
 import 'package:provider/provider.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:privastead_flutter/notifications/firebase_options.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -32,6 +33,12 @@ void main() async {
   createLogStream().listen((event) {
     var level = event.level;
     var tag = event.tag; // Represents the calling file
+
+    // For now, we filter out all Rust code that isn't from us in release mode.
+    if (kReleaseMode &&
+        (!tag.contains("privastead") && !tag.startsWith("src"))) {
+      return;
+    }
 
     // We filter out OpenMLS as we don't need OpenMLS logging leaking data (although this shouldn't be a risk regardless due to release only allowing info and above in logging)
     if (tag.contains("openmls")) {
