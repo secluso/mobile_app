@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'propietary_camera_option.dart';
 import 'ip_camera_option.dart';
+import 'proprietary_camera_option.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
 import 'package:privastead_flutter/notifications/firebase.dart';
 import 'package:flutter/services.dart';

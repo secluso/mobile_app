@@ -15,6 +15,9 @@ import 'package:path/path.dart' as p;
 class ProprietaryCameraConnectDialog extends StatefulWidget {
   const ProprietaryCameraConnectDialog({super.key});
 
+  static bool pairingCompleted = false;
+  static bool pairingInProgress = false;
+
   @override
   State<ProprietaryCameraConnectDialog> createState() =>
       _ProprietaryCameraConnectDialogState();
@@ -26,27 +29,35 @@ class ProprietaryCameraConnectDialog extends StatefulWidget {
   static Future<Map<String, Object>?> showProprietaryCameraSetupFlow(
     BuildContext context,
   ) async {
-    // Show connect dialog
-    final connectResult = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => const ProprietaryCameraConnectDialog(),
-    );
+    pairingCompleted = false;
+    pairingInProgress = true;
 
-    // If user canceled or closed
-    if (connectResult == null || connectResult == false) {
-      return null;
+    try {
+      // Show connect dialog
+      final connectResult = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => const ProprietaryCameraConnectDialog(),
+      );
+
+      // If user canceled or closed
+      if (connectResult == null || connectResult == false) {
+        return null;
+      }
+
+      // Show camera info dialog
+      final infoResult = await showDialog<Map<String, Object>>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => const ProprietaryCameraInfoDialog(),
+      );
+
+      // Returns null if user canceled or final data if user tapped "Add Camera"
+      return infoResult;
+    } finally {
+      // Reset regardless of outcome
+      pairingInProgress = false;
     }
-
-    // Show camera info dialog
-    final infoResult = await showDialog<Map<String, Object>>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => const ProprietaryCameraInfoDialog(),
-    );
-
-    // Returns null if user canceled or final data if user tapped "Add Camera"
-    return infoResult;
   }
 }
 
@@ -55,6 +66,7 @@ class _ProprietaryCameraConnectDialogState
   bool _isConnected = false;
   bool _connectivityError = false;
   bool _isConnecting = false;
+  bool _exitingToNext = false;
 
   final platform =
       Platform.isIOS
@@ -130,12 +142,34 @@ class _ProprietaryCameraConnectDialogState
     }
   }
 
+  Future<void> _maybeDisconnect() async {
+    //TODO: Implement for iOS
+    Log.d("Possibly disconnecting");
+
+    if (_isConnected &&
+        Platform.isAndroid &&
+        !ProprietaryCameraConnectDialog.pairingCompleted &&
+        !_exitingToNext) {
+      Log.d(
+        "Disconnecting from WiFi as proprietary pairing was ended prematurely",
+      );
+      try {
+        await platform.invokeMethod<String>('disconnectFromWifi');
+      } catch (e) {
+        Log.w("WiFi disconnect failed: $e");
+      }
+    }
+  }
+
   void _onNext() {
+    _exitingToNext = true;
     // Return true to indicate we're ready to go next
     Navigator.of(context).pop(true);
   }
 
-  void _onCancel() {
+  void _onCancel() async {
+    await _maybeDisconnect();
+    ProprietaryCameraConnectDialog.pairingInProgress = false;
     // Return false or just pop with no value => indicates cancel
     Navigator.of(context).pop(false);
   }
@@ -151,95 +185,103 @@ class _ProprietaryCameraConnectDialogState
             ? "Error connecting. Try again"
             : 'Not connected to the camera.';
 
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: _onCancel,
-                  tooltip: 'Cancel',
-                ),
-              ],
-            ),
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: Theme.of(context).primaryColor,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.camera_alt,
-                color: Colors.white,
-                size: 36,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Connect to Your Camera',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'We need to connect to the camera. Ensure it\'s plugged in '
-              'and powered on before proceeding.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(height: 1.4),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text(
-                  'Status: ',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                Text(
-                  statusText,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color:
-                        _isConnecting
-                            ? Colors.orange
-                            : (_isConnected ? Colors.green : Colors.red),
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (bool didPop, Object? result) async {
+        if (didPop) {
+          await _maybeDisconnect();
+        }
+      },
+      child: Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: _onCancel,
+                    tooltip: 'Cancel',
                   ),
+                ],
+              ),
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor,
+                  shape: BoxShape.circle,
                 ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed:
-                  _isConnected || _isConnecting
-                      ? null
-                      : () {
-                        _connectToCamera();
-                      },
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
+                child: const Icon(
+                  Icons.camera_alt,
+                  color: Colors.white,
+                  size: 36,
+                ),
               ),
-              child: const Text('Connect'),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: _isConnected ? _onNext : null,
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
+              const SizedBox(height: 16),
+              Text(
+                'Connect to Your Camera',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
               ),
-              child: const Text('Next'),
-            ),
-          ],
+              const SizedBox(height: 12),
+              Text(
+                'We need to connect to the camera. Ensure it\'s plugged in '
+                'and powered on before proceeding.',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(height: 1.4),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    'Status: ',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  Text(
+                    statusText,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color:
+                          _isConnecting
+                              ? Colors.orange
+                              : (_isConnected ? Colors.green : Colors.red),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed:
+                    _isConnected || _isConnecting
+                        ? null
+                        : () {
+                          _connectToCamera();
+                        },
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                child: const Text('Connect'),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: _isConnected ? _onNext : null,
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                child: const Text('Next'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -263,8 +305,26 @@ class _ProprietaryCameraInfoDialogState
 
   Uint8List? _qrCode;
 
-  void _onCancel() {
-    Navigator.of(context).pop(); // Return null => canceled
+  @override
+  void initState() {
+    super.initState();
+    ProprietaryCameraConnectDialog.pairingCompleted = false;
+  }
+
+  void _onCancel() async {
+    Log.d("Cancelling");
+    if (!ProprietaryCameraConnectDialog.pairingCompleted &&
+        ProprietaryCameraConnectDialog.pairingInProgress &&
+        Platform.isAndroid) {
+      try {
+        const platform = MethodChannel("privastead.com/android/wifi");
+        await platform.invokeMethod<String>('disconnectFromWifi');
+      } catch (e) {
+        Log.w("WiFi disconnect failed from InfoDialog: $e");
+      }
+    }
+    ProprietaryCameraConnectDialog.pairingInProgress = false;
+    Navigator.of(context).pop();
   }
 
   Future<void> _qrScan() async {

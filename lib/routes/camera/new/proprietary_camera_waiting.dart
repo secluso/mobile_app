@@ -11,6 +11,7 @@ import 'package:privastead_flutter/keys.dart';
 import 'package:privastead_flutter/routes/camera/list_cameras.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
 import 'package:privastead_flutter/utilities/camera_util.dart';
+import 'proprietary_camera_option.dart';
 import 'package:path/path.dart' as p;
 
 class ProprietaryCameraWaitingDialog extends StatefulWidget {
@@ -50,6 +51,7 @@ class _ProprietaryCameraWaitingDialogState
   bool _timedOut = false;
   bool _pairingCompleted = false;
   String? _errorMessage;
+  bool _wifiDisconnected = false;
 
   @override
   void initState() {
@@ -60,8 +62,21 @@ class _ProprietaryCameraWaitingDialogState
 
   @override
   void dispose() {
+    _disconnectWifiOnce();
     ProprietaryCameraWaitingDialog._currentState = null;
     super.dispose();
+  }
+
+  Future<void> _disconnectWifiOnce() async {
+    if (_wifiDisconnected || Platform.isIOS) return;
+
+    try {
+      const platform = MethodChannel("privastead.com/android/wifi");
+      await platform.invokeMethod<String>('disconnectFromWifi');
+      _wifiDisconnected = true;
+    } catch (e) {
+      Log.w("WiFi disconnect failed: $e");
+    }
   }
 
   void _startInitialPairing() async {
@@ -88,14 +103,7 @@ class _ProprietaryCameraWaitingDialogState
         return;
       }
 
-      if (Platform.isAndroid) {
-        try {
-          const platform = MethodChannel("privastead.com/android/wifi");
-          await platform.invokeMethod<String>('disconnectFromWifi');
-        } catch (e) {
-          Log.w("WiFi disconnect failed: $e");
-        }
-      }
+      _disconnectWifiOnce();
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
@@ -118,6 +126,9 @@ class _ProprietaryCameraWaitingDialogState
   }
 
   void _onPairingConfirmed() async {
+    ProprietaryCameraConnectDialog.pairingCompleted =
+        true; // So we don't attempt a WiFi disconnect when we pop()
+    ProprietaryCameraConnectDialog.pairingInProgress = false;
     if (!mounted || _pairingCompleted) return;
     Log.d("Entered method");
     _pairingCompleted = true;
@@ -148,14 +159,7 @@ class _ProprietaryCameraWaitingDialogState
     var cameraName = widget.cameraName;
 
     // We don't know for sure if they'll try again or not.
-    if (Platform.isAndroid) {
-      try {
-        const platform = MethodChannel("privastead.com/android/wifi");
-        await platform.invokeMethod<String>('disconnectFromWifi');
-      } catch (e) {
-        Log.w("WiFi disconnect failed: $e");
-      }
-    }
+    await _disconnectWifiOnce();
 
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await deregisterCamera(cameraName: cameraName);
@@ -345,15 +349,6 @@ class _ProprietaryCameraWaitingDialogState
                         ? _buildTimeoutView()
                         : _buildWaitingView(),
               ),
-            ),
-          ),
-          Positioned(
-            top: 8,
-            right: 8,
-            child: IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: () => Navigator.of(context).pop(),
-              splashRadius: 20,
             ),
           ),
         ],
