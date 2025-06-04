@@ -1,8 +1,7 @@
-pub mod core;
 pub mod logger;
 pub mod lock_manager;
 
-use crate::api::core::Clients;
+use privastead_app_native::{self, Clients};
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -24,7 +23,7 @@ pub fn initialize_camera(camera_name: String, file_dir: String, first_time: bool
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        return match crate::api::core::initialize(&mut *client_guard, file_dir, first_time) {
+        return match privastead_app_native::initialize(&mut *client_guard, file_dir, first_time) {
             Ok(_v) => return true,
             //TODO: Add back the error logging here
             Err(_e) => return false,
@@ -47,12 +46,12 @@ pub fn deregister_camera(camera_name: String) {
                 // Start inner scope: lock, call deregister, then drop
                 match client_mutex.lock() {
                     Ok(mut client_guard) => {
-                        crate::api::core::deregister(&mut *client_guard);
+                        privastead_app_native::deregister(&mut *client_guard);
                     }
                     Err(poisoned) => {
                         info!("Mutex for {} was poisoned. Recovering.", camera_name);
                         let mut client_guard = poisoned.into_inner();
-                        crate::api::core::deregister(&mut *client_guard);
+                        privastead_app_native::deregister(&mut *client_guard);
                     }
                 }
             } // client_guard is dropped here
@@ -77,7 +76,7 @@ pub fn decrypt_video(_camera_name: String, enc_filename: String) -> String {
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        match crate::api::core::decrypt_video(&mut *client_guard, enc_filename) {
+        match privastead_app_native::decrypt_video(&mut *client_guard, enc_filename) {
             Ok(decrypted_filename) => {
                 return decrypted_filename;
             }
@@ -109,7 +108,7 @@ pub fn flutter_add_camera(
         let mut client_guard = client_entry.lock().unwrap();
 
         //TODO: Have this return a result, and then print the error (and return false)
-        return crate::api::core::add_camera(
+        return privastead_app_native::add_camera(
             &mut *client_guard,
             camera_name,
             ip,
@@ -170,7 +169,7 @@ pub fn decrypt_fcm_message(_camera_name: String, data: Vec<u8>) -> String {
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        match crate::api::core::decrypt_fcm_message(&mut *client_guard, data) {
+        match privastead_app_native::decrypt_fcm_message(&mut *client_guard, data) {
             Ok(timestamp) => {
                 return timestamp;
             }
@@ -194,7 +193,7 @@ pub fn get_motion_group_name(_camera_name: String) -> String {
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        match crate::api::core::get_motion_group_name(&mut *client_guard, _camera_name) {
+        match privastead_app_native::get_motion_group_name(&mut *client_guard, _camera_name) {
             Ok(motion_group_name) => {
                 return motion_group_name;
             }
@@ -218,7 +217,7 @@ pub fn livestream_update(_camera_name: String, msg: Vec<u8>) -> bool {
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        match crate::api::core::livestream_update(&mut *client_guard, msg) {
+        match privastead_app_native::livestream_update(&mut *client_guard, msg) {
             Ok(_) => {
                 return true;
             }
@@ -242,7 +241,7 @@ pub fn livestream_decrypt(_camera_name: String, data: Vec<u8>, expected_chunk_nu
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        let ret = match crate::api::core::livestream_decrypt(&mut *client_guard, data, expected_chunk_number) {
+        let ret = match privastead_app_native::livestream_decrypt(&mut *client_guard, data, expected_chunk_number) {
             Ok(dec_data) => dec_data,
             Err(e) => {
                 info!("Error: {}", e);
@@ -267,7 +266,7 @@ pub fn get_livestream_group_name(_camera_name: String) -> String {
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        match crate::api::core::get_livestream_group_name(&mut *client_guard, _camera_name) {
+        match privastead_app_native::get_livestream_group_name(&mut *client_guard, _camera_name) {
             Ok(livestream_group_name) => {
                 return livestream_group_name;
             }

@@ -4,7 +4,6 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api.dart';
-import 'api/core.dart';
 import 'api/lock_manager.dart';
 import 'api/logger.dart';
 import 'dart:async';
@@ -68,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.10.0';
 
   @override
-  int get rustContentHash => 395025331;
+  int get rustContentHash => -1710440161;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -87,16 +86,6 @@ abstract class RustLibApi extends BaseApi {
 
   Future<bool> crateApiLockManagerAcquireLock({required String path});
 
-  Future<bool> crateApiCoreAddCamera({
-    required OptionBoxClients clientsReg,
-    required String cameraName,
-    required String cameraIp,
-    required List<int> secretVec,
-    required bool standaloneCamera,
-    required String wifiSsid,
-    required String wifiPassword,
-  });
-
   Stream<LogEntry> crateApiLoggerCreateLogStream();
 
   Future<String> crateApiDecryptFcmMessage({
@@ -104,22 +93,10 @@ abstract class RustLibApi extends BaseApi {
     required List<int> data,
   });
 
-  Future<String> crateApiCoreDecryptFcmMessage({
-    required OptionBoxClients clients,
-    required List<int> message,
-  });
-
   Future<String> crateApiDecryptVideo({
     required String cameraName,
     required String encFilename,
   });
-
-  Future<String> crateApiCoreDecryptVideo({
-    required OptionBoxClients clients,
-    required String encryptedFilename,
-  });
-
-  Future<void> crateApiCoreDeregister({required OptionBoxClients clients});
 
   Future<void> crateApiDeregisterCamera({required String cameraName});
 
@@ -134,27 +111,11 @@ abstract class RustLibApi extends BaseApi {
 
   Future<String> crateApiGetLivestreamGroupName({required String cameraName});
 
-  Future<String> crateApiCoreGetLivestreamGroupName({
-    required OptionBoxClients clients,
-    required String cameraName,
-  });
-
   Future<String> crateApiGetMotionGroupName({required String cameraName});
-
-  Future<String> crateApiCoreGetMotionGroupName({
-    required OptionBoxClients clients,
-    required String cameraName,
-  });
 
   Future<void> crateApiInitApp();
 
   Future<void> crateApiLoggerInitLogger();
-
-  Future<bool> crateApiCoreInitialize({
-    required OptionBoxClients clients,
-    required String fileDir,
-    required bool firstTime,
-  });
 
   Future<bool> crateApiInitializeCamera({
     required String cameraName,
@@ -170,20 +131,9 @@ abstract class RustLibApi extends BaseApi {
     required BigInt expectedChunkNumber,
   });
 
-  Future<Uint8List> crateApiCoreLivestreamDecrypt({
-    required OptionBoxClients clients,
-    required List<int> encData,
-    required BigInt expectedChunkNumber,
-  });
-
   Future<bool> crateApiLivestreamUpdate({
     required String cameraName,
     required List<int> msg,
-  });
-
-  Future<void> crateApiCoreLivestreamUpdate({
-    required OptionBoxClients clients,
-    required List<int> updatesMsg,
   });
 
   Future<bool> crateApiPingProprietaryDevice({required String cameraIp});
@@ -201,15 +151,6 @@ abstract class RustLibApi extends BaseApi {
   get rust_arc_decrement_strong_count_LevelFilter;
 
   CrossPlatformFinalizerArg get rust_arc_decrement_strong_count_LevelFilterPtr;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_OptionBoxClients;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_OptionBoxClients;
-
-  CrossPlatformFinalizerArg
-  get rust_arc_decrement_strong_count_OptionBoxClientsPtr;
 
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_SendToDartLogger;
@@ -330,69 +271,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "acquire_lock", argNames: ["path"]);
 
   @override
-  Future<bool> crateApiCoreAddCamera({
-    required OptionBoxClients clientsReg,
-    required String cameraName,
-    required String cameraIp,
-    required List<int> secretVec,
-    required bool standaloneCamera,
-    required String wifiSsid,
-    required String wifiPassword,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients(
-            clientsReg,
-            serializer,
-          );
-          sse_encode_String(cameraName, serializer);
-          sse_encode_String(cameraIp, serializer);
-          sse_encode_list_prim_u_8_loose(secretVec, serializer);
-          sse_encode_bool(standaloneCamera, serializer);
-          sse_encode_String(wifiSsid, serializer);
-          sse_encode_String(wifiPassword, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 4,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_bool,
-          decodeErrorData: null,
-        ),
-        constMeta: kCrateApiCoreAddCameraConstMeta,
-        argValues: [
-          clientsReg,
-          cameraName,
-          cameraIp,
-          secretVec,
-          standaloneCamera,
-          wifiSsid,
-          wifiPassword,
-        ],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiCoreAddCameraConstMeta => const TaskConstMeta(
-    debugName: "add_camera",
-    argNames: [
-      "clientsReg",
-      "cameraName",
-      "cameraIp",
-      "secretVec",
-      "standaloneCamera",
-      "wifiSsid",
-      "wifiPassword",
-    ],
-  );
-
-  @override
   Stream<LogEntry> crateApiLoggerCreateLogStream() {
     final s = RustStreamSink<LogEntry>();
     unawaited(
@@ -404,7 +282,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             pdeCallFfi(
               generalizedFrbRustBinding,
               serializer,
-              funcId: 5,
+              funcId: 4,
               port: port_,
             );
           },
@@ -438,7 +316,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 5,
             port: port_,
           );
         },
@@ -459,44 +337,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<String> crateApiCoreDecryptFcmMessage({
-    required OptionBoxClients clients,
-    required List<int> message,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients(
-            clients,
-            serializer,
-          );
-          sse_encode_list_prim_u_8_loose(message, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 7,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiCoreDecryptFcmMessageConstMeta,
-        argValues: [clients, message],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiCoreDecryptFcmMessageConstMeta =>
-      const TaskConstMeta(
-        debugName: "decrypt_fcm_message",
-        argNames: ["clients", "message"],
-      );
-
-  @override
   Future<String> crateApiDecryptVideo({
     required String cameraName,
     required String encFilename,
@@ -510,7 +350,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 6,
             port: port_,
           );
         },
@@ -531,74 +371,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<String> crateApiCoreDecryptVideo({
-    required OptionBoxClients clients,
-    required String encryptedFilename,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients(
-            clients,
-            serializer,
-          );
-          sse_encode_String(encryptedFilename, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 9,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiCoreDecryptVideoConstMeta,
-        argValues: [clients, encryptedFilename],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiCoreDecryptVideoConstMeta => const TaskConstMeta(
-    debugName: "decrypt_video",
-    argNames: ["clients", "encryptedFilename"],
-  );
-
-  @override
-  Future<void> crateApiCoreDeregister({required OptionBoxClients clients}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients(
-            clients,
-            serializer,
-          );
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 10,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: null,
-        ),
-        constMeta: kCrateApiCoreDeregisterConstMeta,
-        argValues: [clients],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiCoreDeregisterConstMeta =>
-      const TaskConstMeta(debugName: "deregister", argNames: ["clients"]);
-
-  @override
   Future<void> crateApiDeregisterCamera({required String cameraName}) {
     return handler.executeNormal(
       NormalTask(
@@ -608,7 +380,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 7,
             port: port_,
           );
         },
@@ -650,7 +422,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 8,
             port: port_,
           );
         },
@@ -680,7 +452,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 9,
             port: port_,
           );
         },
@@ -702,44 +474,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<String> crateApiCoreGetLivestreamGroupName({
-    required OptionBoxClients clients,
-    required String cameraName,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients(
-            clients,
-            serializer,
-          );
-          sse_encode_String(cameraName, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 14,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiCoreGetLivestreamGroupNameConstMeta,
-        argValues: [clients, cameraName],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiCoreGetLivestreamGroupNameConstMeta =>
-      const TaskConstMeta(
-        debugName: "get_livestream_group_name",
-        argNames: ["clients", "cameraName"],
-      );
-
-  @override
   Future<String> crateApiGetMotionGroupName({required String cameraName}) {
     return handler.executeNormal(
       NormalTask(
@@ -749,7 +483,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 10,
             port: port_,
           );
         },
@@ -770,44 +504,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<String> crateApiCoreGetMotionGroupName({
-    required OptionBoxClients clients,
-    required String cameraName,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients(
-            clients,
-            serializer,
-          );
-          sse_encode_String(cameraName, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 16,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiCoreGetMotionGroupNameConstMeta,
-        argValues: [clients, cameraName],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiCoreGetMotionGroupNameConstMeta =>
-      const TaskConstMeta(
-        debugName: "get_motion_group_name",
-        argNames: ["clients", "cameraName"],
-      );
-
-  @override
   Future<void> crateApiInitApp() {
     return handler.executeNormal(
       NormalTask(
@@ -816,7 +512,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 11,
             port: port_,
           );
         },
@@ -843,7 +539,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 18,
+            funcId: 12,
             port: port_,
           );
         },
@@ -862,45 +558,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "init_logger", argNames: []);
 
   @override
-  Future<bool> crateApiCoreInitialize({
-    required OptionBoxClients clients,
-    required String fileDir,
-    required bool firstTime,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients(
-            clients,
-            serializer,
-          );
-          sse_encode_String(fileDir, serializer);
-          sse_encode_bool(firstTime, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 19,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiCoreInitializeConstMeta,
-        argValues: [clients, fileDir, firstTime],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiCoreInitializeConstMeta => const TaskConstMeta(
-    debugName: "initialize",
-    argNames: ["clients", "fileDir", "firstTime"],
-  );
-
-  @override
   Future<bool> crateApiInitializeCamera({
     required String cameraName,
     required String fileDir,
@@ -916,7 +573,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 13,
             port: port_,
           );
         },
@@ -946,7 +603,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 14,
             port: port_,
           );
         },
@@ -980,7 +637,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 15,
             port: port_,
           );
         },
@@ -1001,46 +658,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<Uint8List> crateApiCoreLivestreamDecrypt({
-    required OptionBoxClients clients,
-    required List<int> encData,
-    required BigInt expectedChunkNumber,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients(
-            clients,
-            serializer,
-          );
-          sse_encode_list_prim_u_8_loose(encData, serializer);
-          sse_encode_u_64(expectedChunkNumber, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 23,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_list_prim_u_8_strict,
-          decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiCoreLivestreamDecryptConstMeta,
-        argValues: [clients, encData, expectedChunkNumber],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiCoreLivestreamDecryptConstMeta =>
-      const TaskConstMeta(
-        debugName: "livestream_decrypt",
-        argNames: ["clients", "encData", "expectedChunkNumber"],
-      );
-
-  @override
   Future<bool> crateApiLivestreamUpdate({
     required String cameraName,
     required List<int> msg,
@@ -1054,7 +671,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 16,
             port: port_,
           );
         },
@@ -1075,44 +692,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<void> crateApiCoreLivestreamUpdate({
-    required OptionBoxClients clients,
-    required List<int> updatesMsg,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients(
-            clients,
-            serializer,
-          );
-          sse_encode_list_prim_u_8_loose(updatesMsg, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 25,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_AnyhowException,
-        ),
-        constMeta: kCrateApiCoreLivestreamUpdateConstMeta,
-        argValues: [clients, updatesMsg],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiCoreLivestreamUpdateConstMeta =>
-      const TaskConstMeta(
-        debugName: "livestream_update",
-        argNames: ["clients", "updatesMsg"],
-      );
-
-  @override
   Future<bool> crateApiPingProprietaryDevice({required String cameraIp}) {
     return handler.executeNormal(
       NormalTask(
@@ -1122,7 +701,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 26,
+            funcId: 17,
             port: port_,
           );
         },
@@ -1153,7 +732,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 27,
+            funcId: 18,
             port: port_,
           );
         },
@@ -1180,7 +759,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 28,
+            funcId: 19,
             port: port_,
           );
         },
@@ -1208,7 +787,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 29,
+            funcId: 20,
             port: port_,
           );
         },
@@ -1233,14 +812,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   RustArcDecrementStrongCountFnType
   get rust_arc_decrement_strong_count_LevelFilter =>
       wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerLevelFilter;
-
-  RustArcIncrementStrongCountFnType
-  get rust_arc_increment_strong_count_OptionBoxClients =>
-      wire.rust_arc_increment_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients;
-
-  RustArcDecrementStrongCountFnType
-  get rust_arc_decrement_strong_count_OptionBoxClients =>
-      wire.rust_arc_decrement_strong_count_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients;
 
   RustArcIncrementStrongCountFnType
   get rust_arc_increment_strong_count_SendToDartLogger =>
@@ -1275,30 +846,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  OptionBoxClients
-  dco_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return OptionBoxClientsImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
   LevelFilter
   dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerLevelFilter(
     dynamic raw,
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return LevelFilterImpl.frbInternalDcoDecode(raw as List<dynamic>);
-  }
-
-  @protected
-  OptionBoxClients
-  dco_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients(
-    dynamic raw,
-  ) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return OptionBoxClientsImpl.frbInternalDcoDecode(raw as List<dynamic>);
   }
 
   @protected
@@ -1422,36 +975,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  OptionBoxClients
-  sse_decode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return OptionBoxClientsImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
   LevelFilter
   sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerLevelFilter(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return LevelFilterImpl.frbInternalSseDecode(
-      sse_decode_usize(deserializer),
-      sse_decode_i_32(deserializer),
-    );
-  }
-
-  @protected
-  OptionBoxClients
-  sse_decode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return OptionBoxClientsImpl.frbInternalSseDecode(
       sse_decode_usize(deserializer),
       sse_decode_i_32(deserializer),
     );
@@ -1591,19 +1120,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @protected
   void
-  sse_encode_Auto_RefMut_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients(
-    OptionBoxClients self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as OptionBoxClientsImpl).frbInternalSseEncode(move: false),
-      serializer,
-    );
-  }
-
-  @protected
-  void
   sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerLevelFilter(
     LevelFilter self,
     SseSerializer serializer,
@@ -1611,19 +1127,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_usize(
       (self as LevelFilterImpl).frbInternalSseEncode(move: null),
-      serializer,
-    );
-  }
-
-  @protected
-  void
-  sse_encode_RustOpaque_flutter_rust_bridgefor_generatedRustAutoOpaqueInnerOptionBoxClients(
-    OptionBoxClients self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_usize(
-      (self as OptionBoxClientsImpl).frbInternalSseEncode(move: null),
       serializer,
     );
   }
@@ -1754,31 +1257,6 @@ class LevelFilterImpl extends RustOpaque implements LevelFilter {
         RustLib.instance.api.rust_arc_decrement_strong_count_LevelFilter,
     rustArcDecrementStrongCountPtr:
         RustLib.instance.api.rust_arc_decrement_strong_count_LevelFilterPtr,
-  );
-}
-
-@sealed
-class OptionBoxClientsImpl extends RustOpaque implements OptionBoxClients {
-  // Not to be used by end users
-  OptionBoxClientsImpl.frbInternalDcoDecode(List<dynamic> wire)
-    : super.frbInternalDcoDecode(wire, _kStaticData);
-
-  // Not to be used by end users
-  OptionBoxClientsImpl.frbInternalSseDecode(
-    BigInt ptr,
-    int externalSizeOnNative,
-  ) : super.frbInternalSseDecode(ptr, externalSizeOnNative, _kStaticData);
-
-  static final _kStaticData = RustArcStaticData(
-    rustArcIncrementStrongCount:
-        RustLib.instance.api.rust_arc_increment_strong_count_OptionBoxClients,
-    rustArcDecrementStrongCount:
-        RustLib.instance.api.rust_arc_decrement_strong_count_OptionBoxClients,
-    rustArcDecrementStrongCountPtr:
-        RustLib
-            .instance
-            .api
-            .rust_arc_decrement_strong_count_OptionBoxClientsPtr,
   );
 }
 
