@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:privastead_flutter/constants.dart';
 import 'package:privastead_flutter/keys.dart';
 import 'dart:async';
 
@@ -49,7 +50,7 @@ class _QrScanDialogState extends State<QrScanDialog> {
       final rawBytes = barcode.rawBytes;
       final rawBytesLen = rawBytes?.length;
       if (rawBytes != null && rawBytes.isNotEmpty) {
-        if (rawBytesLen == PrefKeys.numCameraSecretBytes) {
+        if (rawBytesLen == Constants.numCameraSecretBytes) {
           _hasScannedCode = true; // mark as handled
           // Stop the camera
           _cameraController.stop();

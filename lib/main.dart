@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:privastead_flutter/notifications/scheduler.dart';
 import 'package:privastead_flutter/src/rust/frb_generated.dart';
 import 'package:privastead_flutter/src/rust/api/logger.dart';
-import 'package:privastead_flutter/utilities/camera_util.dart';
+import 'package:privastead_flutter/utilities/rust_util.dart';
 import 'routes/home_page.dart';
 import "routes/theme_provider.dart";
 import 'package:provider/provider.dart';
@@ -19,6 +19,7 @@ import 'package:privastead_flutter/utilities/logger.dart';
 import 'package:privastead_flutter/utilities/http_client.dart';
 import 'package:privastead_flutter/utilities/lock.dart';
 import 'package:privastead_flutter/keys.dart';
+import 'package:privastead_flutter/constants.dart';
 import 'dart:ui';
 import 'dart:isolate';
 
@@ -125,7 +126,7 @@ Future<void> _checkForUpdates() async {
 
   // TODO: This is essentially a clone of my previous implementation in scheduler.dart
   // Adds the camera to the waiting list if not already in there.
-  if (await lock(PrefKeys.cameraWaitingLock)) {
+  if (await lock(Constants.cameraWaitingLock)) {
     try {
       Log.d("Adding to queue for $cameraNames");
       var sharedPref = SharedPreferencesAsync();
@@ -153,7 +154,7 @@ Future<void> _checkForUpdates() async {
       }
     } finally {
       // Ensure it's unlocked.
-      await unlock(PrefKeys.cameraWaitingLock);
+      await unlock(Constants.cameraWaitingLock);
     }
   }
 

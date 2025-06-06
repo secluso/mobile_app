@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:privastead_flutter/routes/camera/list_cameras.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
-import 'package:privastead_flutter/utilities/camera_util.dart';
+import 'package:privastead_flutter/utilities/rust_util.dart';
 import 'package:privastead_flutter/database/entities.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
 import 'package:privastead_flutter/keys.dart';
@@ -51,7 +51,7 @@ class _CameraSetupStatusDialogState extends State<CameraSetupStatusDialog> {
 
     Log.d("CameraSetup: begin for $cameraName");
 
-    addCamera(cameraName, ip, qrCode, false, '', '').then((success) async {
+    addCamera(cameraName, ip, qrCode, false, '', '', '').then((success) async {
       if (!mounted) return;
 
       if (success) {

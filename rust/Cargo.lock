@@ -1529,6 +1529,7 @@ dependencies = [
  "openmls_traits",
  "serde",
  "serde_derive",
+ "serde_json",
  "sha3",
 ]
 

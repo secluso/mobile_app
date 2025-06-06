@@ -34,6 +34,7 @@ Future<bool> flutterAddCamera({
   required bool standalone,
   required String ssid,
   required String password,
+  required String pairingToken,
 }) => RustLib.instance.api.crateApiFlutterAddCamera(
   cameraName: cameraName,
   ip: ip,
@@ -41,10 +42,19 @@ Future<bool> flutterAddCamera({
   standalone: standalone,
   ssid: ssid,
   password: password,
+  pairingToken: pairingToken,
 );
 
 Future<bool> pingProprietaryDevice({required String cameraIp}) =>
     RustLib.instance.api.crateApiPingProprietaryDevice(cameraIp: cameraIp);
+
+Future<Uint8List> encryptSettingsMessage({
+  required String cameraName,
+  required List<int> data,
+}) => RustLib.instance.api.crateApiEncryptSettingsMessage(
+  cameraName: cameraName,
+  data: data,
+);
 
 Future<String> decryptMessage({
   required String clientTag,

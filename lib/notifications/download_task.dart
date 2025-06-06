@@ -1,4 +1,5 @@
 import 'package:path_provider/path_provider.dart';
+import 'package:privastead_flutter/constants.dart';
 import 'package:privastead_flutter/keys.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:privastead_flutter/utilities/http_client.dart';
@@ -42,7 +43,7 @@ Future<bool> doWorkNonBackground(String cameraName) async {
     await RustBridgeHelper.ensureInitialized();
   }
 
-  if (await lock(PrefKeys.genericDownloadTaskLock)) {
+  if (await lock(Constants.genericDownloadTaskLock)) {
     try {
       var prefs = SharedPreferencesAsync();
       await prefs.setBool(
@@ -58,7 +59,7 @@ Future<bool> doWorkNonBackground(String cameraName) async {
       return result;
     } finally {
       await unlock(
-        PrefKeys.genericDownloadTaskLock,
+        Constants.genericDownloadTaskLock,
       ); // Always ensure this unlocks, even on exceptions
     }
   } else {
@@ -82,10 +83,10 @@ Future<bool> doWorkBackground() async {
     return true;
   }
 
-  if (await lock(PrefKeys.genericDownloadTaskLock)) {
+  if (await lock(Constants.genericDownloadTaskLock)) {
     try {
       var prefs = SharedPreferencesAsync();
-      if (await lock(PrefKeys.cameraWaitingLock)) {
+      if (await lock(Constants.cameraWaitingLock)) {
         var downloadCameraQueue;
         try {
           // Secondary check after locking
@@ -128,12 +129,12 @@ Future<bool> doWorkBackground() async {
           ); // Delete the existing list, so that we know any new entries from this point will require an additional download later
         } finally {
           // Ensure this always unlocks
-          await unlock(PrefKeys.cameraWaitingLock);
+          await unlock(Constants.cameraWaitingLock);
           Log.d("Released lock");
         }
         if (downloadCameraQueue != null) {
           // What if we have uneven cameras within the batch? Say we have 6 cameras. Three have 10 videos to download. Three have 1. It seems best to associate them when batching, but we randomize currently.
-          var batchSize = PrefKeys.downloadBatchSize;
+          var batchSize = Constants.downloadBatchSize;
           var batchedQueue = batch(downloadCameraQueue, batchSize);
           Log.d("Batched Queue List: $batchedQueue");
 
@@ -163,7 +164,7 @@ Future<bool> doWorkBackground() async {
           var allSuccessful = true;
 
           await lock(
-            PrefKeys.cameraWaitingLock,
+            Constants.cameraWaitingLock,
           ); // TODO: I'm not sure what to do if this is false. Is it even possible for it to be false? It's blocking.
 
           try {
@@ -213,7 +214,7 @@ Future<bool> doWorkBackground() async {
             ); // Allow livestreaming to continue.
           } finally {
             await unlock(
-              PrefKeys.cameraWaitingLock,
+              Constants.cameraWaitingLock,
             ); // Always ensure this unlocks.
           }
 
@@ -235,7 +236,7 @@ Future<bool> doWorkBackground() async {
       }
     } finally {
       await unlock(
-        PrefKeys.genericDownloadTaskLock,
+        Constants.genericDownloadTaskLock,
       ); // Always ensure this unlocks, even on exceptions
     }
   } else {
@@ -271,15 +272,17 @@ Future<bool> retrieveVideos(String cameraName) async {
     Log.d(
       "Trying to download video for epoch $epoch with $cameraName and encVideo$epoch",
     );
-    var result = await HttpClientService.instance.downloadVideo(
+    var result = await HttpClientService.instance.download(
+      destinationFile: "encVideo$epoch",
       cameraName: cameraName,
-      epoch: epoch,
-      fileName: "encVideo$epoch",
+      serverFile: epoch.toString(),
+      type: Group.motion,
+      delete: true,
     );
 
     if (result.isSuccess) {
       Log.d("Success!");
-      var file = result.value!;
+      var file = result.value!.file!;
       var decFileName = await decryptVideo(
         cameraName: cameraName,
         encFilename: file.path,

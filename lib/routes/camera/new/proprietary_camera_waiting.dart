@@ -1,8 +1,15 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:async';
+
+import 'package:uuid/data.dart';
+import 'package:uuid/uuid.dart';
+import 'package:uuid/rng.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:privastead_flutter/constants.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
 import 'package:privastead_flutter/database/entities.dart';
 import 'package:privastead_flutter/src/rust/api.dart';
@@ -10,7 +17,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:privastead_flutter/keys.dart';
 import 'package:privastead_flutter/routes/camera/list_cameras.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
-import 'package:privastead_flutter/utilities/camera_util.dart';
+import 'package:privastead_flutter/utilities/http_client.dart';
+import 'package:privastead_flutter/utilities/rust_util.dart';
 import 'proprietary_camera_option.dart';
 import 'package:path/path.dart' as p;
 
@@ -28,19 +36,6 @@ class ProprietaryCameraWaitingDialog extends StatefulWidget {
     super.key,
   });
 
-  static _ProprietaryCameraWaitingDialogState? _currentState;
-
-  static void completePairingForCamera(String name, DateTime timestamp) {
-    Log.d("Called complete pairing for camera");
-    final state = _currentState;
-    if (state == null) return;
-    final now = DateTime.now();
-    if (state.widget.cameraName.toLowerCase() != name.toLowerCase()) return;
-    if (now.difference(timestamp).inSeconds > 60) return;
-
-    state._onPairingConfirmed();
-  }
-
   @override
   State<ProprietaryCameraWaitingDialog> createState() =>
       _ProprietaryCameraWaitingDialogState();
@@ -56,14 +51,12 @@ class _ProprietaryCameraWaitingDialogState
   @override
   void initState() {
     super.initState();
-    ProprietaryCameraWaitingDialog._currentState = this;
     _startInitialPairing();
   }
 
   @override
   void dispose() {
     _disconnectWifiOnce();
-    ProprietaryCameraWaitingDialog._currentState = null;
     super.dispose();
   }
 
@@ -87,13 +80,15 @@ class _ProprietaryCameraWaitingDialogState
     });
 
     try {
+      var pairingToken = Uuid().v4(config: V4Options(null, CryptoRNG()));
       final success = await addCamera(
         widget.cameraName,
-        PrefKeys.proprietaryCameraIp,
+        Constants.proprietaryCameraIp,
         List<int>.from(widget.qrCode),
         true,
         widget.wifiSsid,
         widget.wifiPassword,
+        pairingToken,
       );
 
       if (!success) {
@@ -106,16 +101,23 @@ class _ProprietaryCameraWaitingDialogState
       _disconnectWifiOnce();
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        PrefKeys.waitingAdditionalCamera,
-        widget.cameraName,
-      );
-      await prefs.setInt(
-        PrefKeys.waitingAdditionalCameraTime,
-        DateTime.now().millisecondsSinceEpoch,
+      await prefs.setString(PrefKeys.lastCameraAdd, widget.cameraName);
+      final status = await HttpClientService.instance.waitForPairingStatus(
+        pairingToken: pairingToken,
       );
 
-      Future.delayed(const Duration(seconds: 30), () {
+      Log.d("Returned status: $status");
+
+      if (!mounted) return;
+
+      if (status.isSuccess && status.value! == "paired") {
+        _onPairingConfirmed();
+      } else {
+        setState(() => _timedOut = true);
+      }
+
+      // Backup
+      Future.delayed(const Duration(seconds: 45), () {
         if (mounted && !_pairingCompleted) {
           setState(() => _timedOut = true);
         }
@@ -126,17 +128,19 @@ class _ProprietaryCameraWaitingDialogState
   }
 
   void _onPairingConfirmed() async {
+    if (!mounted || _pairingCompleted) return;
+    // TODO: should these two lines go before the mounted check? what happens if this occurs?
+
     ProprietaryCameraConnectDialog.pairingCompleted =
         true; // So we don't attempt a WiFi disconnect when we pop()
     ProprietaryCameraConnectDialog.pairingInProgress = false;
-    if (!mounted || _pairingCompleted) return;
+
     Log.d("Entered method");
     _pairingCompleted = true;
 
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     prefs.setBool("first_time_${widget.cameraName}", true);
-    prefs.remove(PrefKeys.waitingAdditionalCamera);
-    prefs.remove(PrefKeys.waitingAdditionalCameraTime);
+    prefs.remove(PrefKeys.lastCameraAdd);
 
     final existingSet = prefs.getStringList(PrefKeys.cameraSet) ?? <String>[];
     if (!existingSet.contains(widget.cameraName)) {
@@ -163,8 +167,7 @@ class _ProprietaryCameraWaitingDialogState
 
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await deregisterCamera(cameraName: cameraName);
-    prefs.remove(PrefKeys.waitingAdditionalCamera);
-    prefs.remove(PrefKeys.waitingAdditionalCameraTime);
+    prefs.remove(PrefKeys.lastCameraAdd);
 
     final docsDir = await getApplicationDocumentsDirectory();
     final camDir = Directory(p.join(docsDir.path, 'camera_dir_$cameraName'));
@@ -182,10 +185,6 @@ class _ProprietaryCameraWaitingDialogState
       count++;
       return count == 3;
     });
-  }
-
-  void _onContinueAnyway() {
-    _onPairingConfirmed();
   }
 
   Widget _buildWaitingView() => Column(
@@ -260,35 +259,6 @@ class _ProprietaryCameraWaitingDialogState
             child: FilledButton(
               onPressed: _onRetry,
               child: const Text("Try Again"),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: OutlinedButton(
-              onPressed: () async {
-                final proceed = await showDialog<bool>(
-                  context: context,
-                  builder:
-                      (_) => AlertDialog(
-                        title: const Text("Proceed without confirmation?"),
-                        content: const Text(
-                          "If the camera hasn't actually paired, it may not work correctly. Are you sure?",
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: const Text("Cancel"),
-                          ),
-                          FilledButton(
-                            onPressed: () => Navigator.pop(context, true),
-                            child: const Text("Continue"),
-                          ),
-                        ],
-                      ),
-                );
-                if (proceed == true) _onContinueAnyway();
-              },
-              child: const Text("Continue"),
             ),
           ),
         ],

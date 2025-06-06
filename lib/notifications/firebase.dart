@@ -177,21 +177,6 @@ class PushNotificationService {
       final List<String> cameraSet =
           prefs.getStringList(PrefKeys.cameraSet) ?? [];
 
-      // If we have a waiting FCM camera within the last minute, we allow it to pass through.
-      if (prefs.containsKey(PrefKeys.waitingAdditionalCamera) &&
-          !cameraSet.contains(
-            prefs.getString(PrefKeys.waitingAdditionalCamera),
-          )) {
-        var time = prefs.getInt(PrefKeys.waitingAdditionalCameraTime);
-        var currentTime = DateTime.now().millisecondsSinceEpoch;
-        if (time != null) {
-          var diff = time - currentTime;
-          if (diff <= 60000) {
-            cameraSet.add(prefs.getString(PrefKeys.waitingAdditionalCamera)!);
-          }
-        }
-      }
-
       Log.d('Pre-existing camera set: $cameraSet');
 
       //   final bool needNotification =
@@ -210,26 +195,12 @@ class PushNotificationService {
         try {
           final decodedJson = jsonDecode(response) as Map<String, dynamic>;
           if (decodedJson.containsKey("type")) {
-            var type = decodedJson['type'];
-            if (type == "wifi_success") {
-              Log.d(
-                "Got successful wifi FCM notification for camera $cameraName, $response",
-              );
-
-              var timestamp = decodedJson['timestamp'];
-              var date = new DateTime.fromMillisecondsSinceEpoch(timestamp);
-
-              ProprietaryCameraWaitingDialog.completePairingForCamera(
-                cameraName,
-                date,
-              );
-            } else {
-              Log.e("Error: Unknown JSON message type: $type");
-            }
+            // TODO: This was made for future use cases.
           } else {
             Log.e("Error: JSON FCM message didn't contain type key");
           }
         } catch (_) {
+          // TODO: What if logic from above failed for reasons other than jsonDecode?
           if (response == 'Download') {
             Log.d("Downloading video");
             final bool useMobile = prefs.getBool('use_mobile_state') ?? false;

@@ -63,14 +63,14 @@ class _IpCameraDialogState extends State<IpCameraDialog> {
       final prefs = await SharedPreferences.getInstance();
 
       // Reset these as they are no longer needed.
-      if (prefs.containsKey(PrefKeys.waitingAdditionalCamera)) {
-        await deregisterCamera(cameraName: cameraName);
-        prefs.remove(PrefKeys.waitingAdditionalCamera);
-        prefs.remove(PrefKeys.waitingAdditionalCameraTime);
+      if (prefs.containsKey(PrefKeys.lastCameraAdd)) {
+        var lastCameraName = prefs.getString(PrefKeys.lastCameraAdd)!;
+        await deregisterCamera(cameraName: lastCameraName);
+        prefs.remove(PrefKeys.lastCameraAdd);
 
         final docsDir = await getApplicationDocumentsDirectory();
         final camDir = Directory(
-          p.join(docsDir.path, 'camera_dir_$cameraName'),
+          p.join(docsDir.path, 'camera_dir_$lastCameraName'),
         );
         if (await camDir.exists()) {
           try {

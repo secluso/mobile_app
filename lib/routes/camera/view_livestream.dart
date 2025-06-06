@@ -5,7 +5,7 @@ import 'package:privastead_flutter/keys.dart';
 import 'package:privastead_flutter/utilities/byte_stream_player.dart';
 import 'package:privastead_flutter/utilities/http_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:privastead_flutter/utilities/camera_util.dart';
+import 'package:privastead_flutter/utilities/rust_util.dart';
 import 'package:privastead_flutter/utilities/byte_player_view.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
 import 'package:path_provider/path_provider.dart';

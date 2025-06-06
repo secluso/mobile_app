@@ -1,3 +1,4 @@
+import 'package:privastead_flutter/constants.dart';
 import 'package:privastead_flutter/src/rust/api.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
 import 'proprietary_camera_waiting.dart';
@@ -128,7 +129,7 @@ class _ProprietaryCameraConnectDialogState
         // We expect the same IP for all Raspberry Pi Cameras
         try {
           bool connected = await pingProprietaryDevice(
-            cameraIp: PrefKeys.proprietaryCameraIp,
+            cameraIp: Constants.proprietaryCameraIp,
           );
           if (!mounted) return;
 
@@ -382,13 +383,16 @@ class _ProprietaryCameraInfoDialogState
         sharedPreferences.getStringList(PrefKeys.cameraSet) ?? [];
 
     // Reset these as they are no longer needed.
-    if (sharedPreferences.containsKey(PrefKeys.waitingAdditionalCamera)) {
-      await deregisterCamera(cameraName: cameraName);
-      sharedPreferences.remove(PrefKeys.waitingAdditionalCamera);
-      sharedPreferences.remove(PrefKeys.waitingAdditionalCameraTime);
+    if (sharedPreferences.containsKey(PrefKeys.lastCameraAdd)) {
+      Log.d("Deleting extra last camera");
+      var lastCameraAdd = sharedPreferences.getString(PrefKeys.lastCameraAdd)!;
+      await deregisterCamera(cameraName: lastCameraAdd);
+      sharedPreferences.remove(PrefKeys.lastCameraAdd);
 
       final docsDir = await getApplicationDocumentsDirectory();
-      final camDir = Directory(p.join(docsDir.path, 'camera_dir_$cameraName'));
+      final camDir = Directory(
+        p.join(docsDir.path, 'camera_dir_$lastCameraAdd'),
+      );
       if (await camDir.exists()) {
         try {
           await camDir.delete(recursive: true);

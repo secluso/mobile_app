@@ -13,6 +13,7 @@ Future<bool> addCamera(
   bool standalone,
   String ssid,
   String password,
+  String pairingToken,
 ) async {
   if (!(await connect(cameraName))) {
     Log.d("Connect = false");
@@ -26,6 +27,7 @@ Future<bool> addCamera(
     standalone: standalone,
     ssid: ssid,
     password: password,
+    pairingToken: pairingToken,
   );
 }
 

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:privastead_flutter/constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'theme_provider.dart';
@@ -10,7 +11,7 @@ import 'package:privastead_flutter/keys.dart';
 import 'package:privastead_flutter/notifications/firebase.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
 import 'package:privastead_flutter/database/entities.dart';
-import 'package:privastead_flutter/utilities/camera_util.dart';
+import 'package:privastead_flutter/utilities/rust_util.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
 
 class ServerPage extends StatefulWidget {
@@ -64,7 +65,7 @@ class _ServerPageState extends State<ServerPage> {
       String credentialsString = utf8.decode(decodedCredentials);
 
       // TODO: Check how this handles on failure... bad QR code
-      if (credentialsString.length != PrefKeys.credentialsLength) {
+      if (credentialsString.length != Constants.credentialsLength) {
         var len = credentialsString.length;
         Log.e(
           "Server Page Save: User credentials should be 28 characters. Current is $len",
@@ -82,11 +83,11 @@ class _ServerPageState extends State<ServerPage> {
 
       var serverUsername = credentialsString.substring(
         0,
-        PrefKeys.usernameLength,
+        Constants.usernameLength,
       );
       var serverPassword = credentialsString.substring(
-        PrefKeys.usernameLength,
-        PrefKeys.usernameLength + PrefKeys.passwordLength,
+        Constants.usernameLength,
+        Constants.usernameLength + Constants.passwordLength,
       );
 
       final prefs = await SharedPreferences.getInstance();

@@ -97,6 +97,7 @@ pub fn flutter_add_camera(
     standalone: bool,
     ssid: String,
     password: String,
+    pairing_token: String
 ) -> bool {
     let mut clients_map = CLIENTS.lock().unwrap();
 
@@ -115,6 +116,7 @@ pub fn flutter_add_camera(
             standalone,
             ssid,
             password,
+            pairing_token,
         );
     } else {
         info!("CLIENTS map not initialized!");
@@ -158,6 +160,29 @@ pub fn ping_proprietary_device(camera_ip: String) -> bool {
     }
 }
 
+#[flutter_rust_bridge::frb]
+pub fn encrypt_settings_message(camera_name: String, data: Vec<u8>) -> Vec<u8> {
+    let mut clients_map = CLIENTS.lock().unwrap();
+    if let Some(map) = clients_map.as_mut() {
+        let client_entry = map
+            .entry(camera_name.clone())
+            .or_insert_with(|| Mutex::new(None));
+        let mut client_guard = client_entry.lock().unwrap();
+
+        match privastead_app_native::encrypt_settings_message(&mut *client_guard, camera_name, data) {
+            Ok(encrypted_message) => {
+                return encrypted_message;
+            }
+            Err(e) => {
+                info!("Error: {}", e);
+                return Vec::new();
+            }
+        }
+    } else {
+        info!("CLIENTS map not initialized!");
+        return Vec::new();
+    }
+}
 
 #[flutter_rust_bridge::frb]
 pub fn decrypt_message(client_tag: String, camera_name: String, data: Vec<u8>) -> String {

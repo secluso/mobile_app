@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:privastead_flutter/constants.dart';
 import 'package:privastead_flutter/keys.dart';
 import 'package:privastead_flutter/notifications/download_task.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
@@ -116,7 +117,7 @@ class DownloadScheduler {
     Log.d("Continuing to queue one 15 min task for $camera");
 
     // Adds the camera to the waiting list if not already in there.
-    if (!camera.isEmpty && await lock(PrefKeys.cameraWaitingLock)) {
+    if (!camera.isEmpty && await lock(Constants.cameraWaitingLock)) {
       Log.d("Adding to queue for $camera");
       try {
         var sharedPref = SharedPreferencesAsync();
@@ -142,7 +143,7 @@ class DownloadScheduler {
         }
       } finally {
         // Ensure it's unlocked.
-        await unlock(PrefKeys.cameraWaitingLock);
+        await unlock(Constants.cameraWaitingLock);
       }
     } else {
       Log.e("Failed to acquire motion lock OR didn't need to");
