@@ -6,7 +6,6 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:privastead_flutter/notifications/notifications.dart';
 import 'package:privastead_flutter/notifications/scheduler.dart';
-import 'package:privastead_flutter/routes/camera/new/proprietary_camera_waiting.dart';
 import 'package:privastead_flutter/utilities/http_client.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -77,9 +76,6 @@ class PushNotificationService {
         android: AndroidInitializationSettings('ic_notification'),
         iOS: DarwinInitializationSettings(),
       ),
-      onDidReceiveNotificationResponse: (resp) {
-        // TODO: navigate to video list page using resp.payload
-      },
     );
     //  _notifReady = true;
 
@@ -104,7 +100,6 @@ class PushNotificationService {
       _handleMessage(msg);
     });
 
-    FirebaseMessaging.onMessageOpenedApp.listen(_handleTapFromTray);
     FirebaseMessaging.instance.onTokenRefresh.listen(_updateToken);
 
     await initLocalNotifications();
@@ -159,7 +154,6 @@ class PushNotificationService {
   }
 
   Future<void> _handleMessage(RemoteMessage msg) => _process(msg.data);
-  void _handleTapFromTray(RemoteMessage msg) {}
 
   // Core notification processing method
   Future<void> _process(Map<String, dynamic> data) async {

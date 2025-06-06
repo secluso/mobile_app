@@ -27,6 +27,22 @@ class CameraViewPage extends StatefulWidget {
   State<CameraViewPage> createState() => _CameraViewPageState();
 }
 
+String repackageVideoTitle(String videoFileName) {
+  if (videoFileName.startsWith("video_") && videoFileName.endsWith(".mp4")) {
+    var timeOf = int.parse(
+      videoFileName.replaceAll("video_", "").replaceAll(".mp4", ""),
+    );
+    final date =
+        DateTime.fromMillisecondsSinceEpoch(
+          timeOf * 1000,
+          isUtc: true,
+        ).toLocal();
+    return DateFormat('yyyy-MM-dd HH:mm:ss').format(date);
+  }
+
+  return videoFileName;
+}
+
 class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
   late Box<Video> _videoBox;
   final List<Video> _videos = [];
@@ -235,22 +251,6 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
         'pet': Icons.pets,
         'pets': Icons.pets,
       }[d.toLowerCase()];
-
-  String repackageVideoTitle(String videoFileName) {
-    if (videoFileName.startsWith("video_") && videoFileName.endsWith(".mp4")) {
-      var timeOf = int.parse(
-        videoFileName.replaceAll("video_", "").replaceAll(".mp4", ""),
-      );
-      final date =
-          DateTime.fromMillisecondsSinceEpoch(
-            timeOf * 1000,
-            isUtc: true,
-          ).toLocal();
-      return DateFormat('yyyy-MM-dd HH:mm:ss').format(date);
-    }
-
-    return videoFileName;
-  }
 
   @override
   Widget build(BuildContext context) {

@@ -24,6 +24,7 @@ import 'dart:ui';
 import 'dart:isolate';
 
 final ReceivePort _mainReceivePort = ReceivePort();
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   Log.init();
@@ -211,6 +212,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
     return MaterialApp(
       title: 'Flutter Demo',
+      navigatorKey: navigatorKey,
       navigatorObservers: [routeObserver],
       theme: themeProvider.isDarkMode ? ThemeData.dark() : ThemeData.light(),
       home: HomePage(),
