@@ -46,11 +46,11 @@ class HttpClientService {
   }
 
   Future<String> _motionGroupName(String cameraName) async {
-    return await getMotionGroupName(cameraName: cameraName);
+    return await getGroupName(clientTag: "motion", cameraName: cameraName);
   }
 
   Future<String> _livestreamGroupName(String cameraName) async {
-    return await getLivestreamGroupName(cameraName: cameraName);
+    return await getGroupName(clientTag: "livestream", cameraName: cameraName);
   }
 
   /// bulk check the list of camera names against the server to check for updates

@@ -46,16 +46,23 @@ Future<bool> flutterAddCamera({
 Future<bool> pingProprietaryDevice({required String cameraIp}) =>
     RustLib.instance.api.crateApiPingProprietaryDevice(cameraIp: cameraIp);
 
-Future<String> decryptFcmMessage({
+Future<String> decryptMessage({
+  required String clientTag,
   required String cameraName,
   required List<int> data,
-}) => RustLib.instance.api.crateApiDecryptFcmMessage(
+}) => RustLib.instance.api.crateApiDecryptMessage(
+  clientTag: clientTag,
   cameraName: cameraName,
   data: data,
 );
 
-Future<String> getMotionGroupName({required String cameraName}) =>
-    RustLib.instance.api.crateApiGetMotionGroupName(cameraName: cameraName);
+Future<String> getGroupName({
+  required String clientTag,
+  required String cameraName,
+}) => RustLib.instance.api.crateApiGetGroupName(
+  clientTag: clientTag,
+  cameraName: cameraName,
+);
 
 Future<bool> livestreamUpdate({
   required String cameraName,
@@ -74,6 +81,3 @@ Future<Uint8List> livestreamDecrypt({
   data: data,
   expectedChunkNumber: expectedChunkNumber,
 );
-
-Future<String> getLivestreamGroupName({required String cameraName}) =>
-    RustLib.instance.api.crateApiGetLivestreamGroupName(cameraName: cameraName);

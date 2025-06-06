@@ -13,7 +13,6 @@ use std::str::FromStr;
 
 static CLIENTS: Mutex<Option<HashMap<String, Mutex<Option<Box<Clients>>>>>> = Mutex::new(None);
 
-//good
 #[flutter_rust_bridge::frb]
 pub fn initialize_camera(camera_name: String, file_dir: String, first_time: bool) -> bool {
     let mut clients_map = CLIENTS.lock().unwrap();
@@ -161,15 +160,15 @@ pub fn ping_proprietary_device(camera_ip: String) -> bool {
 
 
 #[flutter_rust_bridge::frb]
-pub fn decrypt_fcm_message(_camera_name: String, data: Vec<u8>) -> String {
+pub fn decrypt_message(client_tag: String, camera_name: String, data: Vec<u8>) -> String {
     let mut clients_map = CLIENTS.lock().unwrap();
     if let Some(map) = clients_map.as_mut() {
         let client_entry = map
-            .entry(_camera_name.clone())
+            .entry(camera_name.clone())
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        match privastead_app_native::decrypt_fcm_message(&mut *client_guard, data) {
+        match privastead_app_native::decrypt_message(&mut *client_guard, client_tag, data) {
             Ok(timestamp) => {
                 return timestamp;
             }
@@ -185,15 +184,15 @@ pub fn decrypt_fcm_message(_camera_name: String, data: Vec<u8>) -> String {
 }
 
 #[flutter_rust_bridge::frb]
-pub fn get_motion_group_name(_camera_name: String) -> String {
+pub fn get_group_name(client_tag: String, camera_name: String) -> String {
     let mut clients_map = CLIENTS.lock().unwrap();
     if let Some(map) = clients_map.as_mut() {
         let client_entry = map
-            .entry(_camera_name.clone())
+            .entry(camera_name.clone())
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        match privastead_app_native::get_motion_group_name(&mut *client_guard, _camera_name) {
+        match privastead_app_native::get_group_name(&mut *client_guard, client_tag, camera_name) {
             Ok(motion_group_name) => {
                 return motion_group_name;
             }
@@ -209,11 +208,11 @@ pub fn get_motion_group_name(_camera_name: String) -> String {
 }
 
 #[flutter_rust_bridge::frb]
-pub fn livestream_update(_camera_name: String, msg: Vec<u8>) -> bool {
+pub fn livestream_update(camera_name: String, msg: Vec<u8>) -> bool {
     let mut clients_map = CLIENTS.lock().unwrap();
     if let Some(map) = clients_map.as_mut() {
         let client_entry = map
-            .entry(_camera_name.clone())
+            .entry(camera_name.clone())
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
@@ -233,11 +232,11 @@ pub fn livestream_update(_camera_name: String, msg: Vec<u8>) -> bool {
 }
 
 #[flutter_rust_bridge::frb]
-pub fn livestream_decrypt(_camera_name: String, data: Vec<u8>, expected_chunk_number: u64) -> Vec<u8> {
+pub fn livestream_decrypt(camera_name: String, data: Vec<u8>, expected_chunk_number: u64) -> Vec<u8> {
     let mut clients_map = CLIENTS.lock().unwrap();
     if let Some(map) = clients_map.as_mut() {
         let client_entry = map
-            .entry(_camera_name.clone())
+            .entry(camera_name.clone())
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
@@ -253,30 +252,5 @@ pub fn livestream_decrypt(_camera_name: String, data: Vec<u8>, expected_chunk_nu
     } else {
         info!("CLIENTS map not initialized!");
         vec![]
-    }
-}
-
-//TODO: Fix all the _camera_names (get rid of leading _)
-#[flutter_rust_bridge::frb]
-pub fn get_livestream_group_name(_camera_name: String) -> String {
-    let mut clients_map = CLIENTS.lock().unwrap();
-    if let Some(map) = clients_map.as_mut() {
-        let client_entry = map
-            .entry(_camera_name.clone())
-            .or_insert_with(|| Mutex::new(None));
-        let mut client_guard = client_entry.lock().unwrap();
-
-        match privastead_app_native::get_livestream_group_name(&mut *client_guard, _camera_name) {
-            Ok(livestream_group_name) => {
-                return livestream_group_name;
-            }
-            Err(e) => {
-                info!("Error: {}", e);
-                return "Error!".to_string();
-            }
-        }
-    } else {
-        info!("CLIENTS map not initialized!");
-        return "Error!".to_string();
     }
 }

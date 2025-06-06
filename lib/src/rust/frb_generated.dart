@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.10.0';
 
   @override
-  int get rustContentHash => -1710440161;
+  int get rustContentHash => 1668333833;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -88,7 +88,8 @@ abstract class RustLibApi extends BaseApi {
 
   Stream<LogEntry> crateApiLoggerCreateLogStream();
 
-  Future<String> crateApiDecryptFcmMessage({
+  Future<String> crateApiDecryptMessage({
+    required String clientTag,
     required String cameraName,
     required List<int> data,
   });
@@ -109,9 +110,10 @@ abstract class RustLibApi extends BaseApi {
     required String password,
   });
 
-  Future<String> crateApiGetLivestreamGroupName({required String cameraName});
-
-  Future<String> crateApiGetMotionGroupName({required String cameraName});
+  Future<String> crateApiGetGroupName({
+    required String clientTag,
+    required String cameraName,
+  });
 
   Future<void> crateApiInitApp();
 
@@ -303,7 +305,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "create_log_stream", argNames: ["s"]);
 
   @override
-  Future<String> crateApiDecryptFcmMessage({
+  Future<String> crateApiDecryptMessage({
+    required String clientTag,
     required String cameraName,
     required List<int> data,
   }) {
@@ -311,6 +314,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(clientTag, serializer);
           sse_encode_String(cameraName, serializer);
           sse_encode_list_prim_u_8_loose(data, serializer);
           pdeCallFfi(
@@ -324,16 +328,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiDecryptFcmMessageConstMeta,
-        argValues: [cameraName, data],
+        constMeta: kCrateApiDecryptMessageConstMeta,
+        argValues: [clientTag, cameraName, data],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiDecryptFcmMessageConstMeta => const TaskConstMeta(
-    debugName: "decrypt_fcm_message",
-    argNames: ["cameraName", "data"],
+  TaskConstMeta get kCrateApiDecryptMessageConstMeta => const TaskConstMeta(
+    debugName: "decrypt_message",
+    argNames: ["clientTag", "cameraName", "data"],
   );
 
   @override
@@ -443,11 +447,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<String> crateApiGetLivestreamGroupName({required String cameraName}) {
+  Future<String> crateApiGetGroupName({
+    required String clientTag,
+    required String cameraName,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(clientTag, serializer);
           sse_encode_String(cameraName, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
@@ -460,47 +468,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiGetLivestreamGroupNameConstMeta,
-        argValues: [cameraName],
+        constMeta: kCrateApiGetGroupNameConstMeta,
+        argValues: [clientTag, cameraName],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiGetLivestreamGroupNameConstMeta =>
-      const TaskConstMeta(
-        debugName: "get_livestream_group_name",
-        argNames: ["cameraName"],
-      );
-
-  @override
-  Future<String> crateApiGetMotionGroupName({required String cameraName}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(cameraName, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 10,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_String,
-          decodeErrorData: null,
-        ),
-        constMeta: kCrateApiGetMotionGroupNameConstMeta,
-        argValues: [cameraName],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiGetMotionGroupNameConstMeta => const TaskConstMeta(
-    debugName: "get_motion_group_name",
-    argNames: ["cameraName"],
+  TaskConstMeta get kCrateApiGetGroupNameConstMeta => const TaskConstMeta(
+    debugName: "get_group_name",
+    argNames: ["clientTag", "cameraName"],
   );
 
   @override
@@ -512,7 +489,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 11,
+            funcId: 10,
             port: port_,
           );
         },
@@ -539,7 +516,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 12,
+            funcId: 11,
             port: port_,
           );
         },
@@ -573,7 +550,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 13,
+            funcId: 12,
             port: port_,
           );
         },
@@ -603,7 +580,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 14,
+            funcId: 13,
             port: port_,
           );
         },
@@ -637,7 +614,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 15,
+            funcId: 14,
             port: port_,
           );
         },
@@ -671,7 +648,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 16,
+            funcId: 15,
             port: port_,
           );
         },
@@ -701,7 +678,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 17,
+            funcId: 16,
             port: port_,
           );
         },
@@ -732,7 +709,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 18,
+            funcId: 17,
             port: port_,
           );
         },
@@ -759,7 +736,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 19,
+            funcId: 18,
             port: port_,
           );
         },
@@ -787,7 +764,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 19,
             port: port_,
           );
         },

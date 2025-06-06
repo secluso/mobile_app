@@ -200,7 +200,8 @@ class PushNotificationService {
       // TODO: what happens if we have an invalid name?
       for (final cameraName in cameraSet) {
         Log.d("Starting to iterate $cameraName");
-        final String response = await decryptFcmMessage(
+        final String response = await decryptMessage(
+          clientTag: "fcm",
           cameraName: cameraName,
           data: bytes,
         );

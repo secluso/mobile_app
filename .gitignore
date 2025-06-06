@@ -64,3 +64,6 @@ GoogleService-Info.plist
 # JNI Libs
 jniLibs/
 rust/build/
+
+# Debug files
+*.debug

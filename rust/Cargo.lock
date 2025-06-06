@@ -1497,7 +1497,6 @@ dependencies = [
 [[package]]
 name = "privastead-app-native"
 version = "0.1.0"
-source = "git+https://github.com/privastead/privastead?rev=be51d4b#be51d4b4bb53ab8fa04b3246d37deae9d3c0b223"
 dependencies = [
  "anyhow",
  "bincode",
@@ -1513,7 +1512,6 @@ dependencies = [
 [[package]]
 name = "privastead-client-lib"
 version = "0.1.0"
-source = "git+https://github.com/privastead/privastead?rev=be51d4b#be51d4b4bb53ab8fa04b3246d37deae9d3c0b223"
 dependencies = [
  "anyhow",
  "bincode",
@@ -1537,7 +1535,6 @@ dependencies = [
 [[package]]
 name = "privastead-client-server-lib"
 version = "0.1.0"
-source = "git+https://github.com/privastead/privastead?rev=be51d4b#be51d4b4bb53ab8fa04b3246d37deae9d3c0b223"
 dependencies = [
  "rand",
 ]
