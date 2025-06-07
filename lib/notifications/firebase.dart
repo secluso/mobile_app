@@ -17,6 +17,7 @@ import '../utilities/result.dart';
 import 'package:privastead_flutter/database/entities.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:privastead_flutter/utilities/rust_util.dart';
 import 'package:privastead_flutter/src/rust/frb_generated.dart';
 import 'dart:io' show Platform;
 
@@ -178,6 +179,8 @@ class PushNotificationService {
 
       // TODO: what happens if we have an invalid name?
       for (final cameraName in cameraSet) {
+        // This code might be called after the app is killed/terminated. We need to initialize the cameras again.
+        await initialize(cameraName);
         Log.d("Starting to iterate $cameraName");
         final String response = await decryptMessage(
           clientTag: "fcm",

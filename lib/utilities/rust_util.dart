@@ -15,7 +15,7 @@ Future<bool> addCamera(
   String password,
   String pairingToken,
 ) async {
-  if (!(await connect(cameraName))) {
+  if (!(await initialize(cameraName))) {
     Log.d("Connect = false");
     return false;
   }
@@ -31,18 +31,18 @@ Future<bool> addCamera(
   );
 }
 
-Future<bool> connect(String cameraName) async {
+Future<bool> initialize(String cameraName) async {
   final SharedPreferences prefs = await SharedPreferences.getInstance();
   final bool firstTimeConnectionDone =
       prefs.getBool("first_time_" + cameraName) ?? false;
 
   Log.d("First time connection done: $firstTimeConnectionDone");
 
-  bool success = await connectCore(cameraName, !firstTimeConnectionDone);
+  bool success = await initializeCore(cameraName, !firstTimeConnectionDone);
   return success;
 }
 
-Future<bool> connectCore(String cameraName, bool firstTime) async {
+Future<bool> initializeCore(String cameraName, bool firstTime) async {
   final SharedPreferences prefs = await SharedPreferences.getInstance();
   final String serverIP =
       prefs.getString(PrefKeys.savedIp) ??
@@ -88,57 +88,5 @@ Future<bool> connectCore(String cameraName, bool firstTime) async {
     fileDir: filesDir,
     cameraName: cameraName,
     firstTime: firstTime,
-  );
-}
-
-Future<bool> livestreamUpdateApi({
-  required String cameraName,
-  required Uint8List msg,
-}) async {
-  final SharedPreferences prefs = await SharedPreferences.getInstance();
-  final String dir =
-      (await getApplicationDocumentsDirectory()).path +
-      "/camera_dir_" +
-      cameraName;
-
-  final bool firstTime = !(prefs.getBool("first_time_" + cameraName) ?? false);
-
-  final success = await initializeCamera(
-    fileDir: dir,
-    cameraName: cameraName,
-    firstTime: firstTime,
-  );
-
-  if (!success) return false;
-
-  return await livestreamUpdate(cameraName: cameraName, msg: msg);
-}
-
-/// Decrypts a livestream chunk
-Future<Uint8List> livestreamDecryptApi({
-  required String cameraName,
-  required Uint8List encData,
-  required BigInt expectedChunkNumber,
-}) async {
-  final SharedPreferences prefs = await SharedPreferences.getInstance();
-  final String dir =
-      (await getApplicationDocumentsDirectory()).path +
-      "/camera_dir_" +
-      cameraName;
-
-  final bool firstTime = !(prefs.getBool("first_time_" + cameraName) ?? false);
-
-  final success = await initializeCamera(
-    fileDir: dir,
-    cameraName: cameraName,
-    firstTime: firstTime,
-  );
-
-  if (!success) return Uint8List(0);
-
-  return await livestreamDecrypt(
-    cameraName: cameraName,
-    data: encData,
-    expectedChunkNumber: expectedChunkNumber,
   );
 }

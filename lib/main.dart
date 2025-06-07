@@ -109,7 +109,7 @@ Future<void> _initAllCameras() async {
   final allCameras = box.getAll();
   for (var camera in allCameras) {
     // TODO: Check if false, perhaps there's some weird error we might need to look into...
-    await connect(camera.name);
+    await initialize(camera.name);
   }
 }
 

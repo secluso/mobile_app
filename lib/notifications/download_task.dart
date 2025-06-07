@@ -272,8 +272,10 @@ Future<bool> retrieveVideos(String cameraName) async {
     Log.d(
       "Trying to download video for epoch $epoch with $cameraName and encVideo$epoch",
     );
+
+    final fileName = "encVideo$epoch";
     var result = await HttpClientService.instance.download(
-      destinationFile: "encVideo$epoch",
+      destinationFile: fileName,
       cameraName: cameraName,
       serverFile: epoch.toString(),
       type: Group.motion,
@@ -285,7 +287,7 @@ Future<bool> retrieveVideos(String cameraName) async {
       var file = result.value!.file!;
       var decFileName = await decryptVideo(
         cameraName: cameraName,
-        encFilename: file.path,
+        encFilename: fileName,
       );
       Log.d("Dec file name = $decFileName");
 

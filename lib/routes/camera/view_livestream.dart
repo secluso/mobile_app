@@ -5,7 +5,7 @@ import 'package:privastead_flutter/keys.dart';
 import 'package:privastead_flutter/utilities/byte_stream_player.dart';
 import 'package:privastead_flutter/utilities/http_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:privastead_flutter/utilities/rust_util.dart';
+import 'package:privastead_flutter/src/rust/api.dart';
 import 'package:privastead_flutter/utilities/byte_player_view.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
 import 'package:path_provider/path_provider.dart';
@@ -127,7 +127,7 @@ class _LivestreamPageState extends State<LivestreamPage>
 
     final ok = await res.fold(
       (bytes) async {
-        final updated = await livestreamUpdateApi(
+        final updated = await livestreamUpdate(
           cameraName: widget.cameraName,
           msg: bytes,
         );
@@ -184,9 +184,9 @@ class _LivestreamPageState extends State<LivestreamPage>
 
       await res.fold(
         (enc) async {
-          final dec = await livestreamDecryptApi(
+          final dec = await livestreamDecrypt(
             cameraName: cameraName,
-            encData: enc,
+            data: enc,
             expectedChunkNumber: BigInt.from(chunk),
           );
           if (chunk == 1) {
