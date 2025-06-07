@@ -103,6 +103,8 @@ class _ServerPageState extends State<ServerPage> {
       setState(() {
         hasSynced = true;
       });
+      final SharedPreferences sharedPreferences = await SharedPreferences.getInstance();
+      sharedPreferences.setBool("serverHasSynced", true);
 
       //initialize all cameras again
       final box = AppStores.instance.cameraStore.box<Camera>();
@@ -143,6 +145,8 @@ class _ServerPageState extends State<ServerPage> {
       hasSynced = false;
       _ipController.clear();
     });
+    final SharedPreferences sharedPreferences = await SharedPreferences.getInstance();
+      sharedPreferences.setBool("serverHasSynced", false);
 
     ScaffoldMessenger.of(
       context,

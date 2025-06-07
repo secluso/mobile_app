@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import '../server_page.dart';
 import 'dart:io';
 import 'dart:async';
 
@@ -266,6 +267,7 @@ class CamerasPageState extends State<CamerasPage>
     with WidgetsBindingObserver, RouteAware {
   final List<Map<String, dynamic>> cameras = [];
   final _ch = MethodChannel('privastead.com/thumbnail');
+  late SharedPreferences prefs;
 
   /// cache: cam-name to thumbnail bytes (null = tried but failed)
   final Map<String, Uint8List?> _thumbCache = {};
@@ -282,6 +284,12 @@ class CamerasPageState extends State<CamerasPage>
     setState(() {}); // triggers a rebuild so FutureBuilder runs again
   }
 
+  Future<void> _initPrefs() async {
+    Log.d("Initializing prefs");
+    prefs = await SharedPreferences.getInstance();
+    setState(() {}); // triggers build() to use the prefs
+  }
+
   @override
   void initState() {
     super.initState();
@@ -292,6 +300,8 @@ class CamerasPageState extends State<CamerasPage>
       const Duration(seconds: 5),
       (_) => _loadCamerasFromDatabase(), // refresh from DB every 5s
     );
+
+    _initPrefs();
   }
 
   @override
@@ -575,6 +585,7 @@ class CamerasPageState extends State<CamerasPage>
 
   @override
   Widget build(BuildContext context) {
+    final serverHasSynced = prefs.getBool('serverHasSynced') ?? false;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Cameras', style: TextStyle(color: Colors.white)),
@@ -633,7 +644,7 @@ class CamerasPageState extends State<CamerasPage>
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        '"A camera you can trust"\nEnd-to-end encrypted.',
+                        '"A camera you can trust"\nEnd-to-end Encrypted',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 16,
@@ -643,16 +654,16 @@ class CamerasPageState extends State<CamerasPage>
                       ),
                       const SizedBox(height: 16),
                       ElevatedButton(
-                        onPressed: () async {
-                          // Same action as the FAB to add a new camera
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder:
-                                  (context) => const ShowNewCameraOptions(),
-                            ),
-                          );
-                        },
+                        onPressed: !serverHasSynced
+                            ? () async {
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ServerPage(),
+                                  ),
+                                );
+                              }
+                            : null,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.white,
                           foregroundColor: const Color.fromARGB(
@@ -661,6 +672,27 @@ class CamerasPageState extends State<CamerasPage>
                             114,
                             60,
                           ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text("Scan Your Server Credentials"),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: serverHasSynced
+                            ? () async {
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const ShowNewCameraOptions(),
+                                  ),
+                                );
+                              }
+                            : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: const Color.fromARGB(255, 27, 114, 60),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -692,21 +724,52 @@ class CamerasPageState extends State<CamerasPage>
                 ],
               ),
 
+      
+
       // Floating Action Button for pairing a new camera via QR
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          // Same action as the FAB to add a new camera
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const ShowNewCameraOptions(),
+    floatingActionButton: cameras.isNotEmpty
+    ? Padding(
+        padding: const EdgeInsets.only(right: 16.0, bottom: 16.0),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // The text box
+            if (!serverHasSynced) // ✅ Show text only when no cameras
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                'No server connection!',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.4,
+                  color: Colors.red,
+                ),
+              ),
             ),
-          );
-        },
-        backgroundColor: const Color.fromARGB(255, 27, 114, 60),
-        tooltip: "Pair New Camera",
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
+          if (!serverHasSynced) const SizedBox(width: 12),
+
+            // The floating action button
+            FloatingActionButton(
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ShowNewCameraOptions(),
+                  ),
+                );
+              },
+              backgroundColor: const Color.fromARGB(255, 27, 114, 60),
+              tooltip: "Pair New Camera",
+              child: const Icon(Icons.add, color: Colors.white),
+            ),
+          ],
+        ),
+      )
+    : null,
     );
   }
 }
