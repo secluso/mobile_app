@@ -9,7 +9,7 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <application
         android:requestLegacyExternalStorage="true"
-        android:label="privastead_flutter"
+        android:label="Privastead"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <meta-data

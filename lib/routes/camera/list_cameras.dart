@@ -631,7 +631,11 @@ class CamerasPageState extends State<CamerasPage>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.security, color: Colors.white, size: 60),
+                      Image.asset(
+                        'assets/icon_centered.png',
+                        width: 72,
+                        height: 72,
+                      ),
                       const SizedBox(height: 16),
                       const Text(
                         'Hey! Welcome to Privastead',
@@ -644,7 +648,7 @@ class CamerasPageState extends State<CamerasPage>
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        '"A camera you can trust"\nEnd-to-end Encrypted',
+                        'A camera you can trust\nEnd-to-end Encrypted',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 16,

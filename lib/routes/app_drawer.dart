@@ -32,7 +32,11 @@ class AppDrawer extends StatelessWidget {
                 padding: EdgeInsets.symmetric(vertical: 20, horizontal: 16),
                 child: Row(
                   children: [
-                    Icon(Icons.lock, color: Colors.white, size: 36),
+                    Image.asset(
+                      'assets/icon_centered.png',
+                      width: 48,
+                      height: 48,
+                    ),
                     SizedBox(width: 12),
                     Expanded(
                       child: Column(
