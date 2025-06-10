@@ -36,6 +36,8 @@ PODS:
   - Flutter (1.0.0)
   - flutter_local_notifications (0.0.1):
     - Flutter
+  - flutter_video_info (1.1.0):
+    - Flutter
   - gal (1.0.0):
     - Flutter
     - FlutterMacOS
@@ -104,8 +106,6 @@ PODS:
     - nanopb/encode (= 3.30910.0)
   - nanopb/decode (3.30910.0)
   - nanopb/encode (3.30910.0)
-  - network_info_plus (0.0.1):
-    - Flutter
   - ObjectBox (4.2.0)
   - objectbox_flutter_libs (0.0.1):
     - Flutter
@@ -128,8 +128,6 @@ PODS:
     - FlutterMacOS
   - wakelock_plus (0.0.1):
     - Flutter
-  - wifi_iot (0.0.1):
-    - Flutter
   - workmanager (0.0.1):
     - Flutter
 
@@ -139,10 +137,10 @@ DEPENDENCIES:
   - firebase_messaging (from `.symlinks/plugins/firebase_messaging/ios`)
   - Flutter (from `Flutter`)
   - flutter_local_notifications (from `.symlinks/plugins/flutter_local_notifications/ios`)
+  - flutter_video_info (from `.symlinks/plugins/flutter_video_info/ios`)
   - gal (from `.symlinks/plugins/gal/darwin`)
   - integration_test (from `.symlinks/plugins/integration_test/ios`)
   - mobile_scanner (from `.symlinks/plugins/mobile_scanner/ios`)
-  - network_info_plus (from `.symlinks/plugins/network_info_plus/ios`)
   - objectbox_flutter_libs (from `.symlinks/plugins/objectbox_flutter_libs/ios`)
   - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
   - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
@@ -151,7 +149,6 @@ DEPENDENCIES:
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
   - video_player_avfoundation (from `.symlinks/plugins/video_player_avfoundation/darwin`)
   - wakelock_plus (from `.symlinks/plugins/wakelock_plus/ios`)
-  - wifi_iot (from `.symlinks/plugins/wifi_iot/ios`)
   - workmanager (from `.symlinks/plugins/workmanager/ios`)
 
 SPEC REPOS:
@@ -185,14 +182,14 @@ EXTERNAL SOURCES:
     :path: Flutter
   flutter_local_notifications:
     :path: ".symlinks/plugins/flutter_local_notifications/ios"
+  flutter_video_info:
+    :path: ".symlinks/plugins/flutter_video_info/ios"
   gal:
     :path: ".symlinks/plugins/gal/darwin"
   integration_test:
     :path: ".symlinks/plugins/integration_test/ios"
   mobile_scanner:
     :path: ".symlinks/plugins/mobile_scanner/ios"
-  network_info_plus:
-    :path: ".symlinks/plugins/network_info_plus/ios"
   objectbox_flutter_libs:
     :path: ".symlinks/plugins/objectbox_flutter_libs/ios"
   package_info_plus:
@@ -209,8 +206,6 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/video_player_avfoundation/darwin"
   wakelock_plus:
     :path: ".symlinks/plugins/wakelock_plus/ios"
-  wifi_iot:
-    :path: ".symlinks/plugins/wifi_iot/ios"
   workmanager:
     :path: ".symlinks/plugins/workmanager/ios"
 
@@ -225,6 +220,7 @@ SPEC CHECKSUMS:
   FirebaseMessaging: 2b9f56aa4ed286e1f0ce2ee1d413aabb8f9f5cb9
   Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
   flutter_local_notifications: a5a732f069baa862e728d839dd2ebb904737effb
+  flutter_video_info: 1b1e50c79c7f38e19c887c6d1babdc5eac5af858
   gal: baecd024ebfd13c441269ca7404792a7152fde89
   GoogleDataTransport: aae35b7ea0c09004c3797d53c8c41f66f219d6a7
   GoogleMLKit: eff9e23ec1d90ea4157a1ee2e32a4f610c5b3318
@@ -238,7 +234,6 @@ SPEC CHECKSUMS:
   MLKitVision: 45e79d68845a2de77e2dd4d7f07947f0ed157b0e
   mobile_scanner: af8f71879eaba2bbcb4d86c6a462c3c0e7f23036
   nanopb: fad817b59e0457d11a5dfbde799381cd727c1275
-  network_info_plus: cf61925ab5205dce05a4f0895989afdb6aade5fc
   ObjectBox: 2b4c925852ea99f070492f21328bf4002165cbd9
   objectbox_flutter_libs: 50402e45f47f385d47fc041aba4607b89c4a3a1f
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
@@ -249,7 +244,6 @@ SPEC CHECKSUMS:
   shared_preferences_foundation: 9e1978ff2562383bd5676f64ec4e9aa8fa06a6f7
   video_player_avfoundation: 2cef49524dd1f16c5300b9cd6efd9611ce03639b
   wakelock_plus: e29112ab3ef0b318e58cfa5c32326458be66b556
-  wifi_iot: f645260a2be8608517b2a9bf4c39b98e97003acc
   workmanager: 01be2de7f184bd15de93a1812936a2b7f42ef07e
 
 PODFILE CHECKSUM: fc5f8cbaeb9d5fcae7b3a613e6c6fc49d14215ae

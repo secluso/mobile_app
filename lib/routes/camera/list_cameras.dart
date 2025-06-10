@@ -11,10 +11,12 @@ import '../../objectbox.g.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
+import 'dart:ui';
 import 'package:path_provider/path_provider.dart';
 import '../server_page.dart';
 import 'dart:io';
 import 'dart:async';
+import '../home_page.dart';
 
 class CameraListNotifier {
   static final CameraListNotifier instance = CameraListNotifier._();
@@ -267,7 +269,7 @@ class CamerasPageState extends State<CamerasPage>
     with WidgetsBindingObserver, RouteAware {
   final List<Map<String, dynamic>> cameras = [];
   final _ch = MethodChannel('privastead.com/thumbnail');
-  late SharedPreferences prefs;
+  late Future<SharedPreferences> _prefsFuture;
 
   /// cache: cam-name to thumbnail bytes (null = tried but failed)
   final Map<String, Uint8List?> _thumbCache = {};
@@ -284,15 +286,10 @@ class CamerasPageState extends State<CamerasPage>
     setState(() {}); // triggers a rebuild so FutureBuilder runs again
   }
 
-  Future<void> _initPrefs() async {
-    Log.d("Initializing prefs");
-    prefs = await SharedPreferences.getInstance();
-    setState(() {}); // triggers build() to use the prefs
-  }
-
   @override
   void initState() {
     super.initState();
+    _prefsFuture = SharedPreferences.getInstance();
     WidgetsBinding.instance.addObserver(this);
     CameraListNotifier.instance.refreshCallback = _loadCamerasFromDatabase;
 
@@ -300,8 +297,6 @@ class CamerasPageState extends State<CamerasPage>
       const Duration(seconds: 5),
       (_) => _loadCamerasFromDatabase(), // refresh from DB every 5s
     );
-
-    _initPrefs();
   }
 
   @override
@@ -585,195 +580,238 @@ class CamerasPageState extends State<CamerasPage>
 
   @override
   Widget build(BuildContext context) {
-    final serverHasSynced = prefs.getBool('serverHasSynced') ?? false;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Cameras', style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color.fromARGB(255, 27, 114, 60),
-        leading: IconButton(
-          icon: const Icon(Icons.menu, color: Colors.white),
-          onPressed: () {
-            Scaffold.of(context).openDrawer();
-          },
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.help_outline, color: Colors.white),
-            tooltip: "Need Help?",
-            onPressed: () => _showHelpSheet(context),
+    return FutureBuilder<SharedPreferences>(
+      future: _prefsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final prefs = snapshot.data!;
+        final serverHasSynced = prefs.containsKey(PrefKeys.serverUsername);
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Cameras', style: TextStyle(color: Colors.white)),
+            backgroundColor: const Color.fromARGB(255, 27, 114, 60),
+            leading: IconButton(
+              icon: const Icon(Icons.menu, color: Colors.white),
+              onPressed: () {
+                scaffoldKey.currentState?.openDrawer();
+              },
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.help_outline, color: Colors.white),
+                tooltip: "Need Help?",
+                onPressed: () => _showHelpSheet(context),
+              ),
+            ],
           ),
-        ],
-      ),
-      body:
-          cameras.isEmpty
-              ? Center(
-                child: Container(
-                  margin: const EdgeInsets.all(24),
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Colors.black26,
-                        offset: Offset(0, 4),
-                        blurRadius: 6,
+          body:
+              cameras.isEmpty
+                  ? Center(
+                    child: Container(
+                      margin: const EdgeInsets.all(24),
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black26,
+                            offset: Offset(0, 4),
+                            blurRadius: 6,
+                          ),
+                        ],
+                        gradient: const LinearGradient(
+                          colors: [
+                            Color.fromARGB(255, 27, 114, 60),
+                            Color.fromARGB(255, 54, 178, 98),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                          child: Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.2),
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Image.asset(
+                                  'assets/icon_centered.png',
+                                  width: 72,
+                                  height: 72,
+                                ),
+                                const SizedBox(height: 16),
+                                const Text(
+                                  'Private. Secure. Yours.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'End-to-end encrypted access. Always.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontStyle: FontStyle.italic,
+                                    color: Colors.white60,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'You’re in control.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.white54,
+                                  ),
+                                ),
+
+                                const SizedBox(height: 16),
+                                ElevatedButton(
+                                  onPressed: () async {
+                                    if (serverHasSynced) {
+                                      await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder:
+                                              (context) =>
+                                                  const ShowNewCameraOptions(),
+                                        ),
+                                      );
+                                    } else {
+                                      await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder:
+                                              (context) => ServerPage(
+                                                showBackButton: true,
+                                              ),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.white,
+                                    foregroundColor: const Color.fromARGB(
+                                      255,
+                                      27,
+                                      114,
+                                      60,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child:
+                                      !serverHasSynced
+                                          ? const Text(
+                                            "Scan Your Server Credentials",
+                                          )
+                                          : const Text("Add Your First Camera"),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                  : Column(
+                    children: [
+                      // The camera list fills the rest
+                      Expanded(
+                        child: ListView.builder(
+                          padding: const EdgeInsets.symmetric(vertical: 5),
+                          itemCount: cameras.length,
+                          itemBuilder: (context, index) {
+                            final camera = cameras[index];
+
+                            return CameraCard(
+                              cameraName: camera["name"],
+                              icon: camera["icon"],
+                              unreadMessages: camera["unreadMessages"],
+                            );
+                          },
+                        ),
                       ),
                     ],
-                    gradient: const LinearGradient(
-                      colors: [
-                        Color.fromARGB(255, 27, 114, 60),
-                        Color.fromARGB(255, 54, 178, 98),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Image.asset(
-                        'assets/icon_centered.png',
-                        width: 72,
-                        height: 72,
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Hey! Welcome to Privastead',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'A camera you can trust\nEnd-to-end Encrypted',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 16,
-                          height: 1.4,
-                          color: Colors.white70,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: !serverHasSynced
-                            ? () async {
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => ServerPage(),
-                                  ),
-                                );
-                              }
-                            : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: const Color.fromARGB(
+
+          // Floating Action Button for pairing a new camera via QR
+          floatingActionButton:
+              cameras.isNotEmpty
+                  ? Padding(
+                    padding: const EdgeInsets.only(right: 16.0, bottom: 16.0),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // The text box
+                        if (!serverHasSynced)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              'No server connection!',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 14,
+                                height: 1.4,
+                                color: Colors.red,
+                              ),
+                            ),
+                          ),
+                        if (!serverHasSynced) const SizedBox(width: 12),
+
+                        // The floating action button
+                        FloatingActionButton(
+                          onPressed: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder:
+                                    (context) => const ShowNewCameraOptions(),
+                              ),
+                            );
+                          },
+                          backgroundColor: const Color.fromARGB(
                             255,
                             27,
                             114,
                             60,
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                          tooltip: "Pair New Camera",
+                          child: const Icon(Icons.add, color: Colors.white),
                         ),
-                        child: const Text("Scan Your Server Credentials"),
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: serverHasSynced
-                            ? () async {
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const ShowNewCameraOptions(),
-                                  ),
-                                );
-                              }
-                            : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: const Color.fromARGB(255, 27, 114, 60),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text("Add Your First Camera"),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-              : Column(
-                children: [
-                  // The camera list fills the rest
-                  Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(vertical: 5),
-                      itemCount: cameras.length,
-                      itemBuilder: (context, index) {
-                        final camera = cameras[index];
-
-                        return CameraCard(
-                          cameraName: camera["name"],
-                          icon: camera["icon"],
-                          unreadMessages: camera["unreadMessages"],
-                        );
-                      },
+                      ],
                     ),
-                  ),
-                ],
-              ),
-
-      
-
-      // Floating Action Button for pairing a new camera via QR
-    floatingActionButton: cameras.isNotEmpty
-    ? Padding(
-        padding: const EdgeInsets.only(right: 16.0, bottom: 16.0),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // The text box
-            if (!serverHasSynced) // ✅ Show text only when no cameras
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                'No server connection!',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  height: 1.4,
-                  color: Colors.red,
-                ),
-              ),
-            ),
-          if (!serverHasSynced) const SizedBox(width: 12),
-
-            // The floating action button
-            FloatingActionButton(
-              onPressed: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ShowNewCameraOptions(),
-                  ),
-                );
-              },
-              backgroundColor: const Color.fromARGB(255, 27, 114, 60),
-              tooltip: "Pair New Camera",
-              child: const Icon(Icons.add, color: Colors.white),
-            ),
-          ],
-        ),
-      )
-    : null,
+                  )
+                  : null,
+        );
+      },
     );
   }
 }

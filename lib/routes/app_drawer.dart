@@ -86,7 +86,7 @@ class AppDrawer extends StatelessWidget {
                   themeProvider,
                   Icons.cloud,
                   'Server',
-                  () => onNavigate(ServerPage()),
+                  () => onNavigate(ServerPage(showBackButton: false)),
                 ),
 
                 Divider(),

@@ -13,8 +13,13 @@ import 'package:privastead_flutter/database/app_stores.dart';
 import 'package:privastead_flutter/database/entities.dart';
 import 'package:privastead_flutter/utilities/rust_util.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
+import 'home_page.dart';
 
 class ServerPage extends StatefulWidget {
+  final bool showBackButton;
+
+  const ServerPage({super.key, required this.showBackButton});
+
   @override
   _ServerPageState createState() => _ServerPageState();
 }
@@ -103,8 +108,6 @@ class _ServerPageState extends State<ServerPage> {
       setState(() {
         hasSynced = true;
       });
-      final SharedPreferences sharedPreferences = await SharedPreferences.getInstance();
-      sharedPreferences.setBool("serverHasSynced", true);
 
       //initialize all cameras again
       final box = AppStores.instance.cameraStore.box<Camera>();
@@ -145,8 +148,6 @@ class _ServerPageState extends State<ServerPage> {
       hasSynced = false;
       _ipController.clear();
     });
-    final SharedPreferences sharedPreferences = await SharedPreferences.getInstance();
-      sharedPreferences.setBool("serverHasSynced", false);
 
     ScaffoldMessenger.of(
       context,
@@ -209,12 +210,22 @@ class _ServerPageState extends State<ServerPage> {
       appBar: AppBar(
         title: Text("Server Settings", style: TextStyle(color: Colors.white)),
         backgroundColor: const Color.fromARGB(255, 27, 114, 60),
-        leading: IconButton(
-          icon: Icon(Icons.menu, color: Colors.white),
-          onPressed: () {
-            Scaffold.of(context).openDrawer();
-          },
-        ),
+        leading:
+            widget.showBackButton
+                ? IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  onPressed: () => Navigator.of(context).maybePop(),
+                )
+                : Builder(
+                  builder: (context) {
+                    return IconButton(
+                      icon: const Icon(Icons.menu, color: Colors.white),
+                      onPressed: () {
+                        scaffoldKey.currentState?.openDrawer();
+                      },
+                    );
+                  },
+                ),
       ),
       body: Padding(
         padding: EdgeInsets.all(16),

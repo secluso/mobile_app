@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'camera/list_cameras.dart';
 import 'app_drawer.dart';
 
+final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
+
 class HomePage extends StatefulWidget {
   HomePage();
 
@@ -23,6 +25,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: null,
+      key: scaffoldKey,
       drawer: AppDrawer(onNavigate: _navigateTo),
       body: _currentPage,
     );

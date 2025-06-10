@@ -20,7 +20,7 @@ fs2 = "0.4.3"
 
 [dependencies.privastead-app-native]
 git = "https://github.com/privastead/privastead"
-rev = "be51d4b"
+rev = "1c1523e"
 package = "privastead-app-native"
 
 [lints.rust]
