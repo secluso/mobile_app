@@ -173,10 +173,6 @@ class PushNotificationService {
           prefs.getStringList(PrefKeys.cameraSet) ?? [];
 
       Log.d('Pre-existing camera set: $cameraSet');
-
-      //   final bool needNotification =
-      //       prefs.getBool('saved_need_notification_state') ?? true;
-
       // TODO: what happens if we have an invalid name?
       for (final cameraName in cameraSet) {
         // This code might be called after the app is killed/terminated. We need to initialize the cameras again.
@@ -212,9 +208,17 @@ class PushNotificationService {
               ); // Don't await, as the lock may freeze this up
             }
           } else if (response != 'Error!' && response != 'None') {
-            Log.d("Showing motion notification");
-            //TODO: Figure out if (needNotification) {
-            showMotionNotification(cameraName: cameraName, timestamp: response);
+            var sendNotificationGlobal =
+                prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
+            if (sendNotificationGlobal) {
+              Log.d("Showing motion notification");
+              showMotionNotification(
+                cameraName: cameraName,
+                timestamp: response,
+              );
+            } else {
+              Log.d("Not showing motion notification due to preference");
+            }
 
             // TODO: I removed the pending to repository addition for Android because it's not possible to init ObjectBox in the background handler (as Android requires). Find alternate solution maybe. Not sure this is needed anymore (as we don't want to show users pending videos in cases of failure)
             if (Platform.isIOS) {

@@ -11,6 +11,7 @@ import '../../objectbox.g.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
+import 'package:lottie/lottie.dart';
 import 'dart:ui';
 import 'package:path_provider/path_provider.dart';
 import '../server_page.dart';
@@ -266,10 +267,13 @@ class _CameraCardState extends State<CameraCard> {
 }
 
 class CamerasPageState extends State<CamerasPage>
-    with WidgetsBindingObserver, RouteAware {
+    with WidgetsBindingObserver, RouteAware, SingleTickerProviderStateMixin {
   final List<Map<String, dynamic>> cameras = [];
   final _ch = MethodChannel('privastead.com/thumbnail');
   late Future<SharedPreferences> _prefsFuture;
+  late final AnimationController _controller;
+
+  bool _hasPlayedLockAnimation = false;
 
   /// cache: cam-name to thumbnail bytes (null = tried but failed)
   final Map<String, Uint8List?> _thumbCache = {};
@@ -289,10 +293,23 @@ class CamerasPageState extends State<CamerasPage>
   @override
   void initState() {
     super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+      lowerBound: 0.0,
+      upperBound: 0.85, // stop before the fade away
+    );
+
+    // Stop at the end after playing once
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        _controller.stop();
+        _controller.value = 0.85;
+      }
+    });
     _prefsFuture = SharedPreferences.getInstance();
     WidgetsBinding.instance.addObserver(this);
     CameraListNotifier.instance.refreshCallback = _loadCamerasFromDatabase;
-
     _pollingTimer = Timer.periodic(
       const Duration(seconds: 5),
       (_) => _loadCamerasFromDatabase(), // refresh from DB every 5s
@@ -313,6 +330,7 @@ class CamerasPageState extends State<CamerasPage>
 
   @override
   void dispose() {
+    _controller.dispose();
     routeObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
     _pollingTimer?.cancel();
@@ -650,12 +668,20 @@ class CamerasPageState extends State<CamerasPage>
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Image.asset(
-                                  'assets/icon_centered.png',
-                                  width: 72,
-                                  height: 72,
+                                Lottie.asset(
+                                  'assets/animations/lock_animation.json',
+                                  width: 180,
+                                  controller: _controller,
+                                  onLoaded: (composition) {
+                                    _controller.duration = composition.duration;
+
+                                    if (!_hasPlayedLockAnimation) {
+                                      _controller.forward();
+                                      _hasPlayedLockAnimation = true;
+                                    }
+                                  },
                                 ),
-                                const SizedBox(height: 16),
+
                                 const Text(
                                   'Private. Secure. Yours.',
                                   textAlign: TextAlign.center,
@@ -723,9 +749,7 @@ class CamerasPageState extends State<CamerasPage>
                                   ),
                                   child:
                                       !serverHasSynced
-                                          ? const Text(
-                                            "Scan Your Server Credentials",
-                                          )
+                                          ? const Text("Connect To Your Server")
                                           : const Text("Add Your First Camera"),
                                 ),
                               ],
