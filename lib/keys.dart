@@ -12,4 +12,5 @@ class PrefKeys {
   static const downloadCameraQueue = "download_camera_queue";
   static const backupDownloadCameraQueue = "backup_download_camera_queue";
   static const notificationsEnabled = "notifications_enabled";
+  static const lastNotificationCheck = "last_notification_check";
 }

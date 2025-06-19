@@ -52,13 +52,6 @@ Future<bool> initializeCore(String cameraName, bool firstTime) async {
     return false;
   }
 
-  // TODO: How should we move our FCM token into production?
-  var fcmToken = prefs.getString(PrefKeys.fcmToken) ?? "Error";
-  if (fcmToken == "Error") {
-    Log.e("Error: Failed to retrieve FCM token");
-    return false;
-  }
-
   var userCredentialsString =
       prefs.getString(PrefKeys.serverPassword) ??
       "Error"; // If the password's set, we implicitly know the username is too (validity checks before setting either)

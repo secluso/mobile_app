@@ -64,28 +64,12 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 class PushNotificationService {
   PushNotificationService._();
   static final instance = PushNotificationService._();
-
-  final _notifications = FlutterLocalNotificationsPlugin();
   //  bool _notifReady = false;
 
   Future<void> init() async {
     Log.d("Initializing PushNotificationService");
 
-    // Local notifications (heads‑up for motion + download complete)
-    await _notifications.initialize(
-      const InitializationSettings(
-        android: AndroidInitializationSettings('ic_notification'),
-        iOS: DarwinInitializationSettings(),
-      ),
-    );
     //  _notifReady = true;
-
-    // TODO: Does this clash with our "initLocalNotifications"?
-    await FirebaseMessaging.instance.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
 
     await FirebaseMessaging.instance
         .setForegroundNotificationPresentationOptions(

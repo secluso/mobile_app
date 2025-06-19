@@ -1,22 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path/path.dart' as p;
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:lottie/lottie.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:ui';
+import 'dart:io';
+import 'dart:async';
+
 import 'package:privastead_flutter/src/rust/api.dart';
-import 'view_camera.dart';
-import 'new/show_new_camera_options.dart';
 import 'package:privastead_flutter/database/entities.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
+import 'package:privastead_flutter/notifications/firebase.dart';
 import 'package:privastead_flutter/keys.dart';
 import 'package:privastead_flutter/main.dart';
+import 'view_camera.dart';
+import 'new/show_new_camera_options.dart';
 import '../../objectbox.g.dart';
-import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:path/path.dart' as p;
-import 'package:lottie/lottie.dart';
-import 'dart:ui';
-import 'package:path_provider/path_provider.dart';
 import '../server_page.dart';
-import 'dart:io';
-import 'dart:async';
 import '../home_page.dart';
 
 class CameraListNotifier {
@@ -275,6 +279,8 @@ class CamerasPageState extends State<CamerasPage>
 
   bool _hasPlayedLockAnimation = false;
 
+  bool _showNotificationWarning = false;
+
   /// cache: cam-name to thumbnail bytes (null = tried but failed)
   final Map<String, Uint8List?> _thumbCache = {};
 
@@ -307,7 +313,10 @@ class CamerasPageState extends State<CamerasPage>
         _controller.value = 0.85;
       }
     });
+
     _prefsFuture = SharedPreferences.getInstance();
+    _prefsFuture.then((_) => _checkNotificationStatus());
+
     WidgetsBinding.instance.addObserver(this);
     CameraListNotifier.instance.refreshCallback = _loadCamerasFromDatabase;
     _pollingTimer = Timer.periodic(
@@ -320,12 +329,14 @@ class CamerasPageState extends State<CamerasPage>
   void didPopNext() {
     Log.d("Returned to list cameras [pop]");
     _loadCamerasFromDatabase(); // Load this every time we enter the page.
+    _checkNotificationStatus();
   }
 
   @override
   void didPush() {
     Log.d('Returned to list cameras [push]');
     _loadCamerasFromDatabase(); // Load this every time we enter the page.
+    _checkNotificationStatus();
   }
 
   @override
@@ -355,6 +366,61 @@ class CamerasPageState extends State<CamerasPage>
       _thumbCache.clear();
       _thumbFutures.clear();
       setState(() {});
+      _checkNotificationStatus();
+    }
+  }
+
+  Future<void> _checkNotificationStatus() async {
+    final prefs = await _prefsFuture;
+    final notificationsRequested =
+        prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
+
+    if (cameras.isEmpty) {
+      // We don't need to check before a camera is added.
+      return;
+    }
+
+    if (!notificationsRequested) {
+      setState(() => _showNotificationWarning = false);
+      return;
+    }
+
+    final lastAsked = prefs.getInt(PrefKeys.lastNotificationCheck) ?? 0;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final cooldown = const Duration(hours: 24).inMilliseconds;
+
+    final status = await Permission.notification.status;
+
+    if (status.isDenied || status.isRestricted) {
+      if (now - lastAsked >= cooldown) {
+        Log.d("Requesting for notifications");
+        await prefs.setInt(PrefKeys.lastNotificationCheck, now);
+        final result = await Permission.notification.request();
+
+        if (mounted) {
+          if (!result.isGranted) {
+            setState(() => _showNotificationWarning = true);
+          } else {
+            setState(() => _showNotificationWarning = false);
+
+            //TODO: This might be necessary to work on iOS. Not 100% sure.
+            await FirebaseMessaging.instance.requestPermission(
+              alert: true,
+              badge: true,
+              sound: true,
+            );
+
+            // This may be the first time we have access to this after adding a camera.
+            PushNotificationService.tryUploadIfNeeded(true);
+          }
+        }
+      } else {
+        setState(() => _showNotificationWarning = true);
+      }
+    } else if (!status.isGranted && mounted) {
+      setState(() => _showNotificationWarning = true);
+    } else if (status.isGranted && mounted) {
+      setState(() => _showNotificationWarning = false);
     }
   }
 
@@ -761,6 +827,49 @@ class CamerasPageState extends State<CamerasPage>
                   )
                   : Column(
                     children: [
+                      if (_showNotificationWarning)
+                        Container(
+                          margin: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade100,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.orange),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.notifications_off,
+                                color: Colors.orange,
+                              ),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Text(
+                                  'Notifications are disabled.\nPlease enable them in Settings to receive alerts.',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: openAppSettings,
+                                child: const Text(
+                                  'Fix',
+                                  style: TextStyle(
+                                    color: Colors.orange,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
                       // The camera list fills the rest
                       Expanded(
                         child: ListView.builder(

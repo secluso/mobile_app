@@ -19,6 +19,7 @@ final FlutterLocalNotificationsPlugin _notifs =
 
 // Initialization method
 Future<void> initLocalNotifications() async {
+  Log.d("Init local notifications called");
   // basic engine bootstrap (no permissions yet)
   const initSettings = InitializationSettings(
     android: AndroidInitializationSettings('ic_notification'),
@@ -104,7 +105,7 @@ Future<void> initLocalNotifications() async {
   );
 
   // Ask OS for notification permission
-  await _ensureNotificationPermissions();
+  // await _ensureNotificationPermissions();
 
   // Create Android channel (no effect on iOS)
   if (Platform.isAndroid) await _ensureMotionChannelAndroid();

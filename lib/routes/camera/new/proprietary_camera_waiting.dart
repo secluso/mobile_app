@@ -101,6 +101,10 @@ class _ProprietaryCameraWaitingDialogState
         return;
       }
 
+      sleep(
+        const Duration(seconds: 3),
+      ); // Make sure we have enough time for the other side to read before disconnecting the WiFi.
+
       await _disconnectWifiOnce();
 
       if (Platform.isIOS) {
