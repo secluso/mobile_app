@@ -61,11 +61,14 @@ class _ProprietaryCameraWaitingDialogState
   }
 
   Future<void> _disconnectWifiOnce() async {
-    if (_wifiDisconnected || Platform.isIOS) return;
+    if (_wifiDisconnected) return;
 
     try {
-      const platform = MethodChannel("privastead.com/android/wifi");
-      await platform.invokeMethod<String>('disconnectFromWifi');
+      const platform = MethodChannel("privastead.com/wifi");
+      await platform.invokeMethod<String>(
+        'disconnectFromWifi',
+        <String, dynamic>{'ssid': "Privastead"},
+      );
       _wifiDisconnected = true;
     } catch (e) {
       Log.w("WiFi disconnect failed: $e");
@@ -98,8 +101,33 @@ class _ProprietaryCameraWaitingDialogState
         return;
       }
 
-      _disconnectWifiOnce();
+      await _disconnectWifiOnce();
 
+      if (Platform.isIOS) {
+        for (var i = 0; i < 15; i++) {
+          try {
+            const platform = MethodChannel("privastead.com/wifi");
+            var response = await platform.invokeMethod<String>(
+              'getCurrentSSID',
+              <String, dynamic>{'ssid': "Privastead"},
+            );
+
+            if (response == null || response.isEmpty) {
+              break;
+            }
+          } catch (e) {
+            Log.w("WiFi fetch SSID failed: $e");
+          }
+
+          sleep(const Duration(seconds: 1));
+        }
+      }
+
+      if (!mounted) return;
+
+      sleep(
+        const Duration(seconds: 3),
+      ); // wait 3 seconds to let phone reconnect to wifi / disassociate from private WiFi network
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(PrefKeys.lastCameraAdd, widget.cameraName);
       final status = await HttpClientService.instance.waitForPairingStatus(

@@ -30,13 +30,13 @@ class MainActivity : FlutterActivity() {
         fun finish(id: Int) = queues.remove(id)?.clear()
     }
 
-    private val CHANNEL_PREFIX = "privastead.com/android/"
+    private val CHANNEL_PREFIX = "privastead.com/"
     var activeNetworkCallback: ConnectivityManager.NetworkCallback? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL_PREFIX + "byte_player")
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL_PREFIX + "android/byte_player")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "createStream" -> {

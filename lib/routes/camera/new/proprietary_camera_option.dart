@@ -9,7 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'qr_scan.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:io' show Platform, Directory;
+import 'dart:io' show Platform, Directory, sleep;
 import 'package:path/path.dart' as p;
 
 /// Popup: User connects to camera's Wi-Fi hotspot.
@@ -79,10 +79,7 @@ class _ProprietaryCameraConnectDialogState
 
   late final int localSessionId;
 
-  final platform =
-      Platform.isIOS
-          ? MethodChannel("privastead.com/wifi")
-          : MethodChannel("privastead.com/android/wifi");
+  final platform = MethodChannel("privastead.com/wifi");
 
   @override
   void initState() {
@@ -106,8 +103,11 @@ class _ProprietaryCameraConnectDialogState
       if (result == "connected" &&
           !ProprietaryCameraConnectDialog.pairingInProgress) {
         try {
-          const platform = MethodChannel("privastead.com/android/wifi");
-          await platform.invokeMethod<String>('disconnectFromWifi');
+          const platform = MethodChannel("privastead.com/wifi");
+          await platform.invokeMethod<String>(
+            'disconnectFromWifi',
+            <String, dynamic>{'ssid': "Privastead"},
+          );
         } catch (e) {
           Log.w("WiFi disconnect failed from InfoDialog: $e");
         }
@@ -117,6 +117,9 @@ class _ProprietaryCameraConnectDialogState
 
       if (result == "connected") {
         if (Platform.isIOS) {
+          var duration = const Duration(seconds: 3);
+          sleep(duration);
+
           //Connect again to ensure no awkward errors (not sure why this occurs sometimes), should be instant
           final result = await platform.invokeMethod<String>(
             'connectToWifi',
@@ -128,6 +131,9 @@ class _ProprietaryCameraConnectDialogState
         // Do an additional ping to the camera to ensure connectivity.
         // We expect the same IP for all Raspberry Pi Cameras
         try {
+          var duration = const Duration(seconds: 3);
+          sleep(duration);
+          Log.d("Starting to ping");
           bool connected = await pingProprietaryDevice(
             cameraIp: Constants.proprietaryCameraIp,
           );
@@ -179,17 +185,18 @@ class _ProprietaryCameraConnectDialogState
   }
 
   Future<void> _maybeDisconnect() async {
-    //TODO: Implement for iOS
     Log.d("Possibly disconnecting");
 
     if (_isConnected &&
-        Platform.isAndroid &&
         ProprietaryCameraConnectDialog.boundSessionId == localSessionId &&
         !ProprietaryCameraConnectDialog.pairingCompleted &&
         !_exitingToNext) {
       Log.d("Disconnecting from WiFi (owned by session $localSessionId)");
       try {
-        await platform.invokeMethod<String>('disconnectFromWifi');
+        await platform.invokeMethod<String>(
+          'disconnectFromWifi',
+          <String, dynamic>{'ssid': "Privastead"},
+        );
       } catch (e) {
         Log.w("WiFi disconnect failed: $e");
       } finally {
@@ -351,11 +358,13 @@ class _ProprietaryCameraInfoDialogState
   void _onCancel() async {
     Log.d("Cancelling");
     if (!ProprietaryCameraConnectDialog.pairingCompleted &&
-        ProprietaryCameraConnectDialog.pairingInProgress &&
-        Platform.isAndroid) {
+        ProprietaryCameraConnectDialog.pairingInProgress) {
       try {
-        const platform = MethodChannel("privastead.com/android/wifi");
-        await platform.invokeMethod<String>('disconnectFromWifi');
+        const platform = MethodChannel("privastead.com/wifi");
+        await platform.invokeMethod<String>(
+          'disconnectFromWifi',
+          <String, dynamic>{'ssid': "Privastead"},
+        );
       } catch (e) {
         Log.w("WiFi disconnect failed from InfoDialog: $e");
       }
@@ -387,7 +396,7 @@ class _ProprietaryCameraInfoDialogState
       Log.d("Deleting extra last camera");
       var lastCameraAdd = sharedPreferences.getString(PrefKeys.lastCameraAdd)!;
       await deregisterCamera(cameraName: lastCameraAdd);
-      sharedPreferences.remove(PrefKeys.lastCameraAdd);
+      await sharedPreferences.remove(PrefKeys.lastCameraAdd);
 
       final docsDir = await getApplicationDocumentsDirectory();
       final camDir = Directory(
