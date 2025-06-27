@@ -288,6 +288,9 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
                       label: 'Go Live',
                       icon: Icons.live_tv,
                       color: const Color.fromARGB(255, 27, 114, 60),
+                      enabled:
+                          !Platform
+                              .isIOS, // Disable the button if we're on iOS (for now)
                       onTap:
                           () => Navigator.push(
                             context,
@@ -505,13 +508,14 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     required IconData icon,
     required Color color,
     required VoidCallback onTap,
+    bool enabled = true,
   }) => ElevatedButton(
+    onPressed: enabled ? onTap : null, // Disable if not enabled
     style: ElevatedButton.styleFrom(
-      backgroundColor: color,
+      backgroundColor: enabled ? color : Colors.grey[400], // Gray if disabled
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
-    onPressed: onTap,
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [

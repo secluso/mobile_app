@@ -17,6 +17,7 @@ simplelog="0.12.2"
 time="0.3.41"
 log = { version="0.4.27", features=["kv"] }
 fs2 = "0.4.3"
+tracing-log = "0.2.0"
 
 [dependencies.privastead-app-native]
 git = "https://github.com/privastead/privastead"

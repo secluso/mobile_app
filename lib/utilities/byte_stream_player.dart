@@ -1,10 +1,16 @@
 import 'dart:typed_data';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 
 class ByteStreamPlayer {
-  static const _ch = MethodChannel('privastead.com/android/byte_player');
+  // Platform-specific MethodChannel
+  static final MethodChannel _ch = MethodChannel(
+    defaultTargetPlatform == TargetPlatform.iOS
+        ? 'privastead.com/ios/byte_player'
+        : 'privastead.com/android/byte_player',
+  );
 
-  /// For the embedded widget
+  /// Allocate a native byte queue and return its id.
   static Future<int> createStream() async {
     final id = await _ch.invokeMethod<int>('createStream') ?? -1;
     if (id < 0) throw Exception('Failed to create native queue');
@@ -16,4 +22,7 @@ class ByteStreamPlayer {
 
   static Future<void> finish(int id) =>
       _ch.invokeMethod('finishStream', {'id': id});
+
+  static Future<int> queueLength(int id) async =>
+      await _ch.invokeMethod<int>('qLen', {'id': id}) ?? 0;
 }

@@ -73,5 +73,16 @@
 	<string>We need access to save videos to your photo library</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>This app requires access to devices on your local network.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+	<dict>
+		<key>CFBundleURLName</key>
+		<string>StreamingScheme</string>
+		<key>CFBundleURLSchemes</key>
+		<array>
+		<string>streaming</string> 
+		</array>
+	</dict>
+	</array>
 </dict>
 </plist>

@@ -10,15 +10,25 @@ class BytePlayerView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (defaultTargetPlatform != TargetPlatform.android) {
-      return const Text('Live view not supported on this platform');
-    }
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return AndroidView(
+          viewType: 'byte_player_view',
+          layoutDirection: TextDirection.ltr,
+          creationParams: {'streamId': streamId},
+          creationParamsCodec: const StandardMessageCodec(),
+        );
 
-    return AndroidView(
-      viewType: 'byte_player_view',
-      layoutDirection: TextDirection.ltr,
-      creationParams: <String, dynamic>{'streamId': streamId},
-      creationParamsCodec: const StandardMessageCodec(),
-    );
+      case TargetPlatform.iOS:
+        return UiKitView(
+          viewType: 'byte_player_view',
+          layoutDirection: TextDirection.ltr,
+          creationParams: {'streamId': streamId},
+          creationParamsCodec: const StandardMessageCodec(),
+        );
+
+      default:
+        return const Text('Live view not supported on this platform');
+    }
   }
 }

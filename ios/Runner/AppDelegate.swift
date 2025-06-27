@@ -2,9 +2,9 @@ import AVFoundation
 import Firebase
 import Flutter
 import NetworkExtension
+import SystemConfiguration.CaptiveNetwork
 import UIKit
 import workmanager
-import SystemConfiguration.CaptiveNetwork
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -22,6 +22,15 @@ import SystemConfiguration.CaptiveNetwork
             GeneratedPluginRegistrant.register(with: registry)
         }
 
+        if let registrar = self.registrar(forPlugin: "byte_player_view") {
+            // Platform-view factory
+            let factory = BytePlayerViewFactory(messenger: registrar.messenger())
+            registrar.register(factory, withId: "byte_player_view")
+
+            // MethodChannel that mirrors Android
+            BytePlayerChannel.register(with: registrar.messenger())
+        }
+
         let controller: FlutterViewController = window?.rootViewController as! FlutterViewController
         let wifi = FlutterMethodChannel(
             name: "privastead.com/wifi",
@@ -31,20 +40,20 @@ import SystemConfiguration.CaptiveNetwork
 
             if call.method == "connectToWifi" {
                 guard let args = call.arguments as? [String: String],
-                      let ssid = args["ssid"]
+                    let ssid = args["ssid"]
                 else {
                     result(
                         FlutterError(code: "INVALID_ARGS", message: "Missing SSID", details: nil))
                     return
                 }
-                
+
                 let password = args["password"] ?? ""
                 let config =
-                password.isEmpty
-                ? NEHotspotConfiguration(ssid: ssid)
-                : NEHotspotConfiguration(ssid: ssid, passphrase: password, isWEP: false)
+                    password.isEmpty
+                    ? NEHotspotConfiguration(ssid: ssid)
+                    : NEHotspotConfiguration(ssid: ssid, passphrase: password, isWEP: false)
                 config.joinOnce = true
-                
+
                 NEHotspotConfigurationManager.shared.apply(config) { error in
                     if let error = error {
                         result(
@@ -57,14 +66,16 @@ import SystemConfiguration.CaptiveNetwork
             } else if call.method == "getCurrentSSID" {
                 if let interfaces = CNCopySupportedInterfaces() as? [String] {
                     for interface in interfaces {
-                        if let info = CNCopyCurrentNetworkInfo(interface as CFString) as? [String: AnyObject],
-                           let ssid = info["SSID"] as? String {
+                        if let info = CNCopyCurrentNetworkInfo(interface as CFString)
+                            as? [String: AnyObject],
+                            let ssid = info["SSID"] as? String
+                        {
                             result(ssid)
                             return
                         }
                     }
                 }
-                result("") // Return empty string if not connected
+                result("")  // Return empty string if not connected
             } else if call.method == "disconnectFromWifi" {
                 guard let args = call.arguments as? [String: String],
                     let ssid = args["ssid"]

@@ -38,6 +38,8 @@ static INIT_LOGGER_ONCE: Once = Once::new();
 pub fn init_logger() {
     // https://stackoverflow.com/questions/30177845/how-to-initialize-the-logger-for-integration-tests
     INIT_LOGGER_ONCE.call_once(|| {
+        tracing_log::LogTracer::init().expect("Failed to set tracing -> log bridge");
+
         let level = LevelFilter::Trace;
         assert!(
             level <= log::STATIC_MAX_LEVEL,
@@ -137,6 +139,10 @@ impl SendToDartLogger {
 
 impl Log for SendToDartLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
+        if metadata.target().starts_with("openmls") {
+            return false;
+        }
+
         metadata.level() <= self.level
     }
 

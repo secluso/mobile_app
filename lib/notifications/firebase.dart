@@ -64,12 +64,9 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 class PushNotificationService {
   PushNotificationService._();
   static final instance = PushNotificationService._();
-  //  bool _notifReady = false;
 
   Future<void> init() async {
     Log.d("Initializing PushNotificationService");
-
-    //  _notifReady = true;
 
     await FirebaseMessaging.instance
         .setForegroundNotificationPresentationOptions(
