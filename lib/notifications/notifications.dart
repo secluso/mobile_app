@@ -156,31 +156,6 @@ Future<void> showMotionNotification({
   );
 }
 
-Future<void> _ensureNotificationPermissions() async {
-  if (Platform.isAndroid) {
-    final androidPlugin =
-        _notifs
-            .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin
-            >();
-
-    Log.d("Requesting notification permissions");
-    // Android 13+ runtime permission
-    final granted = (await androidPlugin?.areNotificationsEnabled()) ?? true;
-    Log.d("Previously granted notification status: $granted");
-    if (!granted) await androidPlugin?.requestNotificationsPermission();
-    final granted_after =
-        (await androidPlugin?.areNotificationsEnabled()) ?? true;
-    Log.d("Now granted notification status: $granted_after");
-  } else if (Platform.isIOS) {
-    await _notifs
-        .resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin
-        >()
-        ?.requestPermissions(alert: true, badge: true, sound: true);
-  }
-}
-
 Future<void> _ensureMotionChannelAndroid() async {
   const channel = AndroidNotificationChannel(
     'motion_channel', // id
@@ -201,4 +176,43 @@ String _formatTimestamp(String unixSeconds) {
   final date =
       DateTime.fromMillisecondsSinceEpoch(secs * 1000, isUtc: true).toLocal();
   return DateFormat('yyyy-MM-dd HH:mm:ss').format(date);
+}
+
+Future<void> showHeartbeatNotification({
+  required String cameraName,
+  required String msg,
+}) async {
+  // Android
+  final androidDetails = AndroidNotificationDetails(
+    'repair_channel', // must match channel id below
+    'Re-pair Events',
+    channelDescription: 'Camera re-pair alerts',
+    importance: Importance.high,
+    priority: Priority.high,
+    icon: 'ic_notification',
+    vibrationPattern: Int64List.fromList([500, 500, 500, 500, 500]),
+    enableLights: true,
+    color: const Color(0xFF00FF00),
+    ledColor: const Color(0xFF00FF00),
+    ledOnMs: 2000,
+    ledOffMs: 2000,
+  );
+
+  // iOS
+  final iosDetails = const DarwinNotificationDetails(
+    interruptionLevel: InterruptionLevel.timeSensitive,
+    sound: 'default',
+    badgeNumber: 1,
+  );
+
+  // Cross-platform wrapper
+  final details = NotificationDetails(android: androidDetails, iOS: iosDetails);
+  Log.d("Sent re-pair notification!");
+
+  await _notifs.show(
+    DateTime.now().millisecondsSinceEpoch ~/ 1000, // unique id
+    cameraName, // title
+    msg, // body
+    details,
+  );
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';
+import 'package:privastead_flutter/constants.dart';
 import 'package:privastead_flutter/keys.dart';
 import 'package:privastead_flutter/utilities/byte_stream_player.dart';
 import 'package:privastead_flutter/utilities/http_client.dart';
@@ -136,6 +137,13 @@ class _LivestreamPageState extends State<LivestreamPage>
           _fail('Could not apply commit message');
           return false;
         }
+
+        final prefs = await SharedPreferences.getInstance();
+        final cameraStatus = prefs.getInt(PrefKeys.cameraStatusPrefix + widget.cameraName) ?? CameraStatus.online;
+        if (cameraStatus == CameraStatus.offline) {
+          await prefs.setInt(PrefKeys.cameraStatusPrefix + widget.cameraName, CameraStatus.online);
+        }
+
         return true;
       },
       (err) async {
@@ -389,7 +397,7 @@ class _LivestreamPageState extends State<LivestreamPage>
                       Positioned(
                         bottom: 24,
                         child: const Text(
-                          'Live',
+                          'Live (end-to-end encrypted)',
                           style: TextStyle(color: Colors.white, fontSize: 16),
                         ),
                       ),

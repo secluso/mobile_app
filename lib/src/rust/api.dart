@@ -91,3 +91,21 @@ Future<Uint8List> livestreamDecrypt({
   data: data,
   expectedChunkNumber: expectedChunkNumber,
 );
+
+Future<Uint8List> generateHeartbeatRequestConfigCommand({
+  required String cameraName,
+  required BigInt timestamp,
+}) => RustLib.instance.api.crateApiGenerateHeartbeatRequestConfigCommand(
+  cameraName: cameraName,
+  timestamp: timestamp,
+);
+
+Future<String> processHeartbeatConfigResponse({
+  required String cameraName,
+  required List<int> configResponse,
+  required BigInt expectedTimestamp,
+}) => RustLib.instance.api.crateApiProcessHeartbeatConfigResponse(
+  cameraName: cameraName,
+  configResponse: configResponse,
+  expectedTimestamp: expectedTimestamp,
+);

@@ -3,6 +3,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:privastead_flutter/constants.dart';
 import 'package:privastead_flutter/keys.dart';
 import 'package:privastead_flutter/notifications/download_task.dart';
+import 'package:privastead_flutter/notifications/heartbeat_task.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
 import 'package:privastead_flutter/utilities/lock.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,6 +11,7 @@ import 'package:workmanager/workmanager.dart';
 
 const String _bgTaskId = 'com.privastead.task'; // Matches Info.plist
 const String _workerName = 'download_worker'; // free-form tag
+const String _periodicTaskName = 'periodic_heartbeat_task';
 
 class OneOffHelper {
   static bool _initialized = false;
@@ -39,31 +41,137 @@ void callbackDispatcher() {
       OneOffHelper.ensureInitialized();
     }
 
-    final retry = inputData?['retry'] as int? ?? 0;
-    Log.d("Running task in background (iteration #$retry)");
+    Log.d("Executing task: $taskId");
 
-    final ok = await doWorkBackground();
+    if (taskId == _workerName) {
+      final retry = inputData?['retry'] as int? ?? 0;
+      Log.d("Running task in background (iteration #$retry)");
 
-    if (!ok) {
-      Log.d("Retrying due to failure / new entries");
-      final nextRetry = retry + 1;
-      final delayMin = nextRetry * nextRetry * 15;
+      final ok = await doWorkBackground();
 
-      await Workmanager().registerOneOffTask(
-        _bgTaskId,
-        _workerName,
-        inputData: {'retry': nextRetry},
-        existingWorkPolicy: ExistingWorkPolicy.replace,
-        constraints: Constraints(networkType: NetworkType.connected),
-        initialDelay:
-            Platform.isIOS ? Duration(minutes: delayMin) : Duration.zero,
-      );
-      return ok; // Intreprets true=success, false=retry
-    } else {
-      // no new camera entries, everything succeeded... we can stop scheduling now
+      if (!ok) {
+        Log.d("Retrying due to failure / new entries");
+        final nextRetry = retry + 1;
+        final delayMin = nextRetry * nextRetry * 15;
+
+        await Workmanager().registerOneOffTask(
+          _bgTaskId,
+          _workerName,
+          inputData: {'retry': nextRetry},
+          existingWorkPolicy: ExistingWorkPolicy.replace,
+          constraints: Constraints(networkType: NetworkType.connected),
+          initialDelay:
+              Platform.isIOS ? Duration(minutes: delayMin) : Duration.zero,
+        );
+        return ok; // Intreprets true=success, false=retry
+      } else {
+        // no new camera entries, everything succeeded... we can stop scheduling now
+        return true;
+      }
+    }
+
+    if (taskId == _periodicTaskName) {
+      final cameraName = inputData?['cameraName'] as String? ?? "Error";
+      Log.d("Running periodic heartbeat task for camera: $cameraName");
+      await doHeartbeatTask(cameraName);
       return true;
     }
+
+    return false;
   });
+}
+
+class HeartbeatScheduler {
+  /// Initialization method
+  static Future<void> registerAllCameraTasks({bool debug = false}) async {
+    Log.d("HeartbeatScheduler: Registering periodic tasks for all cameras.");
+
+    // FIXME: we might be calling this multiple times, both here and in DownloadScheduler
+    await Workmanager().initialize(
+      callbackDispatcher,
+      isInDebugMode: debug && Platform.isAndroid,
+    ); // debug mode only on android
+
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> cameraSet =
+      prefs.getStringList(PrefKeys.cameraSet) ?? [];
+
+    for (final cameraName in cameraSet) {
+      Log.d("Registering a heartbeat task for camera: $cameraName");
+      await Workmanager().registerPeriodicTask(
+        'heartbeat_$cameraName',
+        _periodicTaskName,
+        inputData: {'cameraName': cameraName},
+        frequency: Duration(hours: 6),
+        existingWorkPolicy: ExistingWorkPolicy.replace,
+        constraints: Constraints(
+          networkType: NetworkType.connected,
+        ),
+      );
+    }
+  }
+
+  static Future<void> registerCameraTask({required String cameraName, bool debug = false}) async {
+    Log.d("HeartbeatScheduler: Registering periodic task for camera: $cameraName.");
+
+    // FIXME: we might be calling this multiple times, both here and in DownloadScheduler
+    await Workmanager().initialize(
+      callbackDispatcher,
+      isInDebugMode: debug && Platform.isAndroid,
+    ); // debug mode only on android
+
+    await Workmanager().registerPeriodicTask(
+      'heartbeat_$cameraName',
+      _periodicTaskName,
+      inputData: {'cameraName': cameraName},
+      frequency: Duration(hours: 6),
+      existingWorkPolicy: ExistingWorkPolicy.replace,
+      constraints: Constraints(
+        networkType: NetworkType.connected,
+      ),
+    );
+  }
+
+  static Future<void> cancelCameraTask({required String cameraName, bool debug = false}) async {
+    Log.d("HeartbeatScheduler: Cancelling periodic task for camera: $cameraName.");
+
+    // FIXME: we might be calling this multiple times, both here and in DownloadScheduler
+    await Workmanager().initialize(
+      callbackDispatcher,
+      isInDebugMode: debug && Platform.isAndroid,
+    ); // debug mode only on android
+
+    await Workmanager().cancelByUniqueName('heartbeat_$cameraName');
+  }
+
+  static Future<void> scheduleAllCameraOneOffTasks({bool debug = false}) async {
+    Log.d("HeartbeatScheduler: Scheduling oneoff tasks for all cameras.");
+
+    // FIXME: we might be calling this multiple times, both here and in DownloadScheduler
+    await Workmanager().initialize(
+      callbackDispatcher,
+      isInDebugMode: debug && Platform.isAndroid,
+    ); // debug mode only on android
+
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> cameraSet =
+      prefs.getStringList(PrefKeys.cameraSet) ?? [];
+
+    for (final cameraName in cameraSet) {
+      Log.d("Scheduling a oneoff heartbeat task for camera: $cameraName");
+      await Workmanager().registerOneOffTask(
+        'heartbeat_oneoff_$cameraName',
+        _periodicTaskName,
+        inputData: {'cameraName': cameraName},
+        existingWorkPolicy: ExistingWorkPolicy.replace,
+        constraints: Constraints(
+          networkType: NetworkType.connected,
+        ),
+        initialDelay:
+            Platform.isIOS ? const Duration(minutes: 15) : Duration.zero,
+      );
+    }
+  }
 }
 
 class DownloadScheduler {

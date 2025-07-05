@@ -3,7 +3,6 @@ import 'package:privastead_flutter/src/rust/api.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:privastead_flutter/keys.dart';
 
 Future<bool> addCamera(

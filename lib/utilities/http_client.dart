@@ -45,7 +45,7 @@ class HttpClientService {
     List<MotionPair> convertedCameraList = [];
     for (final cameraName in cameraNames) {
       final motionGroup = await _groupName(cameraName, Group.motion);
-      if (motionGroup == "Error!") {
+      if (motionGroup == "Error") {
         continue;
       }
 
@@ -226,7 +226,7 @@ class HttpClientService {
 
     final group = await _groupName(cameraName, Group.livestream);
     final url = _buildUrl(creds.serverIp, ['livestream', group]);
-    final headers = await _basicAuthHeaders(creds.username, creds.password!);
+    final headers = await _basicAuthHeaders(creds.username, creds.password);
 
     final response = await http.post(url, headers: headers);
     if (response.statusCode != 200) {
@@ -280,6 +280,46 @@ class HttpClientService {
         'Failed to send data: ${response.statusCode} ${response.reasonPhrase}',
       );
     }
+  });
+
+  /// POST /config/<group>
+  Future<Result<void>> configCommand({required String cameraName, required Object command}) => _wrap(() async {
+    final creds = await _getValidatedCredentials();
+    final group = await _groupName(cameraName, Group.config);
+    final url = _buildUrl(creds.serverIp, ['config', group]);
+    final headers = await _basicAuthHeaders(creds.username, creds.password);
+
+    final response = await http.post(url, headers: headers, body: command);
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Failed to send config command: ${response.statusCode} ${response.reasonPhrase}',
+      );
+    } else {
+      Log.d("Successfully sent config command");
+    }
+  });
+
+  /// GET /config_response/<group>
+  Future<Result<Uint8List>> fetchConfigResponse({
+    required String cameraName,
+  }) => _wrap(() async {
+    final creds = await _getValidatedCredentials();
+
+    final group = await _groupName(cameraName, Group.config);
+    final url = _buildUrl(creds.serverIp, ['config_response', group]);
+    final headers = await _basicAuthHeaders(creds.username, creds.password);
+
+    final response = await http.get(url, headers: headers);
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Failed to fetch config response: ${response.statusCode} ${response.reasonPhrase}',
+      );
+    } else {
+      Log.d("Successfully fetched config response");
+    }
+
+    return response.bodyBytes;
   });
 
   /// Utility methods below
@@ -346,7 +386,7 @@ class HttpClientService {
       clientTag: clientTag,
       cameraName: cameraName,
     );
-    if (groupName == "Error!") {
+    if (groupName == "Error") {
       throw Exception('Incorrect clientTag or invalid camera');
     }
 

@@ -22,3 +22,10 @@ class Group {
   static const config = "config";
   static const livestream = "livestream";
 }
+
+class CameraStatus {
+  static const online = 0;
+  static const offline = 1;
+  static const corrupted = 2;
+  static const possiblyCorrupted = 3;
+}

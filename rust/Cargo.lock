@@ -1497,7 +1497,6 @@ dependencies = [
 [[package]]
 name = "privastead-app-native"
 version = "0.1.0"
-source = "git+https://github.com/privastead/privastead?rev=1c1523e#1c1523e50e64546c182f2ca02a9635b4c94c154a"
 dependencies = [
  "anyhow",
  "bincode",
@@ -1507,13 +1506,14 @@ dependencies = [
  "privastead-client-lib",
  "privastead-client-server-lib",
  "rand",
+ "serde",
+ "serde_derive",
  "serde_json",
 ]
 
 [[package]]
 name = "privastead-client-lib"
 version = "0.1.0"
-source = "git+https://github.com/privastead/privastead?rev=1c1523e#1c1523e50e64546c182f2ca02a9635b4c94c154a"
 dependencies = [
  "anyhow",
  "bincode",
@@ -1538,7 +1538,6 @@ dependencies = [
 [[package]]
 name = "privastead-client-server-lib"
 version = "0.1.0"
-source = "git+https://github.com/privastead/privastead?rev=1c1523e#1c1523e50e64546c182f2ca02a9635b4c94c154a"
 dependencies = [
  "rand",
 ]

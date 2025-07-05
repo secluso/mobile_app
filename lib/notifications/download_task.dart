@@ -297,34 +297,37 @@ Future<bool> retrieveVideos(String cameraName) async {
 
         Log.d("Received 100%");
 
-        final baseDir = await getApplicationDocumentsDirectory();
+        if (decFileName != "Duplicate") {
+          final baseDir = await getApplicationDocumentsDirectory();
 
-        final filePath = p.join(
-          baseDir.path,
-          'waiting',
-          'camera_$cameraName',
-          decFileName,
-        );
+          final filePath = p.join(
+            baseDir.path,
+            'waiting',
+            'camera_$cameraName',
+            decFileName,
+          );
 
-        final parentDir = Directory(p.dirname(filePath));
-        if (!await parentDir.exists()) {
-          await parentDir.create(recursive: true);
+          final parentDir = Directory(p.dirname(filePath));
+          if (!await parentDir.exists()) {
+            await parentDir.create(recursive: true);
+          }
+
+          // Write an empty file to this pending directory to signal that it needs to be processed to our main processing thread (upon app startup, etc)
+          // TODO: We should check if this fails and make contingencies.
+
+          final creationIndicationFile = File(filePath);
+          if (!await creationIndicationFile.exists()) {
+            await creationIndicationFile.create();
+          }
+
+          SendPort? port = IsolateNameServer.lookupPortByName(
+            'queue_processor_signal_port',
+          );
+          port?.send('signal_new_file');
+
+          camerasPageKey.currentState?.invalidateThumbnail(cameraName);
         }
 
-        // Write an empty file to this pending directory to signal that it needs to be processed to our main processing thread (upon app startup, etc)
-        // TODO: We should check if this fails and make contingencies.
-
-        final creationIndicationFile = File(filePath);
-        if (!await creationIndicationFile.exists()) {
-          await creationIndicationFile.create();
-        }
-
-        SendPort? port = IsolateNameServer.lookupPortByName(
-          'queue_processor_signal_port',
-        );
-        port?.send('signal_new_file');
-
-        camerasPageKey.currentState?.invalidateThumbnail(cameraName);
         await sharedPreferencesAsync.setInt("epoch$cameraName", epoch + 1);
       }
 

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:privastead_flutter/constants.dart';
+import 'package:privastead_flutter/keys.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import 'package:confetti/confetti.dart';
 import 'package:objectbox/objectbox.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../theme_provider.dart';
 import 'view_video.dart';
@@ -108,6 +111,39 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
   Future<void> _initDbAndFirstPage() async {
     _videoBox = AppStores.instance.videoStore.box<Video>();
     await _loadNextPage(); // first 20
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    var cameraStatus = prefs.getInt(PrefKeys.cameraStatusPrefix + widget.cameraName) ?? CameraStatus.online;
+    Log.d("Viewing camera: camera status = $cameraStatus");
+
+    if (cameraStatus == CameraStatus.offline ||
+      cameraStatus == CameraStatus.corrupted ||
+      cameraStatus == CameraStatus.possiblyCorrupted) {
+      
+      late final String msg;
+
+      if (cameraStatus == CameraStatus.offline) {
+        msg = "Camera seems to be offline.";
+      } else if (cameraStatus == CameraStatus.corrupted) {
+        msg = "Camera connection is corrupted. Pair again.";
+      } else { //possiblyCorrupted
+        msg = "Camera connection is likely corrupted. Pair again.";
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              msg,
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.red[700],
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   @override

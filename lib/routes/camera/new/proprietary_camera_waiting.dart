@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:async';
 
+import 'package:privastead_flutter/notifications/scheduler.dart';
 import 'package:uuid/data.dart';
 import 'package:uuid/uuid.dart';
 import 'package:uuid/rng.dart';
@@ -178,6 +179,11 @@ class _ProprietaryCameraWaitingDialogState
     if (!existingSet.contains(widget.cameraName)) {
       existingSet.add(widget.cameraName);
       await prefs.setStringList(PrefKeys.cameraSet, existingSet);
+      await prefs.setInt(PrefKeys.numIgnoredHeartbeatsPrefix + widget.cameraName, 0);
+      await prefs.setInt(PrefKeys.cameraStatusPrefix + widget.cameraName, CameraStatus.online);
+      await prefs.setInt(PrefKeys.numHeartbeatNotificationsPrefix + widget.cameraName, 0);
+      await prefs.setInt(PrefKeys.lastHeartbeatTimestampPrefix + widget.cameraName, 0);
+      await HeartbeatScheduler.registerCameraTask(cameraName: widget.cameraName);
     }
 
     final box = AppStores.instance.cameraStore.box<Camera>();

@@ -72,6 +72,8 @@ void main() async {
   }
 
   await DownloadScheduler.init();
+  await HeartbeatScheduler.registerAllCameraTasks();
+  await HeartbeatScheduler.scheduleAllCameraOneOffTasks();
 
   QueueProcessor.instance.start();
   QueueProcessor.instance.signalNewFile();

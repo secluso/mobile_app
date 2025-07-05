@@ -327,6 +327,13 @@ class _VideoViewPageState extends State<VideoViewPage> {
                 style: const TextStyle(fontSize: 16),
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                "(Delivered end-to-end encrypted from the camera)",
+                style: const TextStyle(fontSize: 16),
+              ),
+            ),
             if (widget.canDownload)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

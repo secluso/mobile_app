@@ -80,12 +80,12 @@ pub fn decrypt_video(_camera_name: String, enc_filename: String) -> String {
                 return decrypted_filename;
             }
             Err(_e) => {
-                return "Error!".to_string();
+                return "Error".to_string();
             }
         }
     } else {
         info!("CLIENTS map not initialized!");
-        return "Error!".to_string();
+        return "Error".to_string();
     }
 }
 
@@ -169,7 +169,7 @@ pub fn encrypt_settings_message(camera_name: String, data: Vec<u8>) -> Vec<u8> {
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        match privastead_app_native::encrypt_settings_message(&mut *client_guard, camera_name, data) {
+        match privastead_app_native::encrypt_settings_message(&mut *client_guard, data) {
             Ok(encrypted_message) => {
                 return encrypted_message;
             }
@@ -193,18 +193,18 @@ pub fn decrypt_message(client_tag: String, camera_name: String, data: Vec<u8>) -
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        match privastead_app_native::decrypt_message(&mut *client_guard, client_tag, data) {
+        match privastead_app_native::decrypt_message(&mut *client_guard, &client_tag, data) {
             Ok(timestamp) => {
                 return timestamp;
             }
             Err(e) => {
                 info!("Error: {}", e);
-                return "Error!".to_string();
+                return "Error".to_string();
             }
         }
     } else {
         info!("CLIENTS map not initialized!");
-        return "Error!".to_string();
+        return "Error".to_string();
     }
 }
 
@@ -217,18 +217,18 @@ pub fn get_group_name(client_tag: String, camera_name: String) -> String {
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        match privastead_app_native::get_group_name(&mut *client_guard, client_tag, camera_name) {
+        match privastead_app_native::get_group_name(&mut *client_guard, &client_tag) {
             Ok(motion_group_name) => {
                 return motion_group_name;
             }
             Err(e) => {
                 info!("Error: {}", e);
-                return "Error!".to_string();
+                return "Error".to_string();
             }
         }
     } else {
         info!("CLIENTS map not initialized!");
-        return "Error!".to_string();
+        return "Error".to_string();
     }
 }
 
@@ -277,5 +277,53 @@ pub fn livestream_decrypt(camera_name: String, data: Vec<u8>, expected_chunk_num
     } else {
         info!("CLIENTS map not initialized!");
         vec![]
+    }
+}
+
+#[flutter_rust_bridge::frb]
+pub fn generate_heartbeat_request_config_command(camera_name: String, timestamp: u64) -> Vec<u8> {
+    let mut clients_map = CLIENTS.lock().unwrap();
+    if let Some(map) = clients_map.as_mut() {
+        let client_entry = map
+            .entry(camera_name.clone())
+            .or_insert_with(|| Mutex::new(None));
+        let mut client_guard = client_entry.lock().unwrap();
+
+        let ret = match privastead_app_native::generate_heartbeat_request_config_command(&mut *client_guard, timestamp) {
+            Ok(config_msg_enc) => config_msg_enc,
+            Err(e) => {
+                info!("Error: {}", e);
+                vec![]
+            }
+        };
+
+        ret
+    } else {
+        info!("CLIENTS map not initialized!");
+        vec![]
+    }
+}
+
+#[flutter_rust_bridge::frb]
+pub fn process_heartbeat_config_response(camera_name: String, config_response: Vec<u8>, expected_timestamp: u64) -> String {
+    let mut clients_map = CLIENTS.lock().unwrap();
+    if let Some(map) = clients_map.as_mut() {
+        let client_entry = map
+            .entry(camera_name.clone())
+            .or_insert_with(|| Mutex::new(None));
+        let mut client_guard = client_entry.lock().unwrap();
+
+        match privastead_app_native::process_heartbeat_config_response(&mut *client_guard, config_response, expected_timestamp) {
+            Ok(heartbeat_response) => {
+                return heartbeat_response;
+            }
+            Err(e) => {
+                info!("Error: {}", e);
+                return "Error".to_string();
+            }
+        }
+    } else {
+        info!("CLIENTS map not initialized!");
+        return "Error".to_string();
     }
 }
