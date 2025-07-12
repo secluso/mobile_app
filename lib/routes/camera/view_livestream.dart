@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';
-import 'package:privastead_flutter/constants.dart';
 import 'package:privastead_flutter/keys.dart';
 import 'package:privastead_flutter/utilities/byte_stream_player.dart';
 import 'package:privastead_flutter/utilities/http_client.dart';
@@ -58,9 +57,13 @@ class _LivestreamPageState extends State<LivestreamPage>
     Log.d('Entered method');
 
     final prefs = await SharedPreferences.getInstance();
-    while (prefs.getBool(PrefKeys.downloadingMotionVideos) ?? false) {
-      Log.d('Waiting for motion-video download to finish…');
-      await Future.delayed(const Duration(seconds: 1));
+    
+    var recordingMotion = prefs.getBool(PrefKeys.recordingMotionVideosPrefix + widget.cameraName) ?? false;
+    var lastRecordingTimestamp = prefs.getInt(PrefKeys.lastRecordingTimestampPrefix + widget.cameraName) ?? 0;
+    var nowTimestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    if (recordingMotion && (nowTimestamp - lastRecordingTimestamp) < 60) {
+      _fail('The camera is recording a video to send to the app and cannot livestream now. Please try again in a couple of seconds.');
+      return;
     }
 
     for (int i = 0; i < 2; i++) {
@@ -136,12 +139,6 @@ class _LivestreamPageState extends State<LivestreamPage>
         if (!updated) {
           _fail('Could not apply commit message');
           return false;
-        }
-
-        final prefs = await SharedPreferences.getInstance();
-        final cameraStatus = prefs.getInt(PrefKeys.cameraStatusPrefix + widget.cameraName) ?? CameraStatus.online;
-        if (cameraStatus == CameraStatus.offline) {
-          await prefs.setInt(PrefKeys.cameraStatusPrefix + widget.cameraName, CameraStatus.online);
         }
 
         return true;

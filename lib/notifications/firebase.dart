@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:privastead_flutter/constants.dart';
 import 'package:privastead_flutter/notifications/notifications.dart';
 import 'package:privastead_flutter/notifications/scheduler.dart';
 import 'package:privastead_flutter/utilities/http_client.dart';
@@ -188,6 +187,9 @@ class PushNotificationService {
                 cameraName,
               ); // Don't await, as the lock may freeze this up
             }
+
+            await prefs.setBool(PrefKeys.recordingMotionVideosPrefix + cameraName, false); // Allow livestreaming.
+            await prefs.setInt(PrefKeys.lastRecordingTimestampPrefix + cameraName, 0);
           } else if (response != 'Error' && response != 'None') {
             var sendNotificationGlobal =
                 prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
@@ -201,7 +203,9 @@ class PushNotificationService {
               Log.d("Not showing motion notification due to preference");
             }
 
-            await prefs.setInt(PrefKeys.cameraStatusPrefix + cameraName, CameraStatus.online);
+            final nowTimestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+            await prefs.setBool(PrefKeys.recordingMotionVideosPrefix + cameraName, true); // Restrict livestreaming.
+            await prefs.setInt(PrefKeys.lastRecordingTimestampPrefix + cameraName, nowTimestamp);
 
             // TODO: I removed the pending to repository addition for Android because it's not possible to init ObjectBox in the background handler (as Android requires). Find alternate solution maybe. Not sure this is needed anymore (as we don't want to show users pending videos in cases of failure)
             if (Platform.isIOS) {

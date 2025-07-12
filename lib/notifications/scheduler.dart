@@ -58,7 +58,7 @@ void callbackDispatcher() {
           _bgTaskId,
           _workerName,
           inputData: {'retry': nextRetry},
-          existingWorkPolicy: ExistingWorkPolicy.replace,
+          existingWorkPolicy: ExistingWorkPolicy.keep,
           constraints: Constraints(networkType: NetworkType.connected),
           initialDelay:
               Platform.isIOS ? Duration(minutes: delayMin) : Duration.zero,
@@ -103,7 +103,7 @@ class HeartbeatScheduler {
         _periodicTaskName,
         inputData: {'cameraName': cameraName},
         frequency: Duration(hours: 6),
-        existingWorkPolicy: ExistingWorkPolicy.replace,
+        existingWorkPolicy: ExistingWorkPolicy.keep,
         constraints: Constraints(
           networkType: NetworkType.connected,
         ),
@@ -125,7 +125,7 @@ class HeartbeatScheduler {
       _periodicTaskName,
       inputData: {'cameraName': cameraName},
       frequency: Duration(hours: 6),
-      existingWorkPolicy: ExistingWorkPolicy.replace,
+      existingWorkPolicy: ExistingWorkPolicy.keep,
       constraints: Constraints(
         networkType: NetworkType.connected,
       ),
@@ -163,7 +163,7 @@ class HeartbeatScheduler {
         'heartbeat_oneoff_$cameraName',
         _periodicTaskName,
         inputData: {'cameraName': cameraName},
-        existingWorkPolicy: ExistingWorkPolicy.replace,
+        existingWorkPolicy: ExistingWorkPolicy.keep,
         constraints: Constraints(
           networkType: NetworkType.connected,
         ),
@@ -194,7 +194,7 @@ class DownloadScheduler {
       _bgTaskId,
       _workerName,
       inputData: {'retry': 0},
-      existingWorkPolicy: ExistingWorkPolicy.replace,
+      existingWorkPolicy: ExistingWorkPolicy.keep,
       constraints: Constraints(networkType: NetworkType.connected),
       initialDelay:
           Platform.isIOS ? const Duration(minutes: 15) : Duration.zero,
@@ -214,7 +214,6 @@ class DownloadScheduler {
     Log.d("Network statuses: wifi = $wifi, cell = $cell");
     // TODO: We can't do work now in Android due to the ObjectBox error where we can't double instantiate (as Android background work doesn't hold the lock that the main process does, so it can't touch the database)
     if (!camera.isEmpty &&
-        Platform.isIOS &&
         (wifi || (cell && allowCellular))) {
       Log.d("Trying to do work now for $camera");
       final ok = await doWorkNonBackground(camera);
@@ -267,7 +266,7 @@ class DownloadScheduler {
         _bgTaskId,
         _workerName,
         inputData: {'retry': 0},
-        existingWorkPolicy: ExistingWorkPolicy.replace,
+        existingWorkPolicy: ExistingWorkPolicy.keep,
         constraints: Constraints(networkType: NetworkType.connected),
         initialDelay:
             Platform.isIOS

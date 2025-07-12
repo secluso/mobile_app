@@ -224,7 +224,7 @@ class _ProprietaryCameraConnectDialogState
         _isConnected
             ? 'Connected to the camera.'
             : _isConnecting
-            ? 'Attempting connection...'
+            ? 'Attempting to connect...'
             : _connectivityError
             ? "Error connecting. Try again"
             : 'Not connected to the camera.';
@@ -277,7 +277,9 @@ class _ProprietaryCameraConnectDialogState
               const SizedBox(height: 12),
               Text(
                 'We need to connect to the camera. Ensure it\'s plugged in '
-                'and powered on before proceeding.',
+                'and powered on before proceeding. If the camera has been '
+                'previously paired with the app, make sure to reset it before '
+                'pairing again.',
                 style: Theme.of(
                   context,
                 ).textTheme.bodyMedium?.copyWith(height: 1.4),
@@ -475,8 +477,9 @@ class _ProprietaryCameraInfoDialogState
               ),
               const SizedBox(height: 12),
               Text(
-                'Make sure your smartphone is connected to the same Wi-Fi '
-                'network as the camera hub.',
+                'Enter the camera name. Also enter the SSID and password of '
+                'the WiFi network that the camera should connect to. Finally, '
+                'scan the camera QR code.',
                 style: Theme.of(
                   context,
                 ).textTheme.bodyMedium?.copyWith(height: 1.4),

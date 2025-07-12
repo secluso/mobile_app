@@ -39,22 +39,12 @@ class RustBridgeHelper {
 Future<bool> doWorkNonBackground(String cameraName) async {
   // TODO: Should we wait for downloadingMotionVideos to be false before continuing? Is this meant to be a spinlock?
 
-  if (Platform.isAndroid) {
-    await RustBridgeHelper.ensureInitialized();
-  }
-
   if (await lock(Constants.genericDownloadTaskLock)) {
     try {
-      var prefs = SharedPreferencesAsync();
-      await prefs.setBool(
-        PrefKeys.downloadingMotionVideos,
-        true,
-      ); // Restrict livestreaming
       Log.d("Starting to work in non-background mode");
 
       bool result = await retrieveVideos(cameraName);
 
-      await prefs.setBool(PrefKeys.downloadingMotionVideos, false);
       QueueProcessor.instance.signalNewFile();
       return result;
     } finally {
@@ -99,10 +89,6 @@ Future<bool> doWorkBackground() async {
           downloadCameraQueue = await prefs.getStringList(
             PrefKeys.downloadCameraQueue,
           );
-          await prefs.setBool(
-            PrefKeys.downloadingMotionVideos,
-            true,
-          ); // Restrict livestreaming.
 
           var backupDownloadCameraQueue = await prefs.getStringList(
             PrefKeys.backupDownloadCameraQueue,
@@ -208,10 +194,6 @@ Future<bool> doWorkBackground() async {
               downloadCameraQueue,
             );
             await prefs.remove(PrefKeys.backupDownloadCameraQueue);
-            await prefs.setBool(
-              PrefKeys.downloadingMotionVideos,
-              false,
-            ); // Allow livestreaming to continue.
           } finally {
             await unlock(
               Constants.cameraWaitingLock,
