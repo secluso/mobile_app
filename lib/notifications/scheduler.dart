@@ -71,9 +71,8 @@ void callbackDispatcher() {
     }
 
     if (taskId == _periodicTaskName) {
-      final cameraName = inputData?['cameraName'] as String? ?? "Error";
-      Log.d("Running periodic heartbeat task for camera: $cameraName");
-      await doHeartbeatTask(cameraName);
+      Log.d("Running periodic heartbeat task for all cameras");
+      await doAllHeartbeatTasks(true);
       return true;
     }
 
@@ -83,7 +82,7 @@ void callbackDispatcher() {
 
 class HeartbeatScheduler {
   /// Initialization method
-  static Future<void> registerAllCameraTasks({bool debug = false}) async {
+  static Future<void> registerPeriodicTask({bool debug = false}) async {
     Log.d("HeartbeatScheduler: Registering periodic tasks for all cameras.");
 
     // FIXME: we might be calling this multiple times, both here and in DownloadScheduler
@@ -92,85 +91,15 @@ class HeartbeatScheduler {
       isInDebugMode: debug && Platform.isAndroid,
     ); // debug mode only on android
 
-    final prefs = await SharedPreferences.getInstance();
-    final List<String> cameraSet =
-      prefs.getStringList(PrefKeys.cameraSet) ?? [];
-
-    for (final cameraName in cameraSet) {
-      Log.d("Registering a heartbeat task for camera: $cameraName");
-      await Workmanager().registerPeriodicTask(
-        'heartbeat_$cameraName',
-        _periodicTaskName,
-        inputData: {'cameraName': cameraName},
-        frequency: Duration(hours: 6),
-        existingWorkPolicy: ExistingWorkPolicy.keep,
-        constraints: Constraints(
-          networkType: NetworkType.connected,
-        ),
-      );
-    }
-  }
-
-  static Future<void> registerCameraTask({required String cameraName, bool debug = false}) async {
-    Log.d("HeartbeatScheduler: Registering periodic task for camera: $cameraName.");
-
-    // FIXME: we might be calling this multiple times, both here and in DownloadScheduler
-    await Workmanager().initialize(
-      callbackDispatcher,
-      isInDebugMode: debug && Platform.isAndroid,
-    ); // debug mode only on android
-
     await Workmanager().registerPeriodicTask(
-      'heartbeat_$cameraName',
+      'heartbeat',
       _periodicTaskName,
-      inputData: {'cameraName': cameraName},
       frequency: Duration(hours: 6),
       existingWorkPolicy: ExistingWorkPolicy.keep,
       constraints: Constraints(
         networkType: NetworkType.connected,
       ),
     );
-  }
-
-  static Future<void> cancelCameraTask({required String cameraName, bool debug = false}) async {
-    Log.d("HeartbeatScheduler: Cancelling periodic task for camera: $cameraName.");
-
-    // FIXME: we might be calling this multiple times, both here and in DownloadScheduler
-    await Workmanager().initialize(
-      callbackDispatcher,
-      isInDebugMode: debug && Platform.isAndroid,
-    ); // debug mode only on android
-
-    await Workmanager().cancelByUniqueName('heartbeat_$cameraName');
-  }
-
-  static Future<void> scheduleAllCameraOneOffTasks({bool debug = false}) async {
-    Log.d("HeartbeatScheduler: Scheduling oneoff tasks for all cameras.");
-
-    // FIXME: we might be calling this multiple times, both here and in DownloadScheduler
-    await Workmanager().initialize(
-      callbackDispatcher,
-      isInDebugMode: debug && Platform.isAndroid,
-    ); // debug mode only on android
-
-    final prefs = await SharedPreferences.getInstance();
-    final List<String> cameraSet =
-      prefs.getStringList(PrefKeys.cameraSet) ?? [];
-
-    for (final cameraName in cameraSet) {
-      Log.d("Scheduling a oneoff heartbeat task for camera: $cameraName");
-      await Workmanager().registerOneOffTask(
-        'heartbeat_oneoff_$cameraName',
-        _periodicTaskName,
-        inputData: {'cameraName': cameraName},
-        existingWorkPolicy: ExistingWorkPolicy.keep,
-        constraints: Constraints(
-          networkType: NetworkType.connected,
-        ),
-        initialDelay:
-            Platform.isIOS ? const Duration(minutes: 15) : Duration.zero,
-      );
-    }
   }
 }
 

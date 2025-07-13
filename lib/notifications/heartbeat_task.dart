@@ -30,10 +30,7 @@ class RustBridgeHelper {
   }
 }
 
-Future<bool> doHeartbeatTask(String cameraName) async {
-  if (Platform.isAndroid) {
-    await RustBridgeHelper.ensureInitialized();
-  }
+Future<bool> _doHeartbeatTask(String cameraName) async {
   Log.d("$cameraName: Starting to work (heartbeat)");
   
   //FIXME: don't attempt a heartbeat if we're livestreaming.
@@ -145,4 +142,19 @@ Future<bool> doHeartbeatTask(String cameraName) async {
   );
 
   return successful;
+}
+
+Future<void> doAllHeartbeatTasks(bool inBackground) async {
+  if (Platform.isAndroid && inBackground) {
+    await RustBridgeHelper.ensureInitialized();
+  }
+  Log.d("Starting to run all heartbeat tasks");
+  
+  final prefs = await SharedPreferences.getInstance();
+  final List<String> cameraSet =
+    prefs.getStringList(PrefKeys.cameraSet) ?? [];
+
+  for (final cameraName in cameraSet) {
+    await _doHeartbeatTask(cameraName);
+  }
 }

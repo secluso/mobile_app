@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:privastead_flutter/constants.dart';
-import 'package:privastead_flutter/notifications/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:privastead_flutter/routes/camera/list_cameras.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
@@ -83,7 +82,6 @@ class _CameraSetupStatusDialogState extends State<CameraSetupStatusDialog> {
       await prefs.setInt(PrefKeys.cameraStatusPrefix + cameraName, CameraStatus.online);
       await prefs.setInt(PrefKeys.numHeartbeatNotificationsPrefix + cameraName, 0);
       await prefs.setInt(PrefKeys.lastHeartbeatTimestampPrefix + cameraName, 0);
-      await HeartbeatScheduler.registerCameraTask(cameraName: cameraName);
     }
 
     final box = AppStores.instance.cameraStore.box<Camera>();

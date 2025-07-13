@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:privastead_flutter/notifications/scheduler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -428,7 +427,6 @@ class CamerasPageState extends State<CamerasPage>
   Future<void> deleteCamera(String cameraName) async {
     //TODO: Remove from any waiting queues. Hold a lock for this to ensure no weird errors.
     final SharedPreferences prefs = await SharedPreferences.getInstance();
-    await HeartbeatScheduler.cancelCameraTask(cameraName: cameraName);
     await prefs.remove(PrefKeys.numIgnoredHeartbeatsPrefix + cameraName);
     await prefs.remove(PrefKeys.cameraStatusPrefix + cameraName);
     await prefs.remove(PrefKeys.numHeartbeatNotificationsPrefix + cameraName);

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:privastead_flutter/notifications/heartbeat_task.dart';
 import 'package:privastead_flutter/notifications/scheduler.dart';
 import 'package:privastead_flutter/src/rust/frb_generated.dart';
 import 'package:privastead_flutter/src/rust/api/logger.dart';
@@ -72,8 +73,12 @@ void main() async {
   }
 
   await DownloadScheduler.init();
-  await HeartbeatScheduler.registerAllCameraTasks();
-  await HeartbeatScheduler.scheduleAllCameraOneOffTasks();
+  // (Re-)schedule the recurring heartbeat task.
+  await HeartbeatScheduler.registerPeriodicTask();
+  // Run the heartbeat tasks.
+  Future.delayed(Duration.zero, () {
+    doAllHeartbeatTasks(false);
+  });
 
   QueueProcessor.instance.start();
   QueueProcessor.instance.signalNewFile();
