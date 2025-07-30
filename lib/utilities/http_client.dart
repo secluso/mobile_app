@@ -16,10 +16,15 @@ import 'logger.dart';
 class DownloadResult {
   final File? file;
   final Uint8List? data;
-  final bool
-  deletedFromServer; //TODO: Use this value in the download() function to make exiting a delete failure optional (let caller decide)
 
-  DownloadResult({this.file, this.data, required this.deletedFromServer});
+  DownloadResult({this.file, this.data});
+}
+
+class _SilentException implements Exception {
+  final String message;
+  _SilentException(this.message);
+  @override
+  String toString() => message;
 }
 
 class HttpClientService {
@@ -145,13 +150,12 @@ class HttpClientService {
     return await http.post(url, headers: headers, body: encryptedMessage);
   });
 
-  /// saves as [fileName] then DELETEs the same URL if [delete]
+  /// Downloads file and saves as [fileName]
   Future<Result<DownloadResult>> download({
     String? destinationFile,
     required String cameraName,
     required String type, // As dictated in constants.dart
     required String serverFile, // This is epoch in motion
-    required bool delete,
   }) => _wrap(() async {
     final creds = await _getValidatedCredentials();
     final group = await _groupName(cameraName, type);
@@ -164,9 +168,15 @@ class HttpClientService {
     // Video download action
     final response = await http.get(url, headers: headers);
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to download file: ${response.statusCode} ${response.reasonPhrase}',
-      );
+      if (response.statusCode == 404) {
+        throw _SilentException(
+          'Failed to download file: ${response.statusCode} ${response.reasonPhrase}',
+        );
+      } else {
+        throw Exception(
+          'Failed to download file: ${response.statusCode} ${response.reasonPhrase}',
+        );
+      }      
     }
 
     File? file;
@@ -180,26 +190,45 @@ class HttpClientService {
       await file.writeAsBytes(response.bodyBytes);
     }
 
-    if (delete) {
-      // Delete action TODO: Should we retry if fail?
-      final delResponse = await http.delete(url, headers: headers);
-      if (delResponse.statusCode != 200) {
-        throw Exception(
-          'Failed to delete video from server: ${delResponse.statusCode} ${delResponse.reasonPhrase}',
-        );
-      }
-      Log.d("Successfully deleted $serverFile from server");
-    }
-
     Log.d("Success downloading $serverFile for camera $cameraName");
     if (destinationFile == null) {
       return DownloadResult(
         data: response.bodyBytes,
-        deletedFromServer: delete,
       );
     } else {
-      return DownloadResult(file: file, deletedFromServer: delete);
+      return DownloadResult(file: file);
     }
+  });
+
+  /// Deletes file at URL
+  Future<Result<void>> delete({
+    String? destinationFile,
+    required String cameraName,
+    required String type, // As dictated in constants.dart
+    required String serverFile, // This is epoch in motion
+  }) => _wrap(() async {
+    final creds = await _getValidatedCredentials();
+    final group = await _groupName(cameraName, type);
+    Log.d(
+      "Camera Name: $cameraName, Group Type: $type, Group: $group, Server File: $serverFile",
+    );
+    final url = _buildUrl(creds.serverIp, [group, serverFile]);
+    final headers = await _basicAuthHeaders(creds.username, creds.password);
+
+    // Delete action TODO: Should we retry if fail?
+    final delResponse = await http.delete(url, headers: headers);
+    if (delResponse.statusCode != 200) {
+      if (delResponse.statusCode == 404) {
+        throw _SilentException(
+          'Failed to delete video from server: ${delResponse.statusCode} ${delResponse.reasonPhrase}',
+        );
+      } else {
+        throw Exception(
+          'Failed to delete video from server: ${delResponse.statusCode} ${delResponse.reasonPhrase}',
+        );
+      }
+    }
+    Log.d("Successfully deleted $serverFile from server");
   });
 
   /// POST /fcm_token
@@ -312,9 +341,15 @@ class HttpClientService {
 
     final response = await http.get(url, headers: headers);
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to fetch config response: ${response.statusCode} ${response.reasonPhrase}',
-      );
+      if (response.statusCode == 404) {
+        throw _SilentException(
+          'Failed to fetch config response: ${response.statusCode} ${response.reasonPhrase}',
+        );
+      } else {
+        throw Exception(
+          'Failed to fetch config response: ${response.statusCode} ${response.reasonPhrase}',
+        );
+      }
     } else {
       Log.d("Successfully fetched config response");
     }
@@ -328,7 +363,11 @@ class HttpClientService {
     try {
       return Result.success(await block());
     } catch (e, st) {
-      Log.e("HttpClientService error: $e\n$st");
+      if (e is _SilentException) {
+        Log.d("HttpClientService error: $e");
+      } else {
+        Log.e("HttpClientService error: $e\n$st");
+      }
       return Result.failure(Exception(e.toString()));
     }
   }

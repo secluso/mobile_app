@@ -250,6 +250,23 @@ Future<bool> retrieveVideos(String cameraName) async {
       SharedPreferencesAsync();
   var epoch = (await sharedPreferencesAsync.getInt("epoch$cameraName")) ?? 2;
 
+  // We could crash/be terminated at any point during execution.
+  // We need to perform the following steps carefully so that we
+  // don't end up with a "fatal crash point", i.e., a crash that
+  // will corrupt the MLS channel for good. For example, imagine
+  // that we download the video and delete it from the server and
+  // then we crash before decrypting it. At that point, the video
+  // file, which includes the MLS commit msg, is gone and we won't
+  // be able to decrypt any other videos on that channel anymore.
+  // So here's the order of steps that should work:
+  // 1. Download the video
+  // 2. Decrypt the video (which merges the MLS commit)
+  //    We should not terminate the loop if this step fails
+  //    since that could happen if we previously crashed between
+  //    steps 2 and 3.
+  // 3. Increase epoch number in shared preferences
+  // 4. Delete file from server
+
   while (true) {
     Log.d(
       "Trying to download video for epoch $epoch with $cameraName and encVideo$epoch",
@@ -261,7 +278,6 @@ Future<bool> retrieveVideos(String cameraName) async {
       cameraName: cameraName,
       serverFile: epoch.toString(),
       type: Group.motion,
-      delete: true,
     );
 
     if (result.isSuccess) {
@@ -309,13 +325,20 @@ Future<bool> retrieveVideos(String cameraName) async {
 
           camerasPageKey.currentState?.invalidateThumbnail(cameraName);
         }
-
-        await sharedPreferencesAsync.setInt("epoch$cameraName", epoch + 1);
       }
+
+      await sharedPreferencesAsync.setInt("epoch$cameraName", epoch + 1);
+
+      await HttpClientService.instance.delete(
+        destinationFile: fileName,
+        cameraName: cameraName,
+        serverFile: epoch.toString(),
+        type: Group.motion,
+      );
 
       epoch += 1;
     } else {
-      Log.e("Failed here");
+      Log.d("Failed here");
       // We keep trying until hitting an error. Allows us to catch up on epochs.
       break;
     }

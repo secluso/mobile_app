@@ -114,7 +114,8 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
-    var cameraStatus = prefs.getInt(PrefKeys.cameraStatusPrefix + widget.cameraName) ?? CameraStatus.online;
+    final cameraName = widget.cameraName;
+    var cameraStatus = prefs.getInt(PrefKeys.cameraStatusPrefix + cameraName) ?? CameraStatus.online;
     Log.d("Viewing camera: camera status = $cameraStatus");
 
     if (cameraStatus == CameraStatus.offline ||
@@ -124,11 +125,11 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
       late final String msg;
 
       if (cameraStatus == CameraStatus.offline) {
-        msg = "Camera seems to be offline.";
+        msg = "Camera ($cameraName) seems to be offline.";
       } else if (cameraStatus == CameraStatus.corrupted) {
-        msg = "Camera connection is corrupted. Pair again.";
+        msg = "Camera ($cameraName) is corrupted. Pair again.";
       } else { //possiblyCorrupted
-        msg = "Camera connection is likely corrupted. Pair again.";
+        msg = "Camera ($cameraName) is likely corrupted. Pair again.";
       }
 
       if (mounted) {

@@ -276,8 +276,9 @@ class _ProprietaryCameraConnectDialogState
               ),
               const SizedBox(height: 12),
               Text(
-                'We need to connect to the camera. Ensure it\'s plugged in '
-                'and powered on before proceeding. If the camera has been '
+                'We need to connect to the camera. Ensure the camera is plugged in '
+                'before proceeding. Ensure that Wi-Fi is enabled '
+                'on your device (e.g., smartphone). If the camera has been '
                 'previously paired with the app, make sure to reset it before '
                 'pairing again.',
                 style: Theme.of(

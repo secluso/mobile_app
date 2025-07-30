@@ -820,7 +820,7 @@ class CamerasPageState extends State<CamerasPage>
                                   ),
                                   child:
                                       !serverHasSynced
-                                          ? const Text("Connect To Your Server")
+                                          ? const Text("Connect to Your Server")
                                           : const Text("Add Your First Camera"),
                                 ),
                               ],

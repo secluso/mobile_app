@@ -1,5 +1,6 @@
 import 'package:privastead_flutter/constants.dart';
 import 'package:privastead_flutter/keys.dart';
+import 'package:privastead_flutter/notifications/download_task.dart';
 import 'package:privastead_flutter/notifications/notifications.dart';
 import 'package:privastead_flutter/utilities/http_client.dart';
 import 'package:privastead_flutter/src/rust/api.dart';
@@ -58,14 +59,19 @@ Future<bool> _doHeartbeatTask(String cameraName) async {
     command: encConfigMsg,
   );
 
+  // Download pending videos before processing the heartbeat response.
+  // This prevents thinking that the MLS channel is corrupted if there
+  // are pending video files in the server.
+  await retrieveVideos(cameraName);
+
   await res.fold(
     (_) async {
       
-      for (int i = 0; i < 10 && !successful; i++) {
+      for (int i = 0; i < 30 && !successful; i++) {
         await Future.delayed(Duration(seconds: 2));
         final fetchRes = await HttpClientService.instance.fetchConfigResponse(cameraName: cameraName);
         await fetchRes.fold(
-          (configResponse) async {
+          (configResponse) async {            
             final heartbeatResult = await processHeartbeatConfigResponse(
               cameraName: cameraName,
               configResponse: configResponse,
@@ -92,10 +98,9 @@ Future<bool> _doHeartbeatTask(String cameraName) async {
             } else { //invalid timestamp || invalid epoch || Error
               // Note on "invalid epoch": Ideally, we want to be able to move this case to the previous else if block (i.e, invalid ciphertext).
               // That is, we want "invalid epoch" to clearly show an MLS channel corruption.
-              // However, currently, "invalid epoch" could also happen if there's a race between a heartbeat
+              // However, "invalid epoch" could also happen if there's a race between a heartbeat
               // and motion video trigger on the camera (or even a livestream start on the app).
-              // If we can prevent these races, then we can then be sure that "invalid epoch" means corruption.
-              // To prevent a race with motion, it should be enough to make sure we download and process any pending motion
+              // We've tried to prevent that for motion videos by downloading and processing any pending motion
               // videos in the server before processing the heartbeat response.
               // To prevent a race with livestream, we should disallow livestreaming while we're working on a heartbeat.
               var numIgnoredHeartbeats = prefs.getInt(PrefKeys.numIgnoredHeartbeatsPrefix + cameraName) ?? 0;
@@ -125,14 +130,20 @@ Future<bool> _doHeartbeatTask(String cameraName) async {
 
       if (!successful) {
         // We get here if we could not successfully fetch the response in all the attempts in the loop
-        Log.d('$cameraName: Error fetching heartbeat config response in all attempts.');
-        await prefs.setInt(PrefKeys.cameraStatusPrefix + cameraName, CameraStatus.offline);
-        var numHeartbeatNotifications = prefs.getInt(PrefKeys.numHeartbeatNotificationsPrefix + cameraName) ?? 0;
-        if (numHeartbeatNotifications < 2) {
-          showHeartbeatNotification(
-            cameraName: cameraName,
-            msg: "Camera seems to be offline.",
-          );
+        // If we delete the camera while heartbeat is taking place, we could end up
+        // here after the camera is deleted. So we check that here.
+        final existingSet = prefs.getStringList(PrefKeys.cameraSet) ?? <String>[];
+        if (existingSet.contains(cameraName)) {
+          Log.d('$cameraName: Error fetching heartbeat config response in all attempts.');
+          await prefs.setInt(PrefKeys.cameraStatusPrefix + cameraName, CameraStatus.offline);
+          var numHeartbeatNotifications = prefs.getInt(PrefKeys.numHeartbeatNotificationsPrefix + cameraName) ?? 0;
+          if (numHeartbeatNotifications < 2) {
+            showHeartbeatNotification(
+              cameraName: cameraName,
+              msg: "Camera seems to be offline.",
+            );
+            await prefs.setInt(PrefKeys.numHeartbeatNotificationsPrefix + cameraName, numHeartbeatNotifications + 1);
+          }
         }
       }
     },
