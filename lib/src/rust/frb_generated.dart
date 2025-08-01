@@ -114,6 +114,7 @@ abstract class RustLibApi extends BaseApi {
     required String ssid,
     required String password,
     required String pairingToken,
+    required String credentialsFull,
   });
 
   Future<Uint8List> crateApiGenerateHeartbeatRequestConfigCommand({
@@ -465,6 +466,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required String ssid,
     required String password,
     required String pairingToken,
+    required String credentialsFull,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -477,6 +479,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_String(ssid, serializer);
           sse_encode_String(password, serializer);
           sse_encode_String(pairingToken, serializer);
+          sse_encode_String(credentialsFull, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -497,6 +500,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           ssid,
           password,
           pairingToken,
+          credentialsFull,
         ],
         apiImpl: this,
       ),
@@ -513,6 +517,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       "ssid",
       "password",
       "pairingToken",
+      "credentialsFull",
     ],
   );
 

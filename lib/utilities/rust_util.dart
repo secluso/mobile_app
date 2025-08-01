@@ -15,7 +15,15 @@ Future<bool> addCamera(
   String pairingToken,
 ) async {
   if (!(await initialize(cameraName))) {
-    Log.d("Connect = false");
+    Log.e("Connect = false");
+    return false;
+  }
+
+  final prefs = await SharedPreferences.getInstance();
+  final credentialsFull = prefs.getString(PrefKeys.credentialsFull);
+
+  if (credentialsFull == null) {
+    Log.e("credentialsFull is null");
     return false;
   }
 
@@ -27,6 +35,7 @@ Future<bool> addCamera(
     ssid: ssid,
     password: password,
     pairingToken: pairingToken,
+    credentialsFull: credentialsFull,
   );
 }
 

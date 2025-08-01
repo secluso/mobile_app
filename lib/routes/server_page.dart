@@ -26,7 +26,6 @@ class ServerPage extends StatefulWidget {
 
 class _ServerPageState extends State<ServerPage> {
   String? serverIp;
-  String? credentials;
 
   final TextEditingController _ipController = TextEditingController();
   bool hasSynced = false;
@@ -42,38 +41,23 @@ class _ServerPageState extends State<ServerPage> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       serverIp = prefs.getString(PrefKeys.savedIp);
-      credentials = prefs.getString('credentials');
+      final credentialsFull = prefs.getString(PrefKeys.credentialsFull);
 
       hasSynced =
-          serverIp != null && serverIp!.isNotEmpty && credentials != null;
+          serverIp != null && serverIp!.isNotEmpty && credentialsFull != null;
       _ipController.text = serverIp ?? '';
     });
   }
 
-  Future<void> _saveServerSettings() async {
-    if (serverIp == null || serverIp!.isEmpty) {
-      FocusManager.instance.primaryFocus?.unfocus();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.red,
-          content: Text(
-            "Please enter a valid server IP.",
-            style: TextStyle(color: Colors.white),
-          ),
-        ),
-      );
-      return;
-    }
-
-    Uint8List decodedCredentials = base64Decode(credentials!);
+  Future<void> _saveServerSettings(Uint8List credentialsFull) async {
     try {
-      String credentialsString = utf8.decode(decodedCredentials);
+      String credentialsFullString = utf8.decode(credentialsFull);
 
       // TODO: Check how this handles on failure... bad QR code
-      if (credentialsString.length != Constants.credentialsLength) {
-        var len = credentialsString.length;
+      if (credentialsFullString.length <= (Constants.usernameLength + Constants.passwordLength)) {
+        var len = credentialsFull.length;
         Log.e(
-          "Server Page Save: User credentials should be 28 characters. Current is $len",
+          "Server Page Save: User credentials should be more than 28 characters. Current is $len",
         );
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -82,24 +66,30 @@ class _ServerPageState extends State<ServerPage> {
           ),
         );
 
-        credentials = null;
         return;
       }
 
-      var serverUsername = credentialsString.substring(
+      var serverUsername = credentialsFullString.substring(
         0,
         Constants.usernameLength,
       );
-      var serverPassword = credentialsString.substring(
+      var serverPassword = credentialsFullString.substring(
         Constants.usernameLength,
         Constants.usernameLength + Constants.passwordLength,
       );
+
+      serverIp = credentialsFullString.substring(
+        Constants.usernameLength + Constants.passwordLength,
+        credentialsFullString.length,
+      );
+
+      //TODO: check to make sure serverIp is a valid IP address.
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(PrefKeys.savedIp, serverIp!);
       await prefs.setString(PrefKeys.serverUsername, serverUsername);
       await prefs.setString(PrefKeys.serverPassword, serverPassword);
-      await prefs.setString('credentials', credentials!);
+      await prefs.setString(PrefKeys.credentialsFull, credentialsFullString);
 
       Log.d("Before try upload");
       await PushNotificationService.tryUploadIfNeeded(true);
@@ -140,10 +130,9 @@ class _ServerPageState extends State<ServerPage> {
     await prefs.remove(PrefKeys.savedIp);
     await prefs.remove(PrefKeys.serverUsername);
     await prefs.remove(PrefKeys.serverPassword);
-    await prefs.remove('credentials');
+    await prefs.remove(PrefKeys.credentialsFull);
     _isDialogOpen.value = false;
     setState(() {
-      credentials = null;
       serverIp = null;
       hasSynced = false;
       _ipController.clear();
@@ -152,53 +141,6 @@ class _ServerPageState extends State<ServerPage> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text("Server connection removed.")));
-  }
-
-  void _showServerIpDialog(BuildContext context, Uint8List scannedData) {
-    if (_isDialogOpen.value) return;
-    _isDialogOpen.value = true;
-
-    _ipController.clear();
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text("Enter Server IP Address"),
-          content: TextField(
-            controller: _ipController,
-            decoration: InputDecoration(
-              hintText: "Server IP",
-              border: OutlineInputBorder(),
-            ),
-            keyboardType: TextInputType.numberWithOptions(decimal: true),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                _isDialogOpen.value = false;
-                Navigator.pop(context);
-              },
-              child: Text("Cancel"),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (_ipController.text.isNotEmpty) {
-                  setState(() {
-                    credentials = base64Encode(scannedData);
-                    serverIp = _ipController.text;
-                  });
-                  _isDialogOpen.value = false;
-                  Navigator.pop(context);
-                  _saveServerSettings();
-                }
-              },
-              child: Text("Save"),
-            ),
-          ],
-        );
-      },
-    ).then((_) => _isDialogOpen.value = false);
   }
 
   @override
@@ -351,7 +293,7 @@ class _ServerPageState extends State<ServerPage> {
                                     );
                                     if (rawBytes != null &&
                                         rawBytes.isNotEmpty) {
-                                      _showServerIpDialog(context, rawBytes);
+                                      _saveServerSettings(rawBytes);
 
                                       // Once we return from that, break out completely
                                       break;

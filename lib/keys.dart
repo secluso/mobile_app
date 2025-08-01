@@ -6,6 +6,7 @@ class PrefKeys {
   static const savedIp = "server_ip";
   static const serverUsername = "server_username";
   static const serverPassword = "server_password";
+  static const credentialsFull = "credentials_full";
   static const recordingMotionVideosPrefix = "recording_motion_videos_";
   static const lastRecordingTimestampPrefix = "last_recording_timestamp_";
   static const cameraNameKey = "camera_name_key";

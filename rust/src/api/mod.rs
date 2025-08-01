@@ -97,7 +97,8 @@ pub fn flutter_add_camera(
     standalone: bool,
     ssid: String,
     password: String,
-    pairing_token: String
+    pairing_token: String,
+    credentials_full: String,
 ) -> bool {
     let mut clients_map = CLIENTS.lock().unwrap();
 
@@ -117,6 +118,7 @@ pub fn flutter_add_camera(
             ssid,
             password,
             pairing_token,
+            credentials_full,
         );
     } else {
         info!("CLIENTS map not initialized!");

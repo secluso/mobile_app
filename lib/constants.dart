@@ -6,8 +6,6 @@ class Constants {
       "generic_download_task.lock"; // A lock on the methods that start processing downloads (individual for foreground, bulk download in background...)
   static const numCameraSecretBytes =
       72; // The number of bytes within a camera secret
-  static const credentialsLength =
-      28; // The number of bytes within a user credentials QR code
   static const usernameLength =
       14; // The number of bytes within a user credentials QR code that belong to the user [first X bytes]
   static const passwordLength =

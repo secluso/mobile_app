@@ -84,6 +84,7 @@ class _ProprietaryCameraWaitingDialogState
 
     try {
       var pairingToken = Uuid().v4(config: V4Options(null, CryptoRNG()));
+
       final success = await addCamera(
         widget.cameraName,
         Constants.proprietaryCameraIp,
@@ -132,6 +133,7 @@ class _ProprietaryCameraWaitingDialogState
       sleep(
         const Duration(seconds: 3),
       ); // wait 3 seconds to let phone reconnect to wifi / disassociate from private WiFi network
+
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(PrefKeys.lastCameraAdd, widget.cameraName);
       final status = await HttpClientService.instance.waitForPairingStatus(
