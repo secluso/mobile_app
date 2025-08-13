@@ -178,15 +178,15 @@ String _formatTimestamp(String unixSeconds) {
   return DateFormat('yyyy-MM-dd HH:mm:ss').format(date);
 }
 
-Future<void> showHeartbeatNotification({
+Future<void> showCameraStatusNotification({
   required String cameraName,
   required String msg,
 }) async {
   // Android
   final androidDetails = AndroidNotificationDetails(
-    'repair_channel', // must match channel id below
-    'Re-pair Events',
-    channelDescription: 'Camera re-pair alerts',
+    'camera_status_channel', // must match channel id below
+    'Camera Status Events',
+    channelDescription: 'Camera status alerts',
     importance: Importance.high,
     priority: Priority.high,
     icon: 'ic_notification',
@@ -207,7 +207,7 @@ Future<void> showHeartbeatNotification({
 
   // Cross-platform wrapper
   final details = NotificationDetails(android: androidDetails, iOS: iosDetails);
-  Log.d("Sent re-pair notification!");
+  Log.d("Sent camera status notification!");
 
   await _notifs.show(
     DateTime.now().millisecondsSinceEpoch ~/ 1000, // unique id

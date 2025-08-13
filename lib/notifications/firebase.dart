@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:privastead_flutter/notifications/heartbeat_task.dart';
 import 'package:privastead_flutter/notifications/notifications.dart';
 import 'package:privastead_flutter/notifications/scheduler.dart';
 import 'package:privastead_flutter/utilities/http_client.dart';
@@ -211,6 +212,10 @@ class PushNotificationService {
             if (Platform.isIOS) {
               await addPendingToRepository(cameraName, response);
             }
+
+            // Prevent back-to-back notifications
+            await Future.delayed(const Duration(seconds: 10));
+            updateCameraStatusFcmNotification(response, cameraName);
           }
         }
       }

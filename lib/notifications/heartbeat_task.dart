@@ -81,15 +81,27 @@ Future<bool> _doHeartbeatTask(String cameraName) async {
             if (heartbeatResult == "healthy") {
               Log.d("$cameraName: Processing healthy heartbeat");
               await prefs.setInt(PrefKeys.numIgnoredHeartbeatsPrefix + cameraName, 0);
+              var previousCameraStatus = prefs.getInt(PrefKeys.cameraStatusPrefix + cameraName) ?? CameraStatus.online;
               await prefs.setInt(PrefKeys.cameraStatusPrefix + cameraName, CameraStatus.online);
               await prefs.setInt(PrefKeys.numHeartbeatNotificationsPrefix + cameraName, 0);
+              var sendNotificationGlobal = prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
+
+              if (previousCameraStatus != CameraStatus.online && sendNotificationGlobal) {
+                Log.d("Showing notification: Camera connection is restored.");
+                showCameraStatusNotification(
+                  cameraName: cameraName,
+                  msg: "Camera connection is restored.",
+                );
+              }
             } else if (heartbeatResult == "invalid ciphertext") {
               Log.d("$cameraName: Processing invalid ciphertext heartbeat");
               await prefs.setInt(PrefKeys.cameraStatusPrefix + cameraName, CameraStatus.corrupted);
               var numHeartbeatNotifications = prefs.getInt(PrefKeys.numHeartbeatNotificationsPrefix + cameraName) ?? 0;
+              var sendNotificationGlobal = prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
               // It could be annoying if we keep showing these notifications.
-              if (numHeartbeatNotifications < 2) {
-                showHeartbeatNotification(
+              if (numHeartbeatNotifications < 2 && sendNotificationGlobal) {
+                Log.d("Showing notification: Camera connection is corrupted.");
+                showCameraStatusNotification(
                   cameraName: cameraName,
                   msg: "Camera connection is corrupted. Pair again.",
                 );
@@ -110,8 +122,10 @@ Future<bool> _doHeartbeatTask(String cameraName) async {
               if (numIgnoredHeartbeats >= 2) {
                 await prefs.setInt(PrefKeys.cameraStatusPrefix + cameraName, CameraStatus.possiblyCorrupted);
                 var numHeartbeatNotifications = prefs.getInt(PrefKeys.numHeartbeatNotificationsPrefix + cameraName) ?? 0;
-                if (numHeartbeatNotifications < 2) {
-                  showHeartbeatNotification(
+                var sendNotificationGlobal = prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
+                if (numHeartbeatNotifications < 2 && sendNotificationGlobal) {
+                  Log.d("Showing notification: Camera connection is likely corrupted.");
+                  showCameraStatusNotification(
                     cameraName: cameraName,
                     msg: "Camera connection is likely corrupted. Pair again.",
                   );
@@ -137,8 +151,10 @@ Future<bool> _doHeartbeatTask(String cameraName) async {
           Log.d('$cameraName: Error fetching heartbeat config response in all attempts.');
           await prefs.setInt(PrefKeys.cameraStatusPrefix + cameraName, CameraStatus.offline);
           var numHeartbeatNotifications = prefs.getInt(PrefKeys.numHeartbeatNotificationsPrefix + cameraName) ?? 0;
-          if (numHeartbeatNotifications < 2) {
-            showHeartbeatNotification(
+          var sendNotificationGlobal = prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
+          if (numHeartbeatNotifications < 2 && sendNotificationGlobal) {
+            Log.d("Showing notification: Camera is offline.");
+            showCameraStatusNotification(
               cameraName: cameraName,
               msg: "Camera seems to be offline.",
             );
@@ -153,6 +169,47 @@ Future<bool> _doHeartbeatTask(String cameraName) async {
   );
 
   return successful;
+}
+
+Future<void> updateCameraStatusFcmNotification(String fcmTimestampString, String cameraName) async {
+  final prefs = await SharedPreferences.getInstance();
+  var cameraStatus = prefs.getInt(PrefKeys.cameraStatusPrefix + cameraName) ?? CameraStatus.online;
+  Log.d("updateCameraStatusFcmNotification: camera status = $cameraStatus");
+
+  if (cameraStatus == CameraStatus.offline) {   
+    final lastHeartbeatTimestamp = prefs.getInt(PrefKeys.lastHeartbeatTimestampPrefix + cameraName) ?? 0;
+    final fcmTimestamp = int.tryParse(fcmTimestampString);
+    
+    if (lastHeartbeatTimestamp != 0 && fcmTimestamp! > lastHeartbeatTimestamp) { 
+      await prefs.setInt(PrefKeys.cameraStatusPrefix + cameraName, CameraStatus.online);
+      var sendNotificationGlobal = prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
+      if (sendNotificationGlobal) {
+        Log.d("Showing notification: Camera connection is restored.");
+        showCameraStatusNotification(
+          cameraName: cameraName,
+          msg: "Camera connection is restored.",
+        ); 
+      }
+    }
+  }
+}
+
+Future<void> updateCameraStatusLivestream(String cameraName) async {
+  final prefs = await SharedPreferences.getInstance();
+  var cameraStatus = prefs.getInt(PrefKeys.cameraStatusPrefix + cameraName) ?? CameraStatus.online;
+  Log.d("updateCameraStatusLivestream: camera status = $cameraStatus");
+
+  if (cameraStatus == CameraStatus.offline) {  
+    await prefs.setInt(PrefKeys.cameraStatusPrefix + cameraName, CameraStatus.online);
+    var sendNotificationGlobal = prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
+    if (sendNotificationGlobal) {
+      Log.d("Showing notification: Camera connection is restored.");
+      showCameraStatusNotification(
+        cameraName: cameraName,
+        msg: "Camera connection is restored.",
+      );
+    }
+  }
 }
 
 Future<void> doAllHeartbeatTasks(bool inBackground) async {

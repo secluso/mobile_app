@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';
 import 'package:privastead_flutter/keys.dart';
+import 'package:privastead_flutter/notifications/heartbeat_task.dart';
 import 'package:privastead_flutter/utilities/byte_stream_player.dart';
 import 'package:privastead_flutter/utilities/http_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -189,6 +190,7 @@ class _LivestreamPageState extends State<LivestreamPage>
 
       await res.fold(
         (enc) async {
+          updateCameraStatusLivestream(cameraName);
           final dec = await livestreamDecrypt(
             cameraName: cameraName,
             data: enc,
