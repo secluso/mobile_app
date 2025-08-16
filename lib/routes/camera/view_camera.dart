@@ -307,7 +307,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
             onPressed:
                 () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const SettingsPage()),
+                  MaterialPageRoute(builder: (_) => SettingsPage(cameraName: widget.cameraName)),
                 ),
           ),
         ],

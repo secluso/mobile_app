@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:privastead_flutter/keys.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key});
+  final String cameraName;
+  const SettingsPage({super.key, required this.cameraName});
 
   @override
   _SettingsPageState createState() => _SettingsPageState();
@@ -30,6 +33,22 @@ class _SettingsPageState extends State<SettingsPage> {
     'Pets',
   ];
   List<String> selectedNotificationEvents = ['All'];
+
+  String _firmwareVersion = "Not known yet";
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFirmwareVersion();
+  }
+
+  Future<void> _loadFirmwareVersion() async {
+    final prefs = await SharedPreferences.getInstance();
+    final version = prefs.getString(PrefKeys.firmwareVersionPrefix + widget.cameraName) ?? "Not known yet";
+    setState(() {
+      _firmwareVersion = version;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -209,6 +228,22 @@ class _SettingsPageState extends State<SettingsPage> {
               child: const Text(
                 "Save Settings",
                 style: TextStyle(fontSize: 16, color: Colors.white),
+              ),
+            ),
+            
+            const SizedBox(height: 48),
+
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade400),
+              ),
+              child: Text(
+                "Camera's Privastead firmware version:  $_firmwareVersion",
+                style: const TextStyle(fontSize: 14),
               ),
             ),
           ],

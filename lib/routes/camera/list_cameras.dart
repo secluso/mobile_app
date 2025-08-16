@@ -431,6 +431,7 @@ class CamerasPageState extends State<CamerasPage>
     await prefs.remove(PrefKeys.cameraStatusPrefix + cameraName);
     await prefs.remove(PrefKeys.numHeartbeatNotificationsPrefix + cameraName);
     await prefs.remove(PrefKeys.lastHeartbeatTimestampPrefix + cameraName);
+    await prefs.remove(PrefKeys.firmwareVersionPrefix + cameraName);
 
     await deregisterCamera(cameraName: cameraName);
 

@@ -5,7 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:privastead_flutter/keys.dart';
 
-Future<bool> addCamera(
+Future<String> addCamera(
   String cameraName,
   String ip,
   List<int> secret,
@@ -16,7 +16,7 @@ Future<bool> addCamera(
 ) async {
   if (!(await initialize(cameraName))) {
     Log.e("Connect = false");
-    return false;
+    return "Error";
   }
 
   final prefs = await SharedPreferences.getInstance();
@@ -24,7 +24,7 @@ Future<bool> addCamera(
 
   if (credentialsFull == null) {
     Log.e("credentialsFull is null");
-    return false;
+    return "Error";
   }
 
   return await flutterAddCamera(

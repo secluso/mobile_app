@@ -85,7 +85,7 @@ class _ProprietaryCameraWaitingDialogState
     try {
       var pairingToken = Uuid().v4(config: V4Options(null, CryptoRNG()));
 
-      final success = await addCamera(
+      final firmwareVersion = await addCamera(
         widget.cameraName,
         Constants.proprietaryCameraIp,
         List<int>.from(widget.qrCode),
@@ -95,7 +95,7 @@ class _ProprietaryCameraWaitingDialogState
         pairingToken,
       );
 
-      if (!success) {
+      if (firmwareVersion == "Error") {
         setState(
           () => _errorMessage = "Failed to send pairing data to camera.",
         );
@@ -145,7 +145,7 @@ class _ProprietaryCameraWaitingDialogState
       if (!mounted) return;
 
       if (status.isSuccess && status.value! == "paired") {
-        _onPairingConfirmed();
+        _onPairingConfirmed(firmwareVersion);
       } else {
         setState(() => _timedOut = true);
       }
@@ -161,7 +161,7 @@ class _ProprietaryCameraWaitingDialogState
     }
   }
 
-  void _onPairingConfirmed() async {
+  void _onPairingConfirmed(String firmwareVersion) async {
     if (!mounted || _pairingCompleted) return;
     // TODO: should these two lines go before the mounted check? what happens if this occurs?
 
@@ -184,6 +184,7 @@ class _ProprietaryCameraWaitingDialogState
       await prefs.setInt(PrefKeys.cameraStatusPrefix + widget.cameraName, CameraStatus.online);
       await prefs.setInt(PrefKeys.numHeartbeatNotificationsPrefix + widget.cameraName, 0);
       await prefs.setInt(PrefKeys.lastHeartbeatTimestampPrefix + widget.cameraName, 0);
+      await prefs.setString(PrefKeys.firmwareVersionPrefix + widget.cameraName, firmwareVersion);
     }
 
     final box = AppStores.instance.cameraStore.box<Camera>();

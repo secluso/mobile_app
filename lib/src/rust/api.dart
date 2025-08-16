@@ -27,7 +27,7 @@ Future<String> decryptVideo({
   encFilename: encFilename,
 );
 
-Future<bool> flutterAddCamera({
+Future<String> flutterAddCamera({
   required String cameraName,
   required String ip,
   required List<int> secret,

@@ -99,7 +99,7 @@ pub fn flutter_add_camera(
     password: String,
     pairing_token: String,
     credentials_full: String,
-) -> bool {
+) -> String {
     let mut clients_map = CLIENTS.lock().unwrap();
 
     if let Some(map) = clients_map.as_mut() {
@@ -124,7 +124,7 @@ pub fn flutter_add_camera(
         info!("CLIENTS map not initialized!");
     }
 
-    false
+    "Error".to_string()
 }
 
 #[flutter_rust_bridge::frb(init)]

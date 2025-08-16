@@ -52,11 +52,13 @@ class _CameraSetupStatusDialogState extends State<CameraSetupStatusDialog> {
 
     Log.d("CameraSetup: begin for $cameraName");
 
-    addCamera(cameraName, ip, qrCode, false, '', '', '').then((success) async {
+    addCamera(cameraName, ip, qrCode, false, '', '', '').then((firmwareVersion) async {
       if (!mounted) return;
 
+      final success = (firmwareVersion != "Error");
+
       if (success) {
-        await _persistCamera(cameraName);
+        await _persistCamera(cameraName, firmwareVersion);
       }
 
       setState(() => _success = success);
@@ -69,7 +71,7 @@ class _CameraSetupStatusDialogState extends State<CameraSetupStatusDialog> {
     });
   }
 
-  Future<void> _persistCamera(String cameraName) async {
+  Future<void> _persistCamera(String cameraName, String firmwareVersion) async {
     final prefs = await SharedPreferences.getInstance();
     prefs.setBool("first_time_$cameraName", true);
 
@@ -82,6 +84,7 @@ class _CameraSetupStatusDialogState extends State<CameraSetupStatusDialog> {
       await prefs.setInt(PrefKeys.cameraStatusPrefix + cameraName, CameraStatus.online);
       await prefs.setInt(PrefKeys.numHeartbeatNotificationsPrefix + cameraName, 0);
       await prefs.setInt(PrefKeys.lastHeartbeatTimestampPrefix + cameraName, 0);
+      await prefs.setString(PrefKeys.firmwareVersionPrefix + cameraName, firmwareVersion);
     }
 
     final box = AppStores.instance.cameraStore.box<Camera>();

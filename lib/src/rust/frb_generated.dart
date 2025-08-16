@@ -106,7 +106,7 @@ abstract class RustLibApi extends BaseApi {
     required List<int> data,
   });
 
-  Future<bool> crateApiFlutterAddCamera({
+  Future<String> crateApiFlutterAddCamera({
     required String cameraName,
     required String ip,
     required List<int> secret,
@@ -458,7 +458,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<bool> crateApiFlutterAddCamera({
+  Future<String> crateApiFlutterAddCamera({
     required String cameraName,
     required String ip,
     required List<int> secret,
@@ -488,7 +488,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_bool,
+          decodeSuccessData: sse_decode_String,
           decodeErrorData: null,
         ),
         constMeta: kCrateApiFlutterAddCameraConstMeta,

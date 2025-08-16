@@ -31,6 +31,18 @@ class RustBridgeHelper {
   }
 }
 
+/// Splits [input] into two parts: before and after the first underscore.
+/// If there's no underscore, returns (input, "").
+List<String> splitAtUnderscore(String input) {
+  final index = input.indexOf('_');
+  if (index == -1) {
+    return [input, ""];
+  }
+  final before = input.substring(0, index);
+  final after = input.substring(index + 1);
+  return [before, after];
+}
+
 Future<bool> _doHeartbeatTask(String cameraName) async {
   Log.d("$cameraName: Starting to work (heartbeat)");
   
@@ -78,12 +90,25 @@ Future<bool> _doHeartbeatTask(String cameraName) async {
               expectedTimestamp: timestamp,
             );
             Log.d("$cameraName: heartbeatResult = $heartbeatResult");
-            if (heartbeatResult == "healthy") {
+            final heartbeatResultParts = splitAtUnderscore(heartbeatResult);
+            
+            if (heartbeatResultParts[0] == "healthy") {
               Log.d("$cameraName: Processing healthy heartbeat");
               await prefs.setInt(PrefKeys.numIgnoredHeartbeatsPrefix + cameraName, 0);
               var previousCameraStatus = prefs.getInt(PrefKeys.cameraStatusPrefix + cameraName) ?? CameraStatus.online;
               await prefs.setInt(PrefKeys.cameraStatusPrefix + cameraName, CameraStatus.online);
               await prefs.setInt(PrefKeys.numHeartbeatNotificationsPrefix + cameraName, 0);
+              final firmwareVersion = heartbeatResultParts[1];
+              if (firmwareVersion != "") {
+                final currentFirmware = prefs.getString(PrefKeys.firmwareVersionPrefix + cameraName) ?? "";
+                if (currentFirmware != firmwareVersion) {
+                  showCameraStatusNotification(
+                    cameraName: cameraName,
+                    msg: "Camera's Privastead firmware version has been updated to $firmwareVersion.",
+                  );
+                }
+                await prefs.setString(PrefKeys.firmwareVersionPrefix + cameraName, heartbeatResultParts[1]);
+              }
               var sendNotificationGlobal = prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
 
               if (previousCameraStatus != CameraStatus.online && sendNotificationGlobal) {
@@ -93,7 +118,7 @@ Future<bool> _doHeartbeatTask(String cameraName) async {
                   msg: "Camera connection is restored.",
                 );
               }
-            } else if (heartbeatResult == "invalid ciphertext") {
+            } else if (heartbeatResultParts[0] == "invalid ciphertext") {
               Log.d("$cameraName: Processing invalid ciphertext heartbeat");
               await prefs.setInt(PrefKeys.cameraStatusPrefix + cameraName, CameraStatus.corrupted);
               var numHeartbeatNotifications = prefs.getInt(PrefKeys.numHeartbeatNotificationsPrefix + cameraName) ?? 0;
