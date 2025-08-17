@@ -66,7 +66,7 @@ class HttpClientService {
 
     var jsonContent = jsonEncode(MotionPairs(convertedCameraList));
     Log.d("JSON content: $jsonContent");
-    final url = _buildUrl(creds.serverIp, ['bulkCheck']);
+    final url = _buildUrl(creds.serverAddr, ['bulkCheck']);
     final headers = await _basicAuthHeaders(
       creds.username,
       creds.password,
@@ -99,7 +99,7 @@ class HttpClientService {
   Future<Result<String>> waitForPairingStatus({
     required String pairingToken,
   }) => _wrap(() async {
-    final url = _buildUrl((await _getValidatedCredentials()).serverIp, [
+    final url = _buildUrl((await _getValidatedCredentials()).serverAddr, [
       'pair',
     ]);
     final headers = await _basicAuthHeaders(
@@ -144,7 +144,7 @@ class HttpClientService {
       cameraName: cameraName,
       data: encodedContent,
     );
-    final url = _buildUrl(creds.serverIp, [configGroup, 'app']);
+    final url = _buildUrl(creds.serverAddr, [configGroup, 'app']);
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
     return await http.post(url, headers: headers, body: encryptedMessage);
@@ -162,7 +162,7 @@ class HttpClientService {
     Log.d(
       "Camera Name: $cameraName, Group Type: $type, Group: $group, Server File: $serverFile",
     );
-    final url = _buildUrl(creds.serverIp, [group, serverFile]);
+    final url = _buildUrl(creds.serverAddr, [group, serverFile]);
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
     // Video download action
@@ -212,7 +212,7 @@ class HttpClientService {
     Log.d(
       "Camera Name: $cameraName, Group Type: $type, Group: $group, Server File: $serverFile",
     );
-    final url = _buildUrl(creds.serverIp, [group, serverFile]);
+    final url = _buildUrl(creds.serverAddr, [group, serverFile]);
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
     // Delete action TODO: Should we retry if fail?
@@ -235,7 +235,7 @@ class HttpClientService {
   Future<Result<void>> uploadFcmToken(String token) => _wrap(() async {
     final creds = await _getValidatedCredentials();
 
-    final url = _buildUrl(creds.serverIp, ['fcm_token']);
+    final url = _buildUrl(creds.serverAddr, ['fcm_token']);
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
     final response = await http.post(url, headers: headers, body: token);
@@ -254,7 +254,7 @@ class HttpClientService {
     final creds = await _getValidatedCredentials();
 
     final group = await _groupName(cameraName, Group.livestream);
-    final url = _buildUrl(creds.serverIp, ['livestream', group]);
+    final url = _buildUrl(creds.serverAddr, ['livestream', group]);
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
     final response = await http.post(url, headers: headers);
@@ -274,7 +274,7 @@ class HttpClientService {
     final creds = await _getValidatedCredentials();
 
     final group = await _groupName(cameraName, Group.livestream);
-    final url = _buildUrl(creds.serverIp, ['livestream', group, chunkNumber]);
+    final url = _buildUrl(creds.serverAddr, ['livestream', group, chunkNumber]);
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
     final response = await http.get(url, headers: headers);
@@ -285,7 +285,7 @@ class HttpClientService {
     }
 
     // Delete action
-    final delUrl = _buildUrl(creds.serverIp, [group, chunkNumber]);
+    final delUrl = _buildUrl(creds.serverAddr, [group, chunkNumber]);
     final delResponse = await http.delete(delUrl, headers: headers);
     if (delResponse.statusCode != 200) {
       throw Exception(
@@ -300,7 +300,7 @@ class HttpClientService {
   Future<Result<void>> livestreamEnd(String cameraName) => _wrap(() async {
     final creds = await _getValidatedCredentials();
     final group = await _groupName(cameraName, Group.livestream);
-    final url = _buildUrl(creds.serverIp, ['livestream_end', group]);
+    final url = _buildUrl(creds.serverAddr, ['livestream_end', group]);
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
     final response = await http.post(url, headers: headers);
@@ -315,7 +315,7 @@ class HttpClientService {
   Future<Result<void>> configCommand({required String cameraName, required Object command}) => _wrap(() async {
     final creds = await _getValidatedCredentials();
     final group = await _groupName(cameraName, Group.config);
-    final url = _buildUrl(creds.serverIp, ['config', group]);
+    final url = _buildUrl(creds.serverAddr, ['config', group]);
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
     final response = await http.post(url, headers: headers, body: command);
@@ -336,7 +336,7 @@ class HttpClientService {
     final creds = await _getValidatedCredentials();
 
     final group = await _groupName(cameraName, Group.config);
-    final url = _buildUrl(creds.serverIp, ['config_response', group]);
+    final url = _buildUrl(creds.serverAddr, ['config_response', group]);
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
     final response = await http.get(url, headers: headers);
@@ -377,9 +377,9 @@ class HttpClientService {
     return prefs.getString(key);
   }
 
-  Uri _buildUrl(String serverIp, List<dynamic> segments) {
+  Uri _buildUrl(String serverAddr, List<dynamic> segments) {
     final path = segments.join('/');
-    return Uri.parse('http://$serverIp:8080/$path');
+    return Uri.parse('$serverAddr/$path');
   }
 
   Future<Map<String, String>> _basicAuthHeaders(
@@ -407,17 +407,17 @@ class HttpClientService {
     return dir;
   }
 
-  Future<({String serverIp, String username, String password})>
+  Future<({String serverAddr, String username, String password})>
   _getValidatedCredentials() async {
-    final serverIp = await _pref(PrefKeys.savedIp);
+    final serverAddr = await _pref(PrefKeys.serverAddr);
     final username = await _pref(PrefKeys.serverUsername);
     final password = await _pref(PrefKeys.serverPassword);
 
-    if ([serverIp, username, password].contains(null)) {
+    if ([serverAddr, username, password].contains(null)) {
       throw Exception('Missing server credentials');
     }
 
-    return (serverIp: serverIp!, username: username!, password: password!);
+    return (serverAddr: serverAddr!, username: username!, password: password!);
   }
 
   Future<String> _groupName(String cameraName, String clientTag) async {

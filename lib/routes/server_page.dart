@@ -25,7 +25,7 @@ class ServerPage extends StatefulWidget {
 }
 
 class _ServerPageState extends State<ServerPage> {
-  String? serverIp;
+  String? serverAddr;
 
   final TextEditingController _ipController = TextEditingController();
   bool hasSynced = false;
@@ -40,12 +40,12 @@ class _ServerPageState extends State<ServerPage> {
   Future<void> _loadServerSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      serverIp = prefs.getString(PrefKeys.savedIp);
+      serverAddr = prefs.getString(PrefKeys.serverAddr);
       final credentialsFull = prefs.getString(PrefKeys.credentialsFull);
 
       hasSynced =
-          serverIp != null && serverIp!.isNotEmpty && credentialsFull != null;
-      _ipController.text = serverIp ?? '';
+          serverAddr != null && serverAddr!.isNotEmpty && credentialsFull != null;
+      _ipController.text = serverAddr ?? '';
     });
   }
 
@@ -78,7 +78,7 @@ class _ServerPageState extends State<ServerPage> {
         Constants.usernameLength + Constants.passwordLength,
       );
 
-      serverIp = credentialsFullString.substring(
+      serverAddr = credentialsFullString.substring(
         Constants.usernameLength + Constants.passwordLength,
         credentialsFullString.length,
       );
@@ -86,7 +86,7 @@ class _ServerPageState extends State<ServerPage> {
       //TODO: check to make sure serverIp is a valid IP address.
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(PrefKeys.savedIp, serverIp!);
+      await prefs.setString(PrefKeys.serverAddr, serverAddr!);
       await prefs.setString(PrefKeys.serverUsername, serverUsername);
       await prefs.setString(PrefKeys.serverPassword, serverPassword);
       await prefs.setString(PrefKeys.credentialsFull, credentialsFullString);
@@ -127,13 +127,13 @@ class _ServerPageState extends State<ServerPage> {
 
   Future<void> _removeServerConnection() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(PrefKeys.savedIp);
+    await prefs.remove(PrefKeys.serverAddr);
     await prefs.remove(PrefKeys.serverUsername);
     await prefs.remove(PrefKeys.serverPassword);
     await prefs.remove(PrefKeys.credentialsFull);
     _isDialogOpen.value = false;
     setState(() {
-      serverIp = null;
+      serverAddr = null;
       hasSynced = false;
       _ipController.clear();
     });
@@ -215,7 +215,7 @@ class _ServerPageState extends State<ServerPage> {
                       ),
                       SizedBox(height: 8),
                       Text(
-                        "Server IP:",
+                        "Server Address:",
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
@@ -223,7 +223,7 @@ class _ServerPageState extends State<ServerPage> {
                         ),
                       ),
                       Text(
-                        serverIp ?? "",
+                        serverAddr ?? "",
                         style: TextStyle(
                           fontSize: 16,
                           color: isDarkMode ? Colors.white70 : Colors.black87,

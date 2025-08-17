@@ -52,11 +52,12 @@ Future<bool> initialize(String cameraName) async {
 
 Future<bool> initializeCore(String cameraName, bool firstTime) async {
   final SharedPreferences prefs = await SharedPreferences.getInstance();
-  final String serverIP =
-      prefs.getString(PrefKeys.savedIp) ??
+  //FIXME: do we still need these checks on serverAddr and user credentials?
+  final String serverAddr =
+      prefs.getString(PrefKeys.serverAddr) ??
       "Error"; // TODO: Make this not a static field
-  if (serverIP == "Error") {
-    Log.e("Error: Failed to retrieve server IP address");
+  if (serverAddr == "Error") {
+    Log.e("Error: Failed to retrieve server address");
     return false;
   }
 
