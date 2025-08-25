@@ -14,6 +14,7 @@ Future<String> addCamera(
   String password,
   String pairingToken,
 ) async {
+  Log.d("In addCamera");
   if (!(await initialize(cameraName))) {
     Log.e("Connect = false");
     return "Error";
@@ -26,6 +27,8 @@ Future<String> addCamera(
     Log.e("credentialsFull is null");
     return "Error";
   }
+
+  Log.d("Calling flutter add camera");
 
   return await flutterAddCamera(
     cameraName: cameraName,

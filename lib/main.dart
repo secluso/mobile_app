@@ -4,6 +4,7 @@ import 'package:privastead_flutter/notifications/scheduler.dart';
 import 'package:privastead_flutter/src/rust/frb_generated.dart';
 import 'package:privastead_flutter/src/rust/api/logger.dart';
 import 'package:privastead_flutter/utilities/rust_util.dart';
+import 'package:privastead_flutter/notifications/thumbnails.dart';
 import 'routes/home_page.dart';
 import "routes/theme_provider.dart";
 import 'package:provider/provider.dart';
@@ -67,7 +68,9 @@ void main() async {
 
   // If we face some kind of HTTP error, we don't want this to interrupt our flow
   try {
+    // TODO: Should all of these be awaited? It might mess with how long our app takes to start up. Maybe we should decouple most of these tasks from the UI processing thread
     await _checkForUpdates(); // Must come before download scheduler
+    await ThumbnailManager.checkThumbnailsForAll();
   } catch (e) {
     Log.d("Caught error - $e");
   }
@@ -122,8 +125,8 @@ Future<void> _initAllCameras() async {
 
 /// Query server for cameras that have video updates and proceed to queue them for download
 Future<void> _checkForUpdates() async {
-  final cameraNamesResult =
-      await HttpClientService.instance.bulkCheckAvailableCameras();
+  final cameraNamesResult = await HttpClientService.instance
+      .bulkCheckAvailableCameras(0);
 
   if (cameraNamesResult.isFailure ||
       (cameraNamesResult.isSuccess && cameraNamesResult.value!.isEmpty)) {
@@ -202,6 +205,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       PushNotificationService.tryUploadIfNeeded(false);
       _initAllCameras(); // I'm not sure if this is necessary or not. It could be good to periodically check for initialization though.
       _checkForUpdates();
+      ThumbnailManager.checkThumbnailsForAll();
       QueueProcessor.instance
           .signalNewFile(); // Try to process any new uploads now
     }

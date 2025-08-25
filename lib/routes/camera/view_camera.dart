@@ -49,8 +49,8 @@ String repackageVideoTitle(String videoFileName) {
 class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
   late Box<Video> _videoBox;
   final List<Video> _videos = [];
-
-  final _ch = MethodChannel('privastead.com/thumbnail');
+  final Map<String, Uint8List?> _videoThumbCache = {};
+  final Map<String, Future<Uint8List?>> _videoThumbFutures = {};
 
   static const int _pageSize = 20;
   int _offset = 0;
@@ -115,30 +115,29 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
     final cameraName = widget.cameraName;
-    var cameraStatus = prefs.getInt(PrefKeys.cameraStatusPrefix + cameraName) ?? CameraStatus.online;
+    var cameraStatus =
+        prefs.getInt(PrefKeys.cameraStatusPrefix + cameraName) ??
+        CameraStatus.online;
     Log.d("Viewing camera: camera status = $cameraStatus");
 
     if (cameraStatus == CameraStatus.offline ||
-      cameraStatus == CameraStatus.corrupted ||
-      cameraStatus == CameraStatus.possiblyCorrupted) {
-      
+        cameraStatus == CameraStatus.corrupted ||
+        cameraStatus == CameraStatus.possiblyCorrupted) {
       late final String msg;
 
       if (cameraStatus == CameraStatus.offline) {
         msg = "Camera ($cameraName) seems to be offline.";
       } else if (cameraStatus == CameraStatus.corrupted) {
         msg = "Camera ($cameraName) is corrupted. Pair again.";
-      } else { //possiblyCorrupted
+      } else {
+        //possiblyCorrupted
         msg = "Camera ($cameraName) is likely corrupted. Pair again.";
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              msg,
-              style: TextStyle(color: Colors.white),
-            ),
+            content: Text(msg, style: TextStyle(color: Colors.white)),
             backgroundColor: Colors.red[700],
             behavior: SnackBarBehavior.floating,
           ),
@@ -210,29 +209,42 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     HapticFeedback.heavyImpact();
     _confetti.play();
 
-    // Query all videos for this camera
     final query =
         _videoBox.query(Video_.camera.equals(widget.cameraName)).build();
     final videosToDelete = query.find();
     query.close();
 
     final dir = await getApplicationDocumentsDirectory();
+    final base = '${dir.path}/camera_dir_${widget.cameraName}';
 
     for (final v in videosToDelete) {
+      // delete mp4
       if (v.received) {
-        final videoPath = '${dir.path}/camera_dir_${v.camera}/${v.video}';
-        final file = File(videoPath);
-        if (await file.exists()) {
+        final mp4 = File('$base/${v.video}');
+        if (await mp4.exists()) {
           try {
-            await file.delete();
+            await mp4.delete();
           } catch (e) {
-            Log.e('Error deleting file $videoPath: $e');
+            Log.e('Error deleting $mp4: $e');
           }
         }
       }
+
+      // delete png neighbor
+      final ts = _timestampFromVideo(v.video);
+      if (ts != null) {
+        final png = File('$base/$ts.png');
+        if (await png.exists()) {
+          try {
+            await png.delete();
+          } catch (_) {}
+        }
+        // also drop from cache
+        _videoThumbCache.remove('${v.camera}/$ts');
+        _videoThumbFutures.remove('${v.camera}/$ts');
+      }
     }
 
-    // Bulk delete all matching from DB
     _videoBox.removeMany(videosToDelete.map((v) => v.id).toList());
 
     setState(() {
@@ -249,29 +261,43 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
       ),
     );
 
+    // nuke any residual caches
+    _videoThumbCache.clear();
+    _videoThumbFutures.clear();
+
     reloadVideos();
   }
 
   void _deleteOne(Video v, int index) async {
+    final dir = await getApplicationDocumentsDirectory();
+
     if (v.received) {
-      Log.d("Deleting one video file from documents");
-      final dir = await getApplicationDocumentsDirectory();
       final videoPath = '${dir.path}/camera_dir_${v.camera}/${v.video}';
       final file = File(videoPath);
-
       if (await file.exists()) {
         try {
           await file.delete();
         } catch (e) {
           Log.e('Error deleting file: $e');
         }
-      } else {
-        Log.d('Video file not found: $videoPath');
+      }
+
+      final ts = _timestampFromVideo(v.video);
+      if (ts != null) {
+        final thumbPath = '${dir.path}/camera_dir_${v.camera}/$ts.png';
+        final thumb = File(thumbPath);
+        if (await thumb.exists()) {
+          try {
+            await thumb.delete();
+          } catch (_) {}
+        }
       }
     }
 
+    _invalidateVideoThumb(v.camera, v.video);
     _videoBox.remove(v.id);
     setState(() => _videos.removeAt(index));
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Video deleted'),
@@ -279,6 +305,69 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
         duration: Duration(seconds: 2),
       ),
     );
+  }
+
+  String? _timestampFromVideo(String videoFile) {
+    // expects "video_<unix>.mp4"
+    if (!videoFile.startsWith("video_") || !videoFile.endsWith(".mp4"))
+      return null;
+    return videoFile.substring(
+      6,
+      videoFile.length - 4,
+    ); // strip "video_" and ".mp4"
+  }
+
+  Future<String?> _findPngForVideo(String cameraName, String videoFile) async {
+    final ts = _timestampFromVideo(videoFile);
+    if (ts == null) return null;
+
+    final docs = await getApplicationDocumentsDirectory();
+    final path = "${docs.path}/camera_dir_$cameraName/$ts.png";
+    final f = File(path);
+    return await f.exists() ? path : null;
+  }
+
+  Future<Uint8List?> _loadVideoThumbBytes(String cameraName, String videoFile) {
+    final ts = _timestampFromVideo(videoFile);
+    if (ts == null) return Future.value(null);
+    final key = "$cameraName/$ts";
+
+    if (_videoThumbCache.containsKey(key)) {
+      return Future.value(_videoThumbCache[key]);
+    }
+    if (_videoThumbFutures.containsKey(key)) {
+      return _videoThumbFutures[key]!;
+    }
+
+    final fut = () async {
+      try {
+        final path = await _findPngForVideo(cameraName, videoFile);
+        if (path == null) {
+          _videoThumbCache[key] = null; // remember miss
+          return null;
+        }
+        final bytes = await File(path).readAsBytes();
+        _videoThumbCache[key] = bytes;
+        return bytes;
+      } catch (e) {
+        Log.e("Video thumb load error [$key]: $e");
+        _videoThumbCache[key] = null;
+        return null;
+      } finally {
+        _videoThumbFutures.remove(key);
+      }
+    }();
+
+    _videoThumbFutures[key] = fut;
+    return fut;
+  }
+
+  void _invalidateVideoThumb(String cameraName, String videoFile) {
+    final ts = _timestampFromVideo(videoFile);
+    if (ts == null) return;
+    final key = "$cameraName/$ts";
+    _videoThumbCache.remove(key);
+    _videoThumbFutures.remove(key);
   }
 
   IconData? _detectionIcon(String d) =>
@@ -307,7 +396,9 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
             onPressed:
                 () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => SettingsPage(cameraName: widget.cameraName)),
+                  MaterialPageRoute(
+                    builder: (_) => SettingsPage(cameraName: widget.cameraName),
+                  ),
                 ),
           ),
         ],
@@ -479,63 +570,28 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
   }
 
   Future<Widget> _thumbPlaceholder(String cameraName, String videoFile) async {
-    if (Platform.isAndroid) {
-      // For android, I skipped the thumbnail generation due to replacement of this mechanism with a frame from the camera's internal sent separately going to be used in the future
-      Log.d("Returning android placeholder");
+    final bytes = await _loadVideoThumbBytes(cameraName, videoFile);
+
+    if (bytes == null) {
       return SizedBox(
         width: 80,
         height: 80,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(8),
-          child: const Image(
-            image: AssetImage('assets/android_thumbnail_placeholder.jpeg'),
+          child: Container(
+            color: Colors.grey[300],
+            child: const Icon(Icons.videocam, color: Colors.black54),
           ),
         ),
       );
     }
-
-    final fullVideoPath =
-        (await getApplicationDocumentsDirectory()).path +
-        "/camera_dir_" +
-        cameraName +
-        "/" +
-        videoFile;
-
-    final file = File(fullVideoPath);
-    if (!await file.exists()) {
-      return Container(
-        width: 80,
-        height: 80,
-        color: Colors.grey,
-        child: const Icon(Icons.videocam_off),
-      );
-    }
-
-    Log.d("[Thumbnail] Generating thumbnail... 2");
-
-    var thumbnailData = null;
-    try {
-      // Send request to iOS native code to generate thumbnail (due to lack of good Flutter option)
-      Uint8List? bytes = await _ch.invokeMethod<Uint8List>(
-        'generateThumbnail',
-        {'path': fullVideoPath, 'fullSize': false},
-      );
-      thumbnailData = bytes!;
-    } on PlatformException catch (e) {
-      Log.e('Thumbnail error: ${e.code} – ${e.message}');
-    }
-
-    Log.d("Done generating thumbnail");
 
     return SizedBox(
       width: 80,
       height: 80,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child:
-            thumbnailData != null
-                ? Image.memory(thumbnailData, fit: BoxFit.cover)
-                : Container(color: Colors.grey[300]),
+        child: Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true),
       ),
     );
   }

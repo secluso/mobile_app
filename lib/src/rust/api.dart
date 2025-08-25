@@ -27,6 +27,14 @@ Future<String> decryptVideo({
   encFilename: encFilename,
 );
 
+Future<String> decryptThumbnail({
+  required String cameraName,
+  required String encFilename,
+}) => RustLib.instance.api.crateApiDecryptThumbnail(
+  cameraName: cameraName,
+  encFilename: encFilename,
+);
+
 Future<String> flutterAddCamera({
   required String cameraName,
   required String ip,

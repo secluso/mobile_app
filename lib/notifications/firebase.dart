@@ -6,8 +6,10 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:privastead_flutter/notifications/heartbeat_task.dart';
 import 'package:privastead_flutter/notifications/notifications.dart';
 import 'package:privastead_flutter/notifications/scheduler.dart';
+import 'package:privastead_flutter/notifications/thumbnails.dart';
 import 'package:privastead_flutter/utilities/http_client.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../keys.dart';
 //TODO: import 'package:wakelock_plus/wakelock_plus.dart';
@@ -20,10 +22,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:privastead_flutter/utilities/rust_util.dart';
 import 'package:privastead_flutter/src/rust/frb_generated.dart';
 import 'dart:io' show Platform;
-
-class TaskNames {
-  static String downloadAndroid(String cam) => 'DownloadTask_$cam';
-}
 
 class RustBridgeHelper {
   static bool _initialized = false;
@@ -189,24 +187,56 @@ class PushNotificationService {
               ); // Don't await, as the lock may freeze this up
             }
 
-            await prefs.setBool(PrefKeys.recordingMotionVideosPrefix + cameraName, false); // Allow livestreaming.
-            await prefs.setInt(PrefKeys.lastRecordingTimestampPrefix + cameraName, 0);
+            await prefs.setBool(
+              PrefKeys.recordingMotionVideosPrefix + cameraName,
+              false,
+            ); // Allow livestreaming.
+            await prefs.setInt(
+              PrefKeys.lastRecordingTimestampPrefix + cameraName,
+              0,
+            );
           } else if (response != 'Error' && response != 'None') {
             var sendNotificationGlobal =
                 prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
             if (sendNotificationGlobal) {
-              Log.d("Showing motion notification");
+              Log.d("Trying to fetch thumbnail before showing notification");
+
+              // Fetch/verify the exact thumbnail.
+              final bool hasThumb =
+                  await ThumbnailManager.checkThumbnailsForCamera(
+                    cameraName,
+                    response, // timestamp
+                  );
+
+              String? thumbPath;
+              if (hasThumb) {
+                final docs = await getApplicationDocumentsDirectory();
+                thumbPath = '${docs.path}/camera_dir_$cameraName/$response.png';
+                Log.d("Thumbnail ready for notification at $thumbPath");
+              } else {
+                Log.d(
+                  "Thumbnail not ready within budget; sending text-only notification",
+                );
+              }
+
               showMotionNotification(
                 cameraName: cameraName,
                 timestamp: response,
+                thumbnailPath: thumbPath, // null means text-only
               );
             } else {
               Log.d("Not showing motion notification due to preference");
             }
 
             final nowTimestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-            await prefs.setBool(PrefKeys.recordingMotionVideosPrefix + cameraName, true); // Restrict livestreaming.
-            await prefs.setInt(PrefKeys.lastRecordingTimestampPrefix + cameraName, nowTimestamp);
+            await prefs.setBool(
+              PrefKeys.recordingMotionVideosPrefix + cameraName,
+              true,
+            ); // Restrict livestreaming.
+            await prefs.setInt(
+              PrefKeys.lastRecordingTimestampPrefix + cameraName,
+              nowTimestamp,
+            );
 
             // TODO: I removed the pending to repository addition for Android because it's not possible to init ObjectBox in the background handler (as Android requires). Find alternate solution maybe. Not sure this is needed anymore (as we don't want to show users pending videos in cases of failure)
             if (Platform.isIOS) {

@@ -21,7 +21,7 @@ tracing-log = "0.2.0"
 
 [dependencies.privastead-app-native]
 git = "https://github.com/privastead/privastead"
-rev = "0aa9caf"
+rev = "80b7cc8"
 package = "privastead-app-native"
 
 [lints.rust]

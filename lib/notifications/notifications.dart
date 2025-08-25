@@ -114,45 +114,77 @@ Future<void> initLocalNotifications() async {
 Future<void> showMotionNotification({
   required String cameraName,
   required String timestamp, // unix seconds
+  String? thumbnailPath, // local file path
 }) async {
   final formatted = _formatTimestamp(timestamp);
 
   // Android
-  final androidDetails = AndroidNotificationDetails(
-    'motion_channel', // must match channel id below
-    'Motion Events',
-    channelDescription: 'Camera motion alerts',
-    importance: Importance.high,
-    priority: Priority.high,
-    icon: 'ic_notification',
-    vibrationPattern: Int64List.fromList([500, 500, 500, 500, 500]),
-    enableLights: true,
-    color: const Color(0xFF00FF00),
-    ledColor: const Color(0xFF00FF00),
-    ledOnMs: 2000,
-    ledOffMs: 2000,
-  );
+  AndroidNotificationDetails androidDetails;
+  if (thumbnailPath != null) {
+    final bigPic = BigPictureStyleInformation(
+      FilePathAndroidBitmap(thumbnailPath),
+      hideExpandedLargeIcon: true,
+      contentTitle: cameraName,
+      summaryText: 'Motion at $formatted',
+    );
+
+    androidDetails = AndroidNotificationDetails(
+      'motion_channel',
+      'Motion Events',
+      channelDescription: 'Camera motion alerts',
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: 'ic_notification',
+      vibrationPattern: Int64List.fromList([500, 500, 500, 500, 500]),
+      enableLights: true,
+      color: const Color(0xFF00FF00),
+      ledColor: const Color(0xFF00FF00),
+      ledOnMs: 2000,
+      ledOffMs: 2000,
+      styleInformation: bigPic,
+    );
+  } else {
+    androidDetails = AndroidNotificationDetails(
+      'motion_channel',
+      'Motion Events',
+      channelDescription: 'Camera motion alerts',
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: 'ic_notification',
+      vibrationPattern: Int64List.fromList([500, 500, 500, 500, 500]),
+      enableLights: true,
+      color: const Color(0xFF00FF00),
+      ledColor: const Color(0xFF00FF00),
+      ledOnMs: 2000,
+      ledOffMs: 2000,
+    );
+  }
 
   // iOS
-  final iosDetails = const DarwinNotificationDetails(
-    interruptionLevel: InterruptionLevel.timeSensitive,
-    sound: 'default',
-    badgeNumber: 1,
-  );
+  DarwinNotificationDetails iosDetails;
+  if (thumbnailPath != null) {
+    iosDetails = DarwinNotificationDetails(
+      interruptionLevel: InterruptionLevel.timeSensitive,
+      sound: 'default',
+      badgeNumber: 1,
+      attachments: [DarwinNotificationAttachment(thumbnailPath)],
+    );
+  } else {
+    iosDetails = const DarwinNotificationDetails(
+      interruptionLevel: InterruptionLevel.timeSensitive,
+      sound: 'default',
+      badgeNumber: 1,
+    );
+  }
 
-  // Cross-platform wrapper
   final details = NotificationDetails(android: androidDetails, iOS: iosDetails);
-  Log.d("Sent notification!");
 
   await _notifs.show(
     DateTime.now().millisecondsSinceEpoch ~/ 1000, // unique id
     cameraName, // title
     'Motion at $formatted', // body
     details,
-    payload: jsonEncode({
-      "cameraName": cameraName,
-      "timestamp": timestamp,
-    }), // deep-link payload
+    payload: jsonEncode({"cameraName": cameraName, "timestamp": timestamp}),
   );
 }
 

@@ -89,6 +89,30 @@ pub fn decrypt_video(_camera_name: String, enc_filename: String) -> String {
     }
 }
 
+
+#[flutter_rust_bridge::frb]
+pub fn decrypt_thumbnail(_camera_name: String, enc_filename: String) -> String {
+    let mut clients_map = CLIENTS.lock().unwrap();
+    if let Some(map) = clients_map.as_mut() {
+        let client_entry = map
+            .entry(_camera_name.clone())
+            .or_insert_with(|| Mutex::new(None));
+        let mut client_guard = client_entry.lock().unwrap();
+
+        match privastead_app_native::decrypt_thumbnail(&mut *client_guard, enc_filename) {
+            Ok(decrypted_filename) => {
+                return decrypted_filename;
+            }
+            Err(_e) => {
+                return "Error".to_string();
+            }
+        }
+    } else {
+        info!("CLIENTS map not initialized!");
+        return "Error".to_string();
+    }
+}
+
 #[flutter_rust_bridge::frb]
 pub fn flutter_add_camera(
     camera_name: String,

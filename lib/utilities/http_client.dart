@@ -32,8 +32,11 @@ class HttpClientService {
   static final HttpClientService instance = HttpClientService._();
 
   /// bulk check the list of camera names against the server to check for updates
-  /// returns list of corresponding cameras that have available videos for download
-  Future<Result<List<String>>> bulkCheckAvailableCameras() => _wrap(() async {
+  /// returns list of corresponding cameras that have available videos/thumbnails for download
+  /// Parameter minimumTime: The minimum amount of time the resource has been on the server to qualify for the list
+  Future<Result<List<String>>> bulkCheckAvailableCameras(
+    int minimumTime,
+  ) => _wrap(() async {
     final pref = await SharedPreferences.getInstance();
     if (!pref.containsKey(PrefKeys.cameraSet)) {
       return [];
@@ -80,18 +83,23 @@ class HttpClientService {
             .body; // Format is comma separated strings representing the associated motion groups
     Log.d("Server response: $responseBody");
 
-    final List<String> listBody = responseBody.split(",");
+    final List<dynamic> decoded = jsonDecode(responseBody);
     final List<String> convertedToGroups = [];
-    if (responseBody.isNotEmpty) {
-      for (final groupName in listBody) {
-        if (groupName.isNotEmpty) {
-          Log.d("Iterating $groupName");
-          convertedToGroups.add(associatedNameToGroup[groupName]);
-        }
+    final now =
+        DateTime.now().millisecondsSinceEpoch ~/
+        1000; // current UNIX time in seconds
+
+    for (final item in decoded) {
+      final groupName = item['group_name'] as String;
+      final timestamp = item['timestamp'] as int;
+
+      final age = now - timestamp;
+      Log.d("Iterating $groupName with ts $timestamp (age=$age)");
+
+      if (age >= minimumTime && associatedNameToGroup.containsKey(groupName)) {
+        convertedToGroups.add(associatedNameToGroup[groupName]);
       }
     }
-    Log.d("Response from function: $convertedToGroups");
-
     return convertedToGroups;
   });
 
@@ -176,7 +184,7 @@ class HttpClientService {
         throw Exception(
           'Failed to download file: ${response.statusCode} ${response.reasonPhrase}',
         );
-      }      
+      }
     }
 
     File? file;
@@ -192,9 +200,7 @@ class HttpClientService {
 
     Log.d("Success downloading $serverFile for camera $cameraName");
     if (destinationFile == null) {
-      return DownloadResult(
-        data: response.bodyBytes,
-      );
+      return DownloadResult(data: response.bodyBytes);
     } else {
       return DownloadResult(file: file);
     }
@@ -312,7 +318,10 @@ class HttpClientService {
   });
 
   /// POST /config/<group>
-  Future<Result<void>> configCommand({required String cameraName, required Object command}) => _wrap(() async {
+  Future<Result<void>> configCommand({
+    required String cameraName,
+    required Object command,
+  }) => _wrap(() async {
     final creds = await _getValidatedCredentials();
     final group = await _groupName(cameraName, Group.config);
     final url = _buildUrl(creds.serverAddr, ['config', group]);

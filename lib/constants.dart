@@ -19,6 +19,7 @@ class Group {
   static const motion = "motion";
   static const config = "config";
   static const livestream = "livestream";
+  static const thumbnail = "thumbnail";
 }
 
 class CameraStatus {

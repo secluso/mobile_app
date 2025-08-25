@@ -67,3 +67,4 @@ rust/build/
 
 # Debug files
 *.debug
+.vscode

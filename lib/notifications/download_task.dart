@@ -165,7 +165,7 @@ Future<bool> doWorkBackground() async {
                   downloadCameraQueue.remove(cameraName);
                 } else {
                   allSuccessful =
-                      false; // We m aintain a queue of ones that still need to be processed.
+                      false; // We maintain a queue of ones that still need to be processed.
                 }
               }
             }

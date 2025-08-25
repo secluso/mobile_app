@@ -23,6 +23,17 @@ import '../../objectbox.g.dart';
 import '../server_page.dart';
 import '../home_page.dart';
 
+class ThumbnailNotifier {
+  ThumbnailNotifier._();
+  static final ThumbnailNotifier instance = ThumbnailNotifier._();
+
+  // emits the camera name whose thumbnail just updated
+  final _controller = StreamController<String>.broadcast();
+  Stream<String> get stream => _controller.stream;
+
+  void notify(String cameraName) => _controller.add(cameraName);
+}
+
 class CameraListNotifier {
   static final CameraListNotifier instance = CameraListNotifier._();
 
@@ -87,19 +98,11 @@ class _CameraCardState extends State<CameraCard> {
             children: [
               // Thumbnail
               Positioned.fill(
-                child:
-                    Platform.isIOS
-                        ? _cameraThumbnailPlaceholder(widget.cameraName)
-                        : const Image(
-                          image: AssetImage(
-                            'assets/android_thumbnail_placeholder.jpeg',
-                          ),
-                          fit: BoxFit.cover,
-                        ),
+                child: _cameraThumbnailPlaceholder(widget.cameraName),
               ),
 
               // Overlay depending on image presence
-              if (!hasImage && Platform.isIOS) ...[
+              if (!hasImage) ...[
                 Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
@@ -248,22 +251,27 @@ class _CameraCardState extends State<CameraCard> {
           .findAncestorStateOfType<CamerasPageState>()!
           ._generateThumb(camName),
       builder: (context, snap) {
-        final data = snap.data;
         if (snap.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator(strokeWidth: 2));
         }
 
-        if (data != null && !hasImage) {
+        final data = snap.data;
+        final has = data != null;
+
+        if (has && !hasImage) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            setState(() => hasImage = true);
+            if (mounted) setState(() => hasImage = true);
           });
         }
 
-        return SizedBox.expand(
-          child:
-              data != null
-                  ? Image.memory(data, fit: BoxFit.cover)
-                  : Container(color: Colors.black),
+        if (has) {
+          return SizedBox.expand(child: Image.memory(data!, fit: BoxFit.cover));
+        }
+
+        // No thumbnail yet
+        return const Image(
+          image: AssetImage('assets/android_thumbnail_placeholder.jpeg'),
+          fit: BoxFit.cover,
         );
       },
     );
@@ -273,9 +281,10 @@ class _CameraCardState extends State<CameraCard> {
 class CamerasPageState extends State<CamerasPage>
     with WidgetsBindingObserver, RouteAware, SingleTickerProviderStateMixin {
   final List<Map<String, dynamic>> cameras = [];
-  final _ch = MethodChannel('privastead.com/thumbnail');
   late Future<SharedPreferences> _prefsFuture;
   late final AnimationController _controller;
+
+  late final StreamSubscription<String> _thumbSub;
 
   bool _hasPlayedLockAnimation = false;
 
@@ -305,6 +314,11 @@ class CamerasPageState extends State<CamerasPage>
       lowerBound: 0.0,
       upperBound: 0.85, // stop before the fade away
     );
+
+    _thumbSub = ThumbnailNotifier.instance.stream.listen((cam) {
+      // only invalidate the one that updated
+      invalidateThumbnail(cam);
+    });
 
     // Stop at the end after playing once
     _controller.addStatusListener((status) {
@@ -341,6 +355,7 @@ class CamerasPageState extends State<CamerasPage>
 
   @override
   void dispose() {
+    _thumbSub.cancel();
     _controller.dispose();
     routeObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
@@ -442,6 +457,7 @@ class CamerasPageState extends State<CamerasPage>
 
     final SharedPreferencesAsync asyncPrefs = SharedPreferencesAsync();
     await asyncPrefs.remove("epoch" + cameraName);
+    await asyncPrefs.remove("thumbnailEpoch$cameraName");
 
     var existingCameraSet = prefs.getStringList(PrefKeys.cameraSet) ?? [];
     existingCameraSet.remove(cameraName);
@@ -472,6 +488,12 @@ class CamerasPageState extends State<CamerasPage>
         Log.e('Error deleting folder: $e');
       }
     }
+
+    // Delete the thumbnail lock, if it exists.
+    final lock = File(
+      p.join(docsDir.path, 'locks', 'thumbnail$cameraName.lock'),
+    );
+    if (await lock.exists()) lock.delete();
 
     final camDirPending = Directory(
       p.join(docsDir.path, 'waiting', 'camera_$cameraName'),
@@ -546,30 +568,25 @@ class CamerasPageState extends State<CamerasPage>
   }
 
   Future<Uint8List?> _generateThumb(String cameraName) {
-    // already cached?
     if (_thumbCache.containsKey(cameraName)) {
       return Future.value(_thumbCache[cameraName]);
     }
-    // already running?
     if (_thumbFutures.containsKey(cameraName)) {
       return _thumbFutures[cameraName]!;
     }
 
     final future = () async {
-      final path = await _latestVideoPath(cameraName);
-      if (path == null) return null; // no videos yet
-
       try {
-        final bytes = await _ch
-            .invokeMethod<Uint8List>('generateThumbnail', {
-              'path': path,
-              'fullSize': true,
-            })
-            .timeout(const Duration(seconds: 3));
-        _thumbCache[cameraName] = bytes; // save even null
+        final path = await _latestThumbnailPath(cameraName);
+        if (path == null) {
+          _thumbCache[cameraName] = null;
+          return null;
+        }
+        final bytes = await File(path).readAsBytes();
+        _thumbCache[cameraName] = bytes;
         return bytes;
-      } on Exception catch (e) {
-        Log.e('Error - $cameraName: $e');
+      } catch (e) {
+        Log.e('Thumb load error [$cameraName]: $e');
         _thumbCache[cameraName] = null;
         return null;
       }
@@ -579,32 +596,33 @@ class CamerasPageState extends State<CamerasPage>
     return future;
   }
 
-  Widget cameraThumbnailPlaceholder(
-    String camName,
-    void Function(bool hasThumb) setHasThumb,
-  ) {
-    return FutureBuilder<Uint8List?>(
-      future: _generateThumb(camName),
-      builder: (context, snap) {
-        if (snap.connectionState != ConnectionState.done) {
-          return const SizedBox(
-            width: 80,
-            height: 80,
-            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-          );
-        }
-        final data = snap.data;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          setHasThumb(data != null); // send result to caller
-        });
-        return SizedBox.expand(
-          child:
-              data != null
-                  ? Image.memory(data, fit: BoxFit.cover)
-                  : Container(color: Colors.black),
-        );
-      },
-    );
+  // TODO: Would a database read be faster?
+  Future<String?> _latestThumbnailPath(String cameraName) async {
+    final docsDir = await getApplicationDocumentsDirectory();
+    final dir = Directory(p.join(docsDir.path, 'camera_dir_$cameraName'));
+
+    if (!await dir.exists()) return null;
+
+    File? best;
+    var bestTs = -1;
+
+    // Scan all .png files, choose the largest numeric basename
+    final entries = await dir.list(followLinks: false).toList();
+    for (final ent in entries) {
+      if (ent is! File) continue;
+      if (!ent.path.toLowerCase().endsWith('.png')) continue;
+
+      final base = p.basenameWithoutExtension(ent.path);
+      final ts = int.tryParse(base);
+      if (ts == null) continue;
+
+      if (ts > bestTs) {
+        bestTs = ts;
+        best = ent;
+      }
+    }
+
+    return best?.path;
   }
 
   void _showHelpSheet(BuildContext context) {
