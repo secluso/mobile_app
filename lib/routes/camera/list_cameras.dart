@@ -324,21 +324,21 @@ class CamerasPageState extends State<CamerasPage>
     CameraListNotifier.instance.refreshCallback = _loadCamerasFromDatabase;
     _pollingTimer = Timer.periodic(
       const Duration(seconds: 5),
-      (_) => _loadCamerasFromDatabase(), // refresh from DB every 5s
+      (_) => _loadCamerasFromDatabase(false), // refresh from DB every 5s
     );
   }
 
   @override
   void didPopNext() {
     Log.d("Returned to list cameras [pop]");
-    _loadCamerasFromDatabase(); // Load this every time we enter the page.
+    _loadCamerasFromDatabase(true); // Load this every time we enter the page.
     _checkNotificationStatus();
   }
 
   @override
   void didPush() {
     Log.d('Returned to list cameras [push]');
-    _loadCamerasFromDatabase(); // Load this every time we enter the page.
+    _loadCamerasFromDatabase(true); // Load this every time we enter the page.
     _checkNotificationStatus();
   }
 
@@ -367,6 +367,9 @@ class CamerasPageState extends State<CamerasPage>
 
     if (state == AppLifecycleState.resumed) {
       // regenerate on resume
+      _loadCamerasFromDatabase(
+        true,
+      ); //this may not be up-to-date as our stream doesn't run in the background
       setState(() {});
       _checkNotificationStatus();
     }
@@ -498,7 +501,7 @@ class CamerasPageState extends State<CamerasPage>
     invalidateThumbnail(cameraName);
 
     // Reload list
-    await _loadCamerasFromDatabase();
+    await _loadCamerasFromDatabase(false);
 
     // Feedback
     if (mounted) {
@@ -517,7 +520,7 @@ class CamerasPageState extends State<CamerasPage>
 
   final _deepEq = const DeepCollectionEquality.unordered();
 
-  Future<void> _loadCamerasFromDatabase() async {
+  Future<void> _loadCamerasFromDatabase([bool forceRun = false]) async {
     final box = AppStores.instance.cameraStore.box<Camera>();
     final all =
         box
@@ -532,9 +535,11 @@ class CamerasPageState extends State<CamerasPage>
             .toList();
 
     // Deep compare
-    if (_deepEq.equals(all, cameras)) return;
+    if (!forceRun && _deepEq.equals(all, cameras)) return;
     Log.d("Refreshing cameras from database");
 
+    _thumbCache.clear();
+    _thumbFutures.clear();
     setState(() {
       cameras
         ..clear()

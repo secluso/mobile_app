@@ -18,9 +18,6 @@ class ThumbnailManager {
   ) async {
     final completer = Completer<bool>();
 
-    // Wait 5 seconds before trying
-    await Future.delayed(Duration(seconds: 5));
-
     // Check if the file already exists in the thumbnails folder
     final baseDir = await getApplicationDocumentsDirectory();
 

@@ -135,6 +135,12 @@ class PushNotificationService {
 
   Future<void> _handleMessage(RemoteMessage msg) => _process(msg.data);
 
+  int _motionNotifId(String cameraName, String timestamp) {
+    // deterministic id
+    final ts = int.tryParse(timestamp) ?? 0;
+    return cameraName.hashCode ^ ts;
+  }
+
   // Core notification processing method
   Future<void> _process(Map<String, dynamic> data) async {
     Log.d("Core notification processing method entered");
@@ -199,31 +205,16 @@ class PushNotificationService {
             var sendNotificationGlobal =
                 prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
             if (sendNotificationGlobal) {
-              Log.d("Trying to fetch thumbnail before showing notification");
-
-              // Fetch/verify the exact thumbnail.
-              final bool hasThumb =
-                  await ThumbnailManager.checkThumbnailsForCamera(
-                    cameraName,
-                    response, // timestamp
-                  );
-
-              String? thumbPath;
-              if (hasThumb) {
-                final docs = await getApplicationDocumentsDirectory();
-                thumbPath = '${docs.path}/camera_dir_$cameraName/$response.png';
-                Log.d("Thumbnail ready for notification at $thumbPath");
-              } else {
-                Log.d(
-                  "Thumbnail not ready within budget; sending text-only notification",
-                );
-              }
+              final notifId = _motionNotifId(cameraName, response);
 
               showMotionNotification(
                 cameraName: cameraName,
                 timestamp: response,
-                thumbnailPath: thumbPath, // null means text-only
+                notificationId: notifId,
+                onlyAlertOnce: false,
               );
+
+              unawaited(_tryAttachThumbLater(cameraName, response, notifId));
             } else {
               Log.d("Not showing motion notification due to preference");
             }
@@ -253,6 +244,45 @@ class PushNotificationService {
       Log.d("After processing");
       // await WakelockPlus.disable(); TODO: Fix above wakelock depending on foreground or not
     }
+  }
+
+  Future<void> _tryAttachThumbLater(
+    String cameraName,
+    String timestamp,
+    int notifId, {
+    Duration timeout = const Duration(seconds: 6),
+    Duration pollEvery = const Duration(milliseconds: 300),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+
+    while (DateTime.now().isBefore(deadline)) {
+      final hasThumb = await ThumbnailManager.checkThumbnailsForCamera(
+        cameraName,
+        timestamp,
+      );
+      if (hasThumb) {
+        Log.d(
+          "Acquired target thumbnail for notification, attempting to update",
+        );
+
+        final docs = await getApplicationDocumentsDirectory();
+        final thumbPath = '${docs.path}/camera_dir_$cameraName/$timestamp.png';
+
+        // Update same notification id with a BigPicture/attachment version.
+        await showMotionNotification(
+          cameraName: cameraName,
+          timestamp: timestamp,
+          thumbnailPath: thumbPath,
+          notificationId: notifId,
+          onlyAlertOnce: true, // don't vibrate/sound again on Android
+        );
+        Log.d("Upgraded motion notification with thumbnail: $thumbPath");
+        return;
+      }
+      await Future.delayed(pollEvery);
+    }
+
+    Log.d("Thumbnail not ready within timeout; leaving text-only notification");
   }
 
   Future<void> addPendingToRepository(

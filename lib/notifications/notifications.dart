@@ -111,12 +111,21 @@ Future<void> initLocalNotifications() async {
   if (Platform.isAndroid) await _ensureMotionChannelAndroid();
 }
 
+int _motionNotifId(String cameraName, String timestamp) {
+  // deterministic id
+  final ts = int.tryParse(timestamp) ?? 0;
+  return cameraName.hashCode ^ ts;
+}
+
 Future<void> showMotionNotification({
   required String cameraName,
   required String timestamp, // unix seconds
   String? thumbnailPath, // local file path
+  int? notificationId, // optional explicit id
+  bool onlyAlertOnce = false,
 }) async {
   final formatted = _formatTimestamp(timestamp);
+  final id = notificationId ?? _motionNotifId(cameraName, timestamp);
 
   // Android
   AndroidNotificationDetails androidDetails;
@@ -142,6 +151,7 @@ Future<void> showMotionNotification({
       ledOnMs: 2000,
       ledOffMs: 2000,
       styleInformation: bigPic,
+      onlyAlertOnce: onlyAlertOnce,
     );
   } else {
     androidDetails = AndroidNotificationDetails(
@@ -157,6 +167,7 @@ Future<void> showMotionNotification({
       ledColor: const Color(0xFF00FF00),
       ledOnMs: 2000,
       ledOffMs: 2000,
+      onlyAlertOnce: onlyAlertOnce,
     );
   }
 
@@ -165,14 +176,14 @@ Future<void> showMotionNotification({
   if (thumbnailPath != null) {
     iosDetails = DarwinNotificationDetails(
       interruptionLevel: InterruptionLevel.timeSensitive,
-      sound: 'default',
+      sound: onlyAlertOnce ? null : 'default',
       badgeNumber: 1,
       attachments: [DarwinNotificationAttachment(thumbnailPath)],
     );
   } else {
-    iosDetails = const DarwinNotificationDetails(
+    iosDetails = DarwinNotificationDetails(
       interruptionLevel: InterruptionLevel.timeSensitive,
-      sound: 'default',
+      sound: onlyAlertOnce ? null : 'default',
       badgeNumber: 1,
     );
   }
@@ -180,7 +191,7 @@ Future<void> showMotionNotification({
   final details = NotificationDetails(android: androidDetails, iOS: iosDetails);
 
   await _notifs.show(
-    DateTime.now().millisecondsSinceEpoch ~/ 1000, // unique id
+    id, // unique id
     cameraName, // title
     'Motion at $formatted', // body
     details,
