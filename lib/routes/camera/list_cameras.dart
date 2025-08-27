@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:collection/collection.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
@@ -65,11 +66,14 @@ class CameraCard extends StatefulWidget {
   State<CameraCard> createState() => _CameraCardState();
 }
 
-class _CameraCardState extends State<CameraCard> {
-  bool hasImage = false;
+class _CameraCardState extends State<CameraCard>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return GestureDetector(
       onTap:
           () => Navigator.push(
@@ -96,66 +100,8 @@ class _CameraCardState extends State<CameraCard> {
           borderRadius: BorderRadius.circular(16),
           child: Stack(
             children: [
-              // Thumbnail
-              Positioned.fill(
-                child: _cameraThumbnailPlaceholder(widget.cameraName),
-              ),
-
-              // Overlay depending on image presence
-              if (!hasImage) ...[
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.black.withOpacity(0.3),
-                        Colors.black.withOpacity(0.7),
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                  ),
-                ),
-                Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.6),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black45,
-                          offset: Offset(0, 2),
-                          blurRadius: 4,
-                        ),
-                      ],
-                    ),
-                    child: const Text(
-                      "No Image Yet",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ] else ...[
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.black.withOpacity(0.2),
-                        Colors.black.withOpacity(0.6),
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                  ),
-                ),
-              ],
+              // Thumbnail + overlay logic
+              Positioned.fill(child: _thumbnailWithOverlay(widget.cameraName)),
 
               // Name + Icon
               Positioned(
@@ -195,15 +141,10 @@ class _CameraCardState extends State<CameraCard> {
                       color: Colors.redAccent,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.notifications,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                      ],
+                    child: const Icon(
+                      Icons.notifications,
+                      color: Colors.white,
+                      size: 16,
                     ),
                   ),
                 ),
@@ -211,6 +152,87 @@ class _CameraCardState extends State<CameraCard> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _thumbnailWithOverlay(String camName) {
+    final state = context.findAncestorStateOfType<CamerasPageState>()!;
+    final initial = state._thumbCache[camName];
+
+    return FutureBuilder<Uint8List?>(
+      future: state._generateThumb(camName),
+      initialData: initial,
+      builder: (context, snap) {
+        // Prefer any bytes we have
+        final bytes = snap.data ?? initial;
+
+        final hasBytes = bytes != null;
+        final image =
+            hasBytes
+                ? Image.memory(bytes!, fit: BoxFit.cover, gaplessPlayback: true)
+                : const Image(
+                  image: AssetImage(
+                    'assets/android_thumbnail_placeholder.jpeg',
+                  ),
+                  fit: BoxFit.cover,
+                );
+
+        // Overlay depends on if we have a thumbnail
+        final overlay = Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors:
+                  hasBytes
+                      ? [
+                        Colors.black.withOpacity(0.2),
+                        Colors.black.withOpacity(0.6),
+                      ]
+                      : [
+                        Colors.black.withOpacity(0.3),
+                        Colors.black.withOpacity(0.7),
+                      ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+        );
+
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            image,
+            overlay,
+            if (!hasBytes)
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black45,
+                        offset: Offset(0, 2),
+                        blurRadius: 4,
+                      ),
+                    ],
+                  ),
+                  child: const Text(
+                    "No Image Yet",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -238,43 +260,10 @@ class _CameraCardState extends State<CameraCard> {
             ],
           ),
     );
-
     if (confirm == true) {
       final pageState = context.findAncestorStateOfType<CamerasPageState>();
       await pageState?.deleteCamera(camName);
     }
-  }
-
-  Widget _cameraThumbnailPlaceholder(String camName) {
-    return FutureBuilder<Uint8List?>(
-      future: context
-          .findAncestorStateOfType<CamerasPageState>()!
-          ._generateThumb(camName),
-      builder: (context, snap) {
-        if (snap.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-        }
-
-        final data = snap.data;
-        final has = data != null;
-
-        if (has && !hasImage) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) setState(() => hasImage = true);
-          });
-        }
-
-        if (has) {
-          return SizedBox.expand(child: Image.memory(data!, fit: BoxFit.cover));
-        }
-
-        // No thumbnail yet
-        return const Image(
-          image: AssetImage('assets/android_thumbnail_placeholder.jpeg'),
-          fit: BoxFit.cover,
-        );
-      },
-    );
   }
 }
 
@@ -378,8 +367,6 @@ class CamerasPageState extends State<CamerasPage>
 
     if (state == AppLifecycleState.resumed) {
       // regenerate on resume
-      _thumbCache.clear();
-      _thumbFutures.clear();
       setState(() {});
       _checkNotificationStatus();
     }
@@ -528,21 +515,30 @@ class CamerasPageState extends State<CamerasPage>
     }
   }
 
+  final _deepEq = const DeepCollectionEquality.unordered();
+
   Future<void> _loadCamerasFromDatabase() async {
     final box = AppStores.instance.cameraStore.box<Camera>();
-    final allCameras = box.getAll();
+    final all =
+        box
+            .getAll()
+            .map(
+              (c) => {
+                "name": c.name,
+                "icon": Icons.videocam,
+                "unreadMessages": c.unreadMessages,
+              },
+            )
+            .toList();
+
+    // Deep compare
+    if (_deepEq.equals(all, cameras)) return;
+    Log.d("Refreshing cameras from database");
 
     setState(() {
-      cameras.clear();
-      cameras.addAll(
-        allCameras.map(
-          (cam) => {
-            "name": cam.name,
-            "icon": Icons.videocam,
-            "unreadMessages": cam.unreadMessages,
-          },
-        ),
-      );
+      cameras
+        ..clear()
+        ..addAll(all);
     });
   }
 
@@ -903,6 +899,7 @@ class CamerasPageState extends State<CamerasPage>
                             final camera = cameras[index];
 
                             return CameraCard(
+                              key: ValueKey(camera["name"]),
                               cameraName: camera["name"],
                               icon: camera["icon"],
                               unreadMessages: camera["unreadMessages"],
