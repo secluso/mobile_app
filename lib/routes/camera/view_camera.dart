@@ -18,6 +18,7 @@ import 'package:privastead_flutter/database/app_stores.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
 import 'package:privastead_flutter/main.dart';
 import 'dart:io';
+import 'package:path/path.dart' as p;
 import 'package:intl/intl.dart';
 
 _CameraViewPageState? globalCameraViewPageState;
@@ -51,6 +52,9 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
   final List<Video> _videos = [];
   final Map<String, Uint8List?> _videoThumbCache = {};
   final Map<String, Future<Uint8List?>> _videoThumbFutures = {};
+
+  late Box<Detection> _detectionBox;
+  final Map<int, Set<String>> _detCache = {};
 
   static const int _pageSize = 20;
   int _offset = 0;
@@ -108,8 +112,29 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     _initDbAndFirstPage();
   }
 
+  Future<void> _prefetchDetectionsFor(List<Video> vids) async {
+    for (final v in vids) {
+      final vidPath = v.video;
+
+      // Build the cache (types that actually match this video's file path)
+      final matchingTypes = <String>{};
+
+      final q =
+          _detectionBox.query(Detection_.videoFile.equals(vidPath)).build();
+
+      final detsForVid = q.find();
+      q.close();
+
+      for (final d in detsForVid) {
+        if (d.type.isNotEmpty) matchingTypes.add(d.type.toLowerCase());
+      }
+      _detCache[v.id] = matchingTypes;
+    }
+  }
+
   Future<void> _initDbAndFirstPage() async {
     _videoBox = AppStores.instance.videoStore.box<Video>();
+    _detectionBox = AppStores.instance.detectionStore.box<Detection>();
     await _loadNextPage(); // first 20
 
     final prefs = await SharedPreferences.getInstance();
@@ -167,6 +192,8 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     final newVideos = query.find();
     query.close();
 
+    await _prefetchDetectionsFor(newVideos);
+
     setState(() {
       _videos.clear();
       _videos.addAll(newVideos);
@@ -188,6 +215,8 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
 
     final List<Video> batch = query.find();
     query.close();
+
+    await _prefetchDetectionsFor(batch);
 
     setState(() {
       _videos.addAll(batch);
@@ -233,7 +262,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
       // delete png neighbor
       final ts = _timestampFromVideo(v.video);
       if (ts != null) {
-        final png = File('$base/$ts.png');
+        final png = File('$base/thumbnail_$ts.png');
         if (await png.exists()) {
           try {
             await png.delete();
@@ -284,7 +313,8 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
 
       final ts = _timestampFromVideo(v.video);
       if (ts != null) {
-        final thumbPath = '${dir.path}/camera_dir_${v.camera}/$ts.png';
+        final thumbPath =
+            '${dir.path}/camera_dir_${v.camera}/thumbnail_$ts.png';
         final thumb = File(thumbPath);
         if (await thumb.exists()) {
           try {
@@ -322,7 +352,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     if (ts == null) return null;
 
     final docs = await getApplicationDocumentsDirectory();
-    final path = "${docs.path}/camera_dir_$cameraName/$ts.png";
+    final path = "${docs.path}/camera_dir_$cameraName/thumbnail_$ts.png";
     final f = File(path);
     return await f.exists() ? path : null;
   }
@@ -370,13 +400,25 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     _videoThumbFutures.remove(key);
   }
 
-  IconData? _detectionIcon(String d) =>
-      {
-        'human': Icons.person,
-        'vehicle': Icons.directions_car,
-        'pet': Icons.pets,
-        'pets': Icons.pets,
-      }[d.toLowerCase()];
+  List<Widget> _iconsForVideo(Video v) {
+    final types = _detCache[v.id] ?? const <String>{};
+    if (types.isEmpty) return const [];
+
+    final icons = <IconData>[
+      if (types.contains('human')) Icons.person,
+      if (types.contains('vehicle')) Icons.directions_car,
+      if (types.contains('pet')) Icons.pets,
+    ];
+
+    return icons
+        .map(
+          (i) => Padding(
+            padding: const EdgeInsets.only(left: 6),
+            child: Icon(i, size: 14, color: Colors.grey),
+          ),
+        )
+        .toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -515,14 +557,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
                                 color: Colors.grey,
                               ),
                             ),
-                            if (v.received && v.motion) ...[
-                              const SizedBox(width: 8),
-                              Icon(
-                                _detectionIcon('human'),
-                                size: 14,
-                                color: Colors.grey,
-                              ),
-                            ],
+                            if (v.received && v.motion) ..._iconsForVideo(v),
                           ],
                         ),
                         trailing: const Icon(Icons.chevron_right),
@@ -537,10 +572,6 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
                                       visibleVideoTitle: repackageVideoTitle(
                                         v.video,
                                       ),
-                                      detections:
-                                          v.motion && v.received
-                                              ? ['Human']
-                                              : [],
                                       canDownload: v.received,
                                     ),
                               ),

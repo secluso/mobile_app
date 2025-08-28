@@ -1,5 +1,25 @@
 import 'package:objectbox/objectbox.dart';
 
+@Entity()
+class Detection {
+  int id;
+
+  @Index()
+  String type; // format: "person", "car" (lowercase)
+
+  String camera; // redundant but handy for queries
+  String videoFile;
+  double? confidence; // potential for future-proofing
+
+  Detection({
+    this.id = 0,
+    required this.type,
+    required this.camera,
+    required this.videoFile,
+    this.confidence,
+  });
+}
+
 // Camera entity just storing name for now. Allows for expandability to things like per-camera settings
 @Entity()
 class Camera {

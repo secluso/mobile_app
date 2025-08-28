@@ -97,6 +97,7 @@ abstract class RustLibApi extends BaseApi {
   Future<String> crateApiDecryptThumbnail({
     required String cameraName,
     required String encFilename,
+    required String pendingMetaDirectory,
   });
 
   Future<String> crateApiDecryptVideo({
@@ -367,6 +368,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Future<String> crateApiDecryptThumbnail({
     required String cameraName,
     required String encFilename,
+    required String pendingMetaDirectory,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -374,6 +376,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(cameraName, serializer);
           sse_encode_String(encFilename, serializer);
+          sse_encode_String(pendingMetaDirectory, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -386,7 +389,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: null,
         ),
         constMeta: kCrateApiDecryptThumbnailConstMeta,
-        argValues: [cameraName, encFilename],
+        argValues: [cameraName, encFilename, pendingMetaDirectory],
         apiImpl: this,
       ),
     );
@@ -394,7 +397,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiDecryptThumbnailConstMeta => const TaskConstMeta(
     debugName: "decrypt_thumbnail",
-    argNames: ["cameraName", "encFilename"],
+    argNames: ["cameraName", "encFilename", "pendingMetaDirectory"],
   );
 
   @override

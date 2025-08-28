@@ -613,7 +613,10 @@ class CamerasPageState extends State<CamerasPage>
       if (ent is! File) continue;
       if (!ent.path.toLowerCase().endsWith('.png')) continue;
 
-      final base = p.basenameWithoutExtension(ent.path);
+      final base = p
+          .basenameWithoutExtension(ent.path)
+          .replaceAll("thumbnail_", "");
+
       final ts = int.tryParse(base);
       if (ts == null) continue;
 

@@ -7,10 +7,13 @@ import 'package:path/path.dart' as p;
 import 'package:gal/gal.dart';
 import 'package:privastead_flutter/utilities/logger.dart';
 
+import 'package:privastead_flutter/database/app_stores.dart';
+import 'package:privastead_flutter/database/entities.dart';
+import '../../objectbox.g.dart';
+
 class VideoViewPage extends StatefulWidget {
   final String videoTitle;
   final String visibleVideoTitle;
-  final List<String> detections;
   final bool canDownload;
   final String cameraName;
 
@@ -18,7 +21,6 @@ class VideoViewPage extends StatefulWidget {
     Key? key,
     required this.videoTitle,
     required this.visibleVideoTitle,
-    required this.detections,
     required this.canDownload,
     required this.cameraName,
   }) : super(key: key);
@@ -31,11 +33,45 @@ class _VideoViewPageState extends State<VideoViewPage> {
   late VideoPlayerController _controller;
   bool _initialized = false;
   late String _videoPath;
+  late Box<Detection> _detBox;
+  Set<String> _dets = {};
+  bool _detsLoaded = false;
 
   @override
   void initState() {
     super.initState();
+    _openBoxesAndLoadDetections();
     _initVideo();
+  }
+
+  Future<void> _openBoxesAndLoadDetections() async {
+    _detBox = AppStores.instance.detectionStore.box<Detection>();
+    await _loadDetections();
+  }
+
+  Future<void> _loadDetections() async {
+    // Query by camera + video file
+    final q =
+        _detBox
+            .query(
+              Detection_.camera.equals(widget.cameraName) &
+                  Detection_.videoFile.equals(widget.videoTitle),
+            )
+            .build();
+    final rows = q.find();
+    q.close();
+
+    final types = <String>{};
+    for (final d in rows) {
+      if (d.type.isNotEmpty) types.add(d.type.toLowerCase());
+    }
+
+    if (mounted) {
+      setState(() {
+        _dets = types;
+        _detsLoaded = true;
+      });
+    }
   }
 
   Future<void> _initVideo() async {
@@ -129,26 +165,59 @@ class _VideoViewPageState extends State<VideoViewPage> {
     });
   }
 
+  List<Widget> _detectionIcons(Set<String> types) {
+    final hasHuman = types.contains('human');
+    final hasVehicle = types.contains('vehicle');
+    final hasPet = types.contains('pet') || types.contains('pets');
+
+    final icons = <IconData>[
+      if (hasHuman) Icons.person,
+      if (hasVehicle) Icons.directions_car,
+      if (hasPet) Icons.pets,
+    ];
+    return icons
+        .map(
+          (i) => Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Icon(i, size: 18, color: Colors.grey),
+          ),
+        )
+        .toList();
+  }
+
+  String _detectionLabel(Set<String> types) {
+    if (types.isEmpty) return 'None';
+    final norm = {for (final t in types) (t == 'pets' ? 'pet' : t)};
+    final ordered = <String>[];
+    if (norm.contains('human')) ordered.add('Human');
+    if (norm.contains('vehicle')) ordered.add('Vehicle');
+    if (norm.contains('pet')) ordered.add('Pet');
+    return ordered.join(', ');
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
 
     return Scaffold(
-      appBar: isLandscape
-          ? null
-          : AppBar(
-              title: Text(
-                widget.visibleVideoTitle,
-                style: const TextStyle(color: Colors.white),
+      appBar:
+          isLandscape
+              ? null
+              : AppBar(
+                title: Text(
+                  widget.visibleVideoTitle,
+                  style: const TextStyle(color: Colors.white),
+                ),
+                iconTheme: const IconThemeData(color: Colors.white),
+                backgroundColor: const Color.fromARGB(255, 27, 114, 60),
               ),
-              iconTheme: const IconThemeData(color: Colors.white),
-              backgroundColor: const Color.fromARGB(255, 27, 114, 60),
-            ),
-      body: _initialized
-          ? isLandscape
-              ? _buildLandscapePlayer()
-              : _buildPortraitContent()
-          : const Center(child: CircularProgressIndicator()),
+      body:
+          _initialized
+              ? isLandscape
+                  ? _buildLandscapePlayer()
+                  : _buildPortraitContent()
+              : const Center(child: CircularProgressIndicator()),
     );
   }
 
@@ -208,14 +277,18 @@ class _VideoViewPageState extends State<VideoViewPage> {
                     final current = _controller.value.position;
                     final newPosition = current - const Duration(seconds: 5);
                     _controller.seekTo(
-                      newPosition >= Duration.zero ? newPosition : Duration.zero,
+                      newPosition >= Duration.zero
+                          ? newPosition
+                          : Duration.zero,
                     );
                   },
                 ),
                 const SizedBox(width: 24),
                 IconButton(
                   icon: Icon(
-                    _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
+                    _controller.value.isPlaying
+                        ? Icons.pause
+                        : Icons.play_arrow,
                   ),
                   iconSize: 44,
                   color: Colors.white,
@@ -242,6 +315,8 @@ class _VideoViewPageState extends State<VideoViewPage> {
   }
 
   Widget _buildPortraitContent() {
+    final effective = _dets;
+
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -287,16 +362,21 @@ class _VideoViewPageState extends State<VideoViewPage> {
                         iconSize: 36,
                         onPressed: () {
                           final current = _controller.value.position;
-                          final newPosition = current - const Duration(seconds: 5);
+                          final newPosition =
+                              current - const Duration(seconds: 5);
                           _controller.seekTo(
-                            newPosition >= Duration.zero ? newPosition : Duration.zero,
+                            newPosition >= Duration.zero
+                                ? newPosition
+                                : Duration.zero,
                           );
                         },
                       ),
                       const SizedBox(width: 24),
                       IconButton(
                         icon: Icon(
-                          _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
+                          _controller.value.isPlaying
+                              ? Icons.pause
+                              : Icons.play_arrow,
                         ),
                         iconSize: 44,
                         onPressed: _togglePlayPause,
@@ -308,7 +388,8 @@ class _VideoViewPageState extends State<VideoViewPage> {
                         onPressed: () {
                           final current = _controller.value.position;
                           final max = _controller.value.duration;
-                          final newPosition = current + const Duration(seconds: 5);
+                          final newPosition =
+                              current + const Duration(seconds: 5);
                           _controller.seekTo(
                             newPosition <= max ? newPosition : max,
                           );
@@ -322,9 +403,17 @@ class _VideoViewPageState extends State<VideoViewPage> {
             const SizedBox(height: 24),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                "Detections: ${widget.detections.isNotEmpty ? widget.detections.join(', ') : 'None'}",
-                style: const TextStyle(fontSize: 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      "Detections: ${_detectionLabel(effective)}",
+                      style: const TextStyle(fontSize: 16),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  ..._detectionIcons(effective),
+                ],
               ),
             ),
             Padding(
@@ -336,7 +425,10 @@ class _VideoViewPageState extends State<VideoViewPage> {
             ),
             if (widget.canDownload)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 child: ElevatedButton(
                   onPressed: _downloadVideo,
                   child: const Text("Save Video to Gallery"),

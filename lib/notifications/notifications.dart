@@ -89,10 +89,6 @@ Future<void> initLocalNotifications() async {
                         visibleVideoTitle: repackageVideoTitle(
                           foundVideo.video,
                         ),
-                        detections:
-                            foundVideo.motion && foundVideo.received
-                                ? ['Human']
-                                : [],
                         canDownload: foundVideo.received,
                       ),
                 ),

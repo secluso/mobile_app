@@ -256,12 +256,14 @@ fn wire__crate__api__decrypt_thumbnail_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api__camera_name = <String>::sse_decode(&mut deserializer);
             let api_enc_filename = <String>::sse_decode(&mut deserializer);
+            let api_pending_meta_directory = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
                     let output_ok = Result::<_, ()>::Ok(crate::api::decrypt_thumbnail(
                         api__camera_name,
                         api_enc_filename,
+                        api_pending_meta_directory,
                     ))?;
                     Ok(output_ok)
                 })())

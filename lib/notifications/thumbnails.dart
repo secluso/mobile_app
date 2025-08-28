@@ -106,26 +106,36 @@ class ThumbnailManager {
 
           if (result.isFailure) break;
 
+          Log.d("Proceeding after thumbnail download");
+          final baseDir = await getApplicationDocumentsDirectory();
+          final metaDir = Directory(p.join(baseDir.path, 'waiting', 'meta'));
+          await metaDir.create(recursive: true);
+
           // Decode the thumbnail
           var file = result.value!.file!;
           var decFileName = await decryptThumbnail(
             cameraName: camera,
             encFilename: fileName,
+            pendingMetaDirectory: metaDir.path,
           );
+
           Log.d("Thumbnail dec file name = $decFileName");
 
           if (decFileName != "Error") {
             await file.delete();
-            var result = decFileName == "$targetTimestamp.png";
+            var result = decFileName == "thumbnail_$targetTimestamp.png";
             Log.d(
-              "Received thumbnail 100%, comparing to $targetTimestamp.png ($result)",
+              "Received thumbnail 100%, comparing to thumbnail_$targetTimestamp.png ($result)",
             );
             ThumbnailNotifier.instance.notify(camera);
 
-            if (decFileName == "$targetTimestamp.png") {
+            if (decFileName == "thumbnail_$targetTimestamp.png") {
               Log.d("Received target thumbnail");
               onTargetReady(true);
             }
+          } else {
+            // TODO: What do we do here? We probably shouldn't increment the epoch if we hit an error..
+            return;
           }
 
           await prefs.setInt("thumbnailEpoch$camera", epoch + 1);

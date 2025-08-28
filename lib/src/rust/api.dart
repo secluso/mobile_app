@@ -30,9 +30,11 @@ Future<String> decryptVideo({
 Future<String> decryptThumbnail({
   required String cameraName,
   required String encFilename,
+  required String pendingMetaDirectory,
 }) => RustLib.instance.api.crateApiDecryptThumbnail(
   cameraName: cameraName,
   encFilename: encFilename,
+  pendingMetaDirectory: pendingMetaDirectory,
 );
 
 Future<String> flutterAddCamera({

@@ -111,6 +111,47 @@ final _entities = <obx_int.ModelEntity>[
     relations: <obx_int.ModelRelation>[],
     backlinks: <obx_int.ModelBacklink>[],
   ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(4, 6557164317597158706),
+    name: 'Detection',
+    lastPropertyId: const obx_int.IdUid(6, 5966625053583304070),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 8075480939196241423),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 2146544567202267283),
+        name: 'type',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(4, 7725688816429019935),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 4648362710815812305),
+        name: 'camera',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 4130886675328047449),
+        name: 'videoFile',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 5966625053583304070),
+        name: 'confidence',
+        type: 8,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
 ];
 
 /// Shortcut for [obx.Store.new] that passes [getObjectBoxModel] and for Flutter
@@ -151,13 +192,13 @@ Future<obx.Store> openStore({
 obx_int.ModelDefinition getObjectBoxModel() {
   final model = obx_int.ModelInfo(
     entities: _entities,
-    lastEntityId: const obx_int.IdUid(3, 6234359154707246677),
-    lastIndexId: const obx_int.IdUid(2, 9006837534420486771),
+    lastEntityId: const obx_int.IdUid(4, 6557164317597158706),
+    lastIndexId: const obx_int.IdUid(4, 7725688816429019935),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [],
-    retiredIndexUids: const [],
-    retiredPropertyUids: const [],
+    retiredIndexUids: const [733525320966176908],
+    retiredPropertyUids: const [5538681523148220227],
     retiredRelationUids: const [],
     modelVersion: 5,
     modelVersionParserMinimum: 5,
@@ -297,6 +338,61 @@ obx_int.ModelDefinition getObjectBoxModel() {
         return object;
       },
     ),
+    Detection: obx_int.EntityDefinition<Detection>(
+      model: _entities[3],
+      toOneRelations: (Detection object) => [],
+      toManyRelations: (Detection object) => {},
+      getId: (Detection object) => object.id,
+      setId: (Detection object, int id) {
+        object.id = id;
+      },
+      objectToFB: (Detection object, fb.Builder fbb) {
+        final typeOffset = fbb.writeString(object.type);
+        final cameraOffset = fbb.writeString(object.camera);
+        final videoFileOffset = fbb.writeString(object.videoFile);
+        fbb.startTable(7);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(2, typeOffset);
+        fbb.addOffset(3, cameraOffset);
+        fbb.addOffset(4, videoFileOffset);
+        fbb.addFloat64(5, object.confidence);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+        final idParam = const fb.Int64Reader().vTableGet(
+          buffer,
+          rootOffset,
+          4,
+          0,
+        );
+        final typeParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 8, '');
+        final cameraParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 10, '');
+        final videoFileParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGet(buffer, rootOffset, 12, '');
+        final confidenceParam = const fb.Float64Reader().vTableGetNullable(
+          buffer,
+          rootOffset,
+          14,
+        );
+        final object = Detection(
+          id: idParam,
+          type: typeParam,
+          camera: cameraParam,
+          videoFile: videoFileParam,
+          confidence: confidenceParam,
+        );
+
+        return object;
+      },
+    ),
   };
 
   return obx_int.ModelDefinition(model, bindings);
@@ -354,5 +450,33 @@ class Meta_ {
   /// See [Meta.dbVersion].
   static final dbVersion = obx.QueryIntegerProperty<Meta>(
     _entities[2].properties[1],
+  );
+}
+
+/// [Detection] entity fields to define ObjectBox queries.
+class Detection_ {
+  /// See [Detection.id].
+  static final id = obx.QueryIntegerProperty<Detection>(
+    _entities[3].properties[0],
+  );
+
+  /// See [Detection.type].
+  static final type = obx.QueryStringProperty<Detection>(
+    _entities[3].properties[1],
+  );
+
+  /// See [Detection.camera].
+  static final camera = obx.QueryStringProperty<Detection>(
+    _entities[3].properties[2],
+  );
+
+  /// See [Detection.videoFile].
+  static final videoFile = obx.QueryStringProperty<Detection>(
+    _entities[3].properties[3],
+  );
+
+  /// See [Detection.confidence].
+  static final confidence = obx.QueryDoubleProperty<Detection>(
+    _entities[3].properties[4],
   );
 }

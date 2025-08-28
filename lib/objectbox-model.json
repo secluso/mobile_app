@@ -83,17 +83,57 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "4:6557164317597158706",
+      "lastPropertyId": "6:5966625053583304070",
+      "name": "Detection",
+      "properties": [
+        {
+          "id": "1:8075480939196241423",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "3:2146544567202267283",
+          "name": "type",
+          "type": 9,
+          "flags": 2048,
+          "indexId": "4:7725688816429019935"
+        },
+        {
+          "id": "4:4648362710815812305",
+          "name": "camera",
+          "type": 9
+        },
+        {
+          "id": "5:4130886675328047449",
+          "name": "videoFile",
+          "type": 9
+        },
+        {
+          "id": "6:5966625053583304070",
+          "name": "confidence",
+          "type": 8
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "3:6234359154707246677",
-  "lastIndexId": "2:9006837534420486771",
+  "lastEntityId": "4:6557164317597158706",
+  "lastIndexId": "4:7725688816429019935",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,
   "modelVersionParserMinimum": 5,
   "retiredEntityUids": [],
-  "retiredIndexUids": [],
-  "retiredPropertyUids": [],
+  "retiredIndexUids": [
+    733525320966176908
+  ],
+  "retiredPropertyUids": [
+    5538681523148220227
+  ],
   "retiredRelationUids": [],
   "version": 1
 }

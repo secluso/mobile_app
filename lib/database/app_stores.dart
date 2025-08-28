@@ -1,6 +1,7 @@
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:privastead_flutter/objectbox.g.dart';
+import 'entities.dart';
 
 /// Holds box ObjectBox stores (camera + video) as a single global singleton.
 class AppStores {
@@ -20,6 +21,9 @@ class AppStores {
     _singleton._videoStore = await openStore(
       directory: p.join(docsDir.path, 'video-db'),
     );
+    _singleton._detectionStore = await openStore(
+      directory: p.join(docsDir.path, 'detection-db'),
+    );
 
     _initialized = true;
     return _singleton;
@@ -35,13 +39,16 @@ class AppStores {
   // Actual stores
   late final Store _cameraStore;
   late final Store _videoStore;
+  late final Store _detectionStore;
 
   Store get cameraStore => _cameraStore;
   Store get videoStore => _videoStore;
+  Store get detectionStore => _detectionStore;
 
   void close() async {
     _cameraStore.close();
     _videoStore.close();
+    _detectionStore.close();
     _initialized = false;
   }
 }

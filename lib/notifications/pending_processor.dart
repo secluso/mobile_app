@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'dart:convert';
+
 import 'package:privastead_flutter/utilities/logger.dart';
 import 'package:privastead_flutter/database/entities.dart';
 import 'package:privastead_flutter/database/app_stores.dart';
@@ -59,8 +61,6 @@ class QueueProcessor {
     for (var file in files) {
       if (file is File) {
         try {
-          Log.d("Starting to process a pending file");
-          // TODO: Potentailly store metadata in the pending file if need be.
           final cameraName = p
               .basename(p.dirname(file.path))
               .replaceFirst('camera_', '');
@@ -74,6 +74,47 @@ class QueueProcessor {
             final box = AppStores.instance.videoStore.box<Video>();
             var video = Video(cameraName, videoFile, true, true);
             box.put(video);
+
+            try {
+              final baseName = p.basenameWithoutExtension(videoFile);
+              final ts =
+                  baseName.startsWith("video_")
+                      ? baseName.substring(6)
+                      : baseName;
+
+              final metaFile = File(
+                p.join(baseDir.path, 'waiting', 'meta', 'meta_$ts.txt'),
+              );
+
+              if (!await metaFile.exists()) {
+                Log.d(
+                  "No meta file for $videoFile (expected: ${metaFile.path})",
+                );
+              } else {
+                final raw = await metaFile.readAsString();
+                Log.d("Meta file (${metaFile.path}) contents:\n$raw");
+
+                final List<dynamic> decoded = jsonDecode(raw);
+                final detections = decoded.cast<String>();
+
+                final detectionBox =
+                    AppStores.instance.detectionStore.box<Detection>();
+                for (final d in detections) {
+                  final detection = Detection(
+                    camera: cameraName,
+                    videoFile: videoFile,
+                    type: d, // lowercase string from Rust
+                  );
+                  final id = detectionBox.put(detection);
+                  Log.d('Detection put id=$id type="$d" video="$videoFile"');
+                }
+
+                await metaFile.delete();
+                Log.d("Saved ${detections.length} detection(s) for $videoFile");
+              }
+            } catch (e, st) {
+              Log.e("Failed to process meta for $videoFile: $e\n$st");
+            }
 
             final cameraBox = AppStores.instance.cameraStore.box<Camera>();
             final cameraQuery =
@@ -112,7 +153,7 @@ class QueueProcessor {
             }
 
             await file.delete();
-          } else {
+          } else if (!videoFile.startsWith("meta_")) {
             Log.d(
               "Disregarding file $videoFile for $cameraName in update pending logic",
             );
