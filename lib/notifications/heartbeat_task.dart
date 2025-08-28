@@ -77,15 +77,15 @@ Future<bool> _doHeartbeatTask(String cameraName) async {
     command: encConfigMsg,
   );
 
-  // Download pending videos before processing the heartbeat response.
-  // This prevents thinking that the MLS channel is corrupted if there
-  // are pending video files in the server.
-  await retrieveVideos(cameraName);
-
   await res.fold(
     (_) async {
       for (int i = 0; i < 30 && !successful; i++) {
         await Future.delayed(Duration(seconds: 2));
+        // Download pending videos before processing the heartbeat response.
+        // This prevents thinking that the MLS channel is corrupted if there
+        // are pending video files in the server.
+        await retrieveVideos(cameraName);
+
         final fetchRes = await HttpClientService.instance.fetchConfigResponse(
           cameraName: cameraName,
         );
