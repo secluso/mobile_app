@@ -20,9 +20,8 @@ fs2 = "0.4.3"
 tracing-log = "0.2.0"
 
 [dependencies.secluso-app-native]
-#git = "https://github.com/secluso/secluso"
-#rev = "7f6a5af"
-path = "../../app_native"
+git = "https://github.com/secluso/secluso"
+rev = "91ad9ff"
 package = "secluso-app-native"
 
 [lints.rust]
