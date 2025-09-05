@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Privastead</string>
+	<string>Secluso</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>privastead_flutter</string>
+	<string>secluso_flutter</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -60,7 +60,7 @@
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<!-- match _bgTaskId in download_scheduler.dart -->
-		<string>com.privastead.task</string>
+		<string>com.secluso.task</string>
 	</array>
 	<key>UIBackgroundModes</key>
 	<array>

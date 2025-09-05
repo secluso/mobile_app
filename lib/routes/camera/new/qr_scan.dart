@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:privastead_flutter/constants.dart';
+import 'package:secluso_flutter/constants.dart';
 import 'dart:async';
 
 /// This dialog displays the camera preview and scans for a single QR code.

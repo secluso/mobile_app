@@ -11,13 +11,13 @@ import 'dart:ui';
 import 'dart:io';
 import 'dart:async';
 
-import 'package:privastead_flutter/src/rust/api.dart';
-import 'package:privastead_flutter/database/entities.dart';
-import 'package:privastead_flutter/database/app_stores.dart';
-import 'package:privastead_flutter/utilities/logger.dart';
-import 'package:privastead_flutter/notifications/firebase.dart';
-import 'package:privastead_flutter/keys.dart';
-import 'package:privastead_flutter/main.dart';
+import 'package:secluso_flutter/src/rust/api.dart';
+import 'package:secluso_flutter/database/entities.dart';
+import 'package:secluso_flutter/database/app_stores.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/notifications/firebase.dart';
+import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/main.dart';
 import 'view_camera.dart';
 import 'new/show_new_camera_options.dart';
 import '../../objectbox.g.dart';
@@ -707,7 +707,7 @@ class CamerasPageState extends State<CamerasPage>
         return Scaffold(
           appBar: AppBar(
             title: const Text('Cameras', style: TextStyle(color: Colors.white)),
-            backgroundColor: const Color.fromARGB(255, 27, 114, 60),
+            backgroundColor: const Color.fromARGB(255, 139, 179, 238),
             leading: IconButton(
               icon: const Icon(Icons.menu, color: Colors.white),
               onPressed: () {
@@ -739,8 +739,8 @@ class CamerasPageState extends State<CamerasPage>
                         ],
                         gradient: const LinearGradient(
                           colors: [
-                            Color.fromARGB(255, 27, 114, 60),
-                            Color.fromARGB(255, 54, 178, 98),
+                            Color.fromARGB(255, 139, 179, 238),
+                            Color.fromARGB(255, 113, 160, 231),
                           ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
@@ -831,12 +831,7 @@ class CamerasPageState extends State<CamerasPage>
                                   },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.white,
-                                    foregroundColor: const Color.fromARGB(
-                                      255,
-                                      27,
-                                      114,
-                                      60,
-                                    ),
+                                    foregroundColor: const Color.fromARGB(255, 139, 179, 238),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
@@ -959,12 +954,7 @@ class CamerasPageState extends State<CamerasPage>
                               ),
                             );
                           },
-                          backgroundColor: const Color.fromARGB(
-                            255,
-                            27,
-                            114,
-                            60,
-                          ),
+                          backgroundColor: const Color.fromARGB(255, 139, 179, 238),
                           tooltip: "Pair New Camera",
                           child: const Icon(Icons.add, color: Colors.white),
                         ),

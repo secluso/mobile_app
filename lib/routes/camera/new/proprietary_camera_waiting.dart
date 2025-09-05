@@ -9,16 +9,16 @@ import 'package:uuid/rng.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:privastead_flutter/constants.dart';
-import 'package:privastead_flutter/database/app_stores.dart';
-import 'package:privastead_flutter/database/entities.dart';
-import 'package:privastead_flutter/src/rust/api.dart';
+import 'package:secluso_flutter/constants.dart';
+import 'package:secluso_flutter/database/app_stores.dart';
+import 'package:secluso_flutter/database/entities.dart';
+import 'package:secluso_flutter/src/rust/api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:privastead_flutter/keys.dart';
-import 'package:privastead_flutter/routes/camera/list_cameras.dart';
-import 'package:privastead_flutter/utilities/logger.dart';
-import 'package:privastead_flutter/utilities/http_client.dart';
-import 'package:privastead_flutter/utilities/rust_util.dart';
+import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/routes/camera/list_cameras.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/http_client.dart';
+import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'proprietary_camera_option.dart';
 import 'package:path/path.dart' as p;
 
@@ -64,10 +64,10 @@ class _ProprietaryCameraWaitingDialogState
     if (_wifiDisconnected) return;
 
     try {
-      const platform = MethodChannel("privastead.com/wifi");
+      const platform = MethodChannel("secluso.com/wifi");
       await platform.invokeMethod<String>(
         'disconnectFromWifi',
-        <String, dynamic>{'ssid': "Privastead"},
+        <String, dynamic>{'ssid': "Secluso"},
       );
       _wifiDisconnected = true;
     } catch (e) {
@@ -111,10 +111,10 @@ class _ProprietaryCameraWaitingDialogState
       if (Platform.isIOS) {
         for (var i = 0; i < 15; i++) {
           try {
-            const platform = MethodChannel("privastead.com/wifi");
+            const platform = MethodChannel("secluso.com/wifi");
             var response = await platform.invokeMethod<String>(
               'getCurrentSSID',
-              <String, dynamic>{'ssid': "Privastead"},
+              <String, dynamic>{'ssid': "Secluso"},
             );
 
             if (response == null || response.isEmpty) {

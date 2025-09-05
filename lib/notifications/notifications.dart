@@ -5,14 +5,14 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
-import 'package:privastead_flutter/objectbox.g.dart';
-import 'package:privastead_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/objectbox.g.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
 
-import 'package:privastead_flutter/routes/camera/view_video.dart';
-import 'package:privastead_flutter/routes/camera/view_camera.dart';
-import 'package:privastead_flutter/database/entities.dart';
-import 'package:privastead_flutter/main.dart';
-import 'package:privastead_flutter/database/app_stores.dart';
+import 'package:secluso_flutter/routes/camera/view_video.dart';
+import 'package:secluso_flutter/routes/camera/view_camera.dart';
+import 'package:secluso_flutter/database/entities.dart';
+import 'package:secluso_flutter/main.dart';
+import 'package:secluso_flutter/database/app_stores.dart';
 
 final FlutterLocalNotificationsPlugin _notifs =
     FlutterLocalNotificationsPlugin();
@@ -142,8 +142,8 @@ Future<void> showMotionNotification({
       icon: 'ic_notification',
       vibrationPattern: Int64List.fromList([500, 500, 500, 500, 500]),
       enableLights: true,
-      color: const Color(0xFF00FF00),
-      ledColor: const Color(0xFF00FF00),
+      color: const Color(0xFF8BB3EE),
+      ledColor: const Color(0xFF8BB3EE),
       ledOnMs: 2000,
       ledOffMs: 2000,
       styleInformation: bigPic,
@@ -159,8 +159,8 @@ Future<void> showMotionNotification({
       icon: 'ic_notification',
       vibrationPattern: Int64List.fromList([500, 500, 500, 500, 500]),
       enableLights: true,
-      color: const Color(0xFF00FF00),
-      ledColor: const Color(0xFF00FF00),
+      color: const Color(0xFF8BB3EE),
+      ledColor: const Color(0xFF8BB3EE),
       ledOnMs: 2000,
       ledOffMs: 2000,
       onlyAlertOnce: onlyAlertOnce,
@@ -231,8 +231,8 @@ Future<void> showCameraStatusNotification({
     icon: 'ic_notification',
     vibrationPattern: Int64List.fromList([500, 500, 500, 500, 500]),
     enableLights: true,
-    color: const Color(0xFF00FF00),
-    ledColor: const Color(0xFF00FF00),
+    color: const Color(0xFF8BB3EE),
+    ledColor: const Color(0xFF8BB3EE),
     ledOnMs: 2000,
     ledOffMs: 2000,
   );

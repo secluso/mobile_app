@@ -15,7 +15,7 @@ import workmanager
         FirebaseApp.configure()  // Native Firebase init BEFORE plugins
 
         // REQUIRED so iOS knows which task id belongs to Workmanager
-        WorkmanagerPlugin.registerTask(withIdentifier: "com.privastead.task")
+        WorkmanagerPlugin.registerTask(withIdentifier: "com.secluso.task")
 
         // Ensures all plugins (http, path_provider …) are available
         WorkmanagerPlugin.setPluginRegistrantCallback { registry in
@@ -33,7 +33,7 @@ import workmanager
 
         let controller: FlutterViewController = window?.rootViewController as! FlutterViewController
         let wifi = FlutterMethodChannel(
-            name: "privastead.com/wifi",
+            name: "secluso.com/wifi",
             binaryMessenger: controller.binaryMessenger)
         wifi.setMethodCallHandler({
             (call: FlutterMethodCall, result: @escaping FlutterResult) -> Void in
@@ -93,7 +93,7 @@ import workmanager
         })
 
         let thumb = FlutterMethodChannel(
-            name: "privastead.com/thumbnail",
+            name: "secluso.com/thumbnail",
             binaryMessenger: controller.binaryMessenger
         )
         thumb.setMethodCallHandler { call, result in

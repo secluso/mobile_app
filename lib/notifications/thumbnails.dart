@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'package:privastead_flutter/utilities/http_client.dart';
-import 'package:privastead_flutter/constants.dart';
-import 'package:privastead_flutter/routes/camera/list_cameras.dart';
+import 'package:secluso_flutter/utilities/http_client.dart';
+import 'package:secluso_flutter/constants.dart';
+import 'package:secluso_flutter/routes/camera/list_cameras.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:privastead_flutter/src/rust/api.dart';
-import 'package:privastead_flutter/utilities/logger.dart';
-import 'package:privastead_flutter/utilities/lock.dart';
+import 'package:secluso_flutter/src/rust/api.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/lock.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'dart:io';

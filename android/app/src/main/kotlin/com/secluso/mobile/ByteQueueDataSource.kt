@@ -1,4 +1,4 @@
-package com.privastead.mobile
+package com.secluso.mobile
 
 import androidx.media3.common.C
 import androidx.media3.datasource.BaseDataSource

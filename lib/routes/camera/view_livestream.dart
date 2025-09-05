@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart';
-import 'package:privastead_flutter/keys.dart';
-import 'package:privastead_flutter/notifications/heartbeat_task.dart';
-import 'package:privastead_flutter/utilities/byte_stream_player.dart';
-import 'package:privastead_flutter/utilities/http_client.dart';
+import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/notifications/heartbeat_task.dart';
+import 'package:secluso_flutter/utilities/byte_stream_player.dart';
+import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:privastead_flutter/src/rust/api.dart';
-import 'package:privastead_flutter/utilities/byte_player_view.dart';
-import 'package:privastead_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/src/rust/api.dart';
+import 'package:secluso_flutter/utilities/byte_player_view.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-import 'package:privastead_flutter/database/entities.dart';
-import 'package:privastead_flutter/database/app_stores.dart';
-import 'package:privastead_flutter/routes/camera/view_camera.dart';
+import 'package:secluso_flutter/database/entities.dart';
+import 'package:secluso_flutter/database/app_stores.dart';
+import 'package:secluso_flutter/routes/camera/view_camera.dart';
 import 'dart:io';
 import '../../objectbox.g.dart';
 
@@ -356,7 +356,7 @@ class _LivestreamPageState extends State<LivestreamPage>
                   'Livestream - ${widget.cameraName}',
                   style: TextStyle(color: Colors.white),
                 ),
-                backgroundColor: const Color.fromARGB(255, 27, 114, 60),
+                backgroundColor: const Color.fromARGB(255, 139, 179, 238),
                 iconTheme: const IconThemeData(color: Colors.white),
               ),
       body:

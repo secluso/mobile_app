@@ -1,27 +1,27 @@
 import 'package:flutter/material.dart';
-import 'package:privastead_flutter/notifications/heartbeat_task.dart';
-import 'package:privastead_flutter/notifications/scheduler.dart';
-import 'package:privastead_flutter/src/rust/frb_generated.dart';
-import 'package:privastead_flutter/src/rust/api/logger.dart';
-import 'package:privastead_flutter/utilities/rust_util.dart';
-import 'package:privastead_flutter/notifications/thumbnails.dart';
+import 'package:secluso_flutter/notifications/heartbeat_task.dart';
+import 'package:secluso_flutter/notifications/scheduler.dart';
+import 'package:secluso_flutter/src/rust/frb_generated.dart';
+import 'package:secluso_flutter/src/rust/api/logger.dart';
+import 'package:secluso_flutter/utilities/rust_util.dart';
+import 'package:secluso_flutter/notifications/thumbnails.dart';
 import 'routes/home_page.dart';
 import "routes/theme_provider.dart";
 import 'package:provider/provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:privastead_flutter/notifications/firebase_options.dart';
+import 'package:secluso_flutter/notifications/firebase_options.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:privastead_flutter/notifications/firebase.dart';
-import 'package:privastead_flutter/database/app_stores.dart';
-import 'package:privastead_flutter/database/entities.dart';
-import 'package:privastead_flutter/notifications/pending_processor.dart';
-import 'package:privastead_flutter/database/migration_runner.dart';
-import 'package:privastead_flutter/utilities/logger.dart';
-import 'package:privastead_flutter/utilities/http_client.dart';
-import 'package:privastead_flutter/utilities/lock.dart';
-import 'package:privastead_flutter/keys.dart';
-import 'package:privastead_flutter/constants.dart';
+import 'package:secluso_flutter/notifications/firebase.dart';
+import 'package:secluso_flutter/database/app_stores.dart';
+import 'package:secluso_flutter/database/entities.dart';
+import 'package:secluso_flutter/notifications/pending_processor.dart';
+import 'package:secluso_flutter/database/migration_runner.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/http_client.dart';
+import 'package:secluso_flutter/utilities/lock.dart';
+import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/constants.dart';
 import 'dart:ui';
 import 'dart:isolate';
 
@@ -40,7 +40,7 @@ void main() async {
 
     // For now, we filter out all Rust code that isn't from us in release mode.
     if (kReleaseMode &&
-        (!tag.contains("privastead") && !tag.startsWith("src"))) {
+        (!tag.contains("secluso") && !tag.startsWith("src"))) {
       return;
     }
 

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:privastead_flutter/src/rust/api.dart';
+import 'package:secluso_flutter/src/rust/api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:privastead_flutter/utilities/logger.dart';
-import 'package:privastead_flutter/routes/camera/new/ip_camera_waiting.dart';
-import 'package:privastead_flutter/keys.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/routes/camera/new/ip_camera_waiting.dart';
+import 'package:secluso_flutter/keys.dart';
 import 'qr_scan.dart';
 import 'package:flutter/services.dart';
 import 'dart:io' show Directory;

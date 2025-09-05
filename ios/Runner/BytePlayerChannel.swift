@@ -5,7 +5,7 @@ final class BytePlayerChannel {
     static func register(with messenger: FlutterBinaryMessenger) {
 
         let channel = FlutterMethodChannel(
-            name: "privastead.com/ios/byte_player",
+            name: "secluso.com/ios/byte_player",
             binaryMessenger: messenger)
 
         channel.setMethodCallHandler {

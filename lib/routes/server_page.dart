@@ -2,17 +2,17 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:privastead_flutter/constants.dart';
+import 'package:secluso_flutter/constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'theme_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:privastead_flutter/keys.dart';
-import 'package:privastead_flutter/notifications/firebase.dart';
-import 'package:privastead_flutter/database/app_stores.dart';
-import 'package:privastead_flutter/database/entities.dart';
-import 'package:privastead_flutter/utilities/rust_util.dart';
-import 'package:privastead_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/notifications/firebase.dart';
+import 'package:secluso_flutter/database/app_stores.dart';
+import 'package:secluso_flutter/database/entities.dart';
+import 'package:secluso_flutter/utilities/rust_util.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
 import 'home_page.dart';
 
 class ServerPage extends StatefulWidget {
@@ -151,7 +151,7 @@ class _ServerPageState extends State<ServerPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text("Server Settings", style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color.fromARGB(255, 27, 114, 60),
+        backgroundColor: const Color.fromARGB(255, 139, 179, 238),
         leading:
             widget.showBackButton
                 ? IconButton(
@@ -182,7 +182,7 @@ class _ServerPageState extends State<ServerPage> {
                     color:
                         isDarkMode
                             ? Colors.grey[900]
-                            : const Color.fromARGB(255, 235, 251, 239),
+                            : const Color.fromARGB(255, 203, 216, 236),
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
@@ -202,15 +202,15 @@ class _ServerPageState extends State<ServerPage> {
                           fontWeight: FontWeight.bold,
                           color:
                               isDarkMode
-                                  ? Colors.greenAccent
-                                  : const Color.fromARGB(255, 27, 114, 60),
+                                  ? Color.fromARGB(255, 139, 179, 238)
+                                  : const Color.fromARGB(255, 139, 179, 238),
                         ),
                       ),
                       Divider(
                         color:
                             isDarkMode
-                                ? Colors.greenAccent
-                                : Colors.green.shade700,
+                                ? Color.fromARGB(255, 139, 179, 238)
+                                : Color.fromARGB(255, 139, 179, 238),
                         thickness: 1,
                       ),
                       SizedBox(height: 8),

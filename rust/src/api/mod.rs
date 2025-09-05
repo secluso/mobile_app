@@ -1,7 +1,7 @@
 pub mod logger;
 pub mod lock_manager;
 
-use privastead_app_native::{self, Clients};
+use secluso_app_native::{self, Clients};
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -22,7 +22,7 @@ pub fn initialize_camera(camera_name: String, file_dir: String, first_time: bool
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        return match privastead_app_native::initialize(&mut *client_guard, file_dir, first_time) {
+        return match secluso_app_native::initialize(&mut *client_guard, file_dir, first_time) {
             Ok(_v) => return true,
             //TODO: Add back the error logging here
             Err(_e) => return false,
@@ -45,12 +45,12 @@ pub fn deregister_camera(camera_name: String) {
                 // Start inner scope: lock, call deregister, then drop
                 match client_mutex.lock() {
                     Ok(mut client_guard) => {
-                        privastead_app_native::deregister(&mut *client_guard);
+                        secluso_app_native::deregister(&mut *client_guard);
                     }
                     Err(poisoned) => {
                         info!("Mutex for {} was poisoned. Recovering.", camera_name);
                         let mut client_guard = poisoned.into_inner();
-                        privastead_app_native::deregister(&mut *client_guard);
+                        secluso_app_native::deregister(&mut *client_guard);
                     }
                 }
             } // client_guard is dropped here
@@ -75,7 +75,7 @@ pub fn decrypt_video(_camera_name: String, enc_filename: String) -> String {
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        match privastead_app_native::decrypt_video(&mut *client_guard, enc_filename) {
+        match secluso_app_native::decrypt_video(&mut *client_guard, enc_filename) {
             Ok(decrypted_filename) => {
                 return decrypted_filename;
             }
@@ -99,7 +99,7 @@ pub fn decrypt_thumbnail(_camera_name: String, enc_filename: String, pending_met
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        match privastead_app_native::decrypt_thumbnail(&mut *client_guard, enc_filename, pending_meta_directory) {
+        match secluso_app_native::decrypt_thumbnail(&mut *client_guard, enc_filename, pending_meta_directory) {
             Ok(decrypted_filename) => {
                 return decrypted_filename;
             }
@@ -133,7 +133,7 @@ pub fn flutter_add_camera(
         let mut client_guard = client_entry.lock().unwrap();
 
         //TODO: Have this return a result, and then print the error (and return false)
-        return privastead_app_native::add_camera(
+        return secluso_app_native::add_camera(
             &mut *client_guard,
             camera_name,
             ip,
@@ -195,7 +195,7 @@ pub fn encrypt_settings_message(camera_name: String, data: Vec<u8>) -> Vec<u8> {
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        match privastead_app_native::encrypt_settings_message(&mut *client_guard, data) {
+        match secluso_app_native::encrypt_settings_message(&mut *client_guard, data) {
             Ok(encrypted_message) => {
                 return encrypted_message;
             }
@@ -219,7 +219,7 @@ pub fn decrypt_message(client_tag: String, camera_name: String, data: Vec<u8>) -
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        match privastead_app_native::decrypt_message(&mut *client_guard, &client_tag, data) {
+        match secluso_app_native::decrypt_message(&mut *client_guard, &client_tag, data) {
             Ok(timestamp) => {
                 return timestamp;
             }
@@ -243,7 +243,7 @@ pub fn get_group_name(client_tag: String, camera_name: String) -> String {
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        match privastead_app_native::get_group_name(&mut *client_guard, &client_tag) {
+        match secluso_app_native::get_group_name(&mut *client_guard, &client_tag) {
             Ok(motion_group_name) => {
                 return motion_group_name;
             }
@@ -267,7 +267,7 @@ pub fn livestream_update(camera_name: String, msg: Vec<u8>) -> bool {
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        match privastead_app_native::livestream_update(&mut *client_guard, msg) {
+        match secluso_app_native::livestream_update(&mut *client_guard, msg) {
             Ok(_) => {
                 return true;
             }
@@ -291,7 +291,7 @@ pub fn livestream_decrypt(camera_name: String, data: Vec<u8>, expected_chunk_num
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        let ret = match privastead_app_native::livestream_decrypt(&mut *client_guard, data, expected_chunk_number) {
+        let ret = match secluso_app_native::livestream_decrypt(&mut *client_guard, data, expected_chunk_number) {
             Ok(dec_data) => dec_data,
             Err(e) => {
                 info!("Error: {}", e);
@@ -315,7 +315,7 @@ pub fn generate_heartbeat_request_config_command(camera_name: String, timestamp:
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        let ret = match privastead_app_native::generate_heartbeat_request_config_command(&mut *client_guard, timestamp) {
+        let ret = match secluso_app_native::generate_heartbeat_request_config_command(&mut *client_guard, timestamp) {
             Ok(config_msg_enc) => config_msg_enc,
             Err(e) => {
                 info!("Error: {}", e);
@@ -339,7 +339,7 @@ pub fn process_heartbeat_config_response(camera_name: String, config_response: V
             .or_insert_with(|| Mutex::new(None));
         let mut client_guard = client_entry.lock().unwrap();
 
-        match privastead_app_native::process_heartbeat_config_response(&mut *client_guard, config_response, expected_timestamp) {
+        match secluso_app_native::process_heartbeat_config_response(&mut *client_guard, config_response, expected_timestamp) {
             Ok(heartbeat_response) => {
                 return heartbeat_response;
             }

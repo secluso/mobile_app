@@ -1,15 +1,15 @@
 import 'dart:io' show Platform;
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:privastead_flutter/constants.dart';
-import 'package:privastead_flutter/keys.dart';
-import 'package:privastead_flutter/notifications/download_task.dart';
-import 'package:privastead_flutter/notifications/heartbeat_task.dart';
-import 'package:privastead_flutter/utilities/logger.dart';
-import 'package:privastead_flutter/utilities/lock.dart';
+import 'package:secluso_flutter/constants.dart';
+import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/notifications/download_task.dart';
+import 'package:secluso_flutter/notifications/heartbeat_task.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/lock.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 
-const String _bgTaskId = 'com.privastead.task'; // Matches Info.plist
+const String _bgTaskId = 'com.secluso.task'; // Matches Info.plist
 const String _workerName = 'download_worker'; // free-form tag
 const String _periodicTaskName = 'periodic_heartbeat_task';
 

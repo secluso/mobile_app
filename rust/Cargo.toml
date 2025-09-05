@@ -1,5 +1,5 @@
 [package]
-name = "rust_lib_privastead_flutter"
+name = "rust_lib_secluso_flutter"
 version = "0.1.0"
 edition = "2021"
 
@@ -19,10 +19,11 @@ log = { version="0.4.27", features=["kv"] }
 fs2 = "0.4.3"
 tracing-log = "0.2.0"
 
-[dependencies.privastead-app-native]
-git = "https://github.com/privastead/privastead"
-rev = "7f6a5af"
-package = "privastead-app-native"
+[dependencies.secluso-app-native]
+#git = "https://github.com/secluso/secluso"
+#rev = "7f6a5af"
+path = "../../app_native"
+package = "secluso-app-native"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

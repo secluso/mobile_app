@@ -1,7 +1,7 @@
 import 'app_stores.dart';
 import 'migrations.dart';
 import 'entities.dart';
-import 'package:privastead_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
 
 Future<void> runMigrations() async {
   final metaBox = AppStores.instance.cameraStore.box<Meta>();

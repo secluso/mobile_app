@@ -1,4 +1,4 @@
-package com.privastead.mobile
+package com.secluso.mobile
 
 import android.content.Context
 import android.net.ConnectivityManager
@@ -30,7 +30,7 @@ class MainActivity : FlutterActivity() {
         fun finish(id: Int) = queues.remove(id)?.clear()
     }
 
-    private val CHANNEL_PREFIX = "privastead.com/"
+    private val CHANNEL_PREFIX = "secluso.com/"
     var activeNetworkCallback: ConnectivityManager.NetworkCallback? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

@@ -1,8 +1,8 @@
-import 'package:privastead_flutter/constants.dart';
-import 'package:privastead_flutter/src/rust/api.dart';
-import 'package:privastead_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/constants.dart';
+import 'package:secluso_flutter/src/rust/api.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
 import 'proprietary_camera_waiting.dart';
-import 'package:privastead_flutter/keys.dart';
+import 'package:secluso_flutter/keys.dart';
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
@@ -79,7 +79,7 @@ class _ProprietaryCameraConnectDialogState
 
   late final int localSessionId;
 
-  final platform = MethodChannel("privastead.com/wifi");
+  final platform = MethodChannel("secluso.com/wifi");
 
   @override
   void initState() {
@@ -96,17 +96,17 @@ class _ProprietaryCameraConnectDialogState
     try {
       final result = await platform.invokeMethod<String>(
         'connectToWifi',
-        <String, dynamic>{'ssid': "Privastead", 'password': '12345678'},
+        <String, dynamic>{'ssid': "Secluso", 'password': '12345678'},
       );
       Log.d("First result from Wifi Connect Attempt: $result");
 
       if (result == "connected" &&
           !ProprietaryCameraConnectDialog.pairingInProgress) {
         try {
-          const platform = MethodChannel("privastead.com/wifi");
+          const platform = MethodChannel("secluso.com/wifi");
           await platform.invokeMethod<String>(
             'disconnectFromWifi',
-            <String, dynamic>{'ssid': "Privastead"},
+            <String, dynamic>{'ssid': "Secluso"},
           );
         } catch (e) {
           Log.w("WiFi disconnect failed from InfoDialog: $e");
@@ -123,7 +123,7 @@ class _ProprietaryCameraConnectDialogState
           //Connect again to ensure no awkward errors (not sure why this occurs sometimes), should be instant
           final result = await platform.invokeMethod<String>(
             'connectToWifi',
-            <String, dynamic>{'ssid': "Privastead", 'password': '12345678'},
+            <String, dynamic>{'ssid': "Secluso", 'password': '12345678'},
           );
           Log.d("iOS secondary result from Wifi Connect Attempt: $result");
         }
@@ -195,7 +195,7 @@ class _ProprietaryCameraConnectDialogState
       try {
         await platform.invokeMethod<String>(
           'disconnectFromWifi',
-          <String, dynamic>{'ssid': "Privastead"},
+          <String, dynamic>{'ssid': "Secluso"},
         );
       } catch (e) {
         Log.w("WiFi disconnect failed: $e");
@@ -363,10 +363,10 @@ class _ProprietaryCameraInfoDialogState
     if (!ProprietaryCameraConnectDialog.pairingCompleted &&
         ProprietaryCameraConnectDialog.pairingInProgress) {
       try {
-        const platform = MethodChannel("privastead.com/wifi");
+        const platform = MethodChannel("secluso.com/wifi");
         await platform.invokeMethod<String>(
           'disconnectFromWifi',
-          <String, dynamic>{'ssid': "Privastead"},
+          <String, dynamic>{'ssid': "Secluso"},
         );
       } catch (e) {
         Log.w("WiFi disconnect failed from InfoDialog: $e");

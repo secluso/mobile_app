@@ -1,11 +1,11 @@
-import 'package:privastead_flutter/constants.dart';
-import 'package:privastead_flutter/keys.dart';
-import 'package:privastead_flutter/notifications/download_task.dart';
-import 'package:privastead_flutter/notifications/notifications.dart';
-import 'package:privastead_flutter/utilities/http_client.dart';
-import 'package:privastead_flutter/src/rust/api.dart';
-import 'package:privastead_flutter/src/rust/frb_generated.dart';
-import 'package:privastead_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/constants.dart';
+import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/notifications/download_task.dart';
+import 'package:secluso_flutter/notifications/notifications.dart';
+import 'package:secluso_flutter/utilities/http_client.dart';
+import 'package:secluso_flutter/src/rust/api.dart';
+import 'package:secluso_flutter/src/rust/frb_generated.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
 import 'dart:io';
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -127,7 +127,7 @@ Future<bool> _doHeartbeatTask(String cameraName) async {
                   showCameraStatusNotification(
                     cameraName: cameraName,
                     msg:
-                        "Camera's Privastead firmware version has been updated to $firmwareVersion.",
+                        "Camera's Secluso firmware version has been updated to $firmwareVersion.",
                   );
                 }
                 await prefs.setString(

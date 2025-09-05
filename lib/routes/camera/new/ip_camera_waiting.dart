@@ -1,14 +1,14 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:privastead_flutter/constants.dart';
+import 'package:secluso_flutter/constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:privastead_flutter/routes/camera/list_cameras.dart';
-import 'package:privastead_flutter/utilities/logger.dart';
-import 'package:privastead_flutter/utilities/rust_util.dart';
-import 'package:privastead_flutter/database/entities.dart';
-import 'package:privastead_flutter/database/app_stores.dart';
-import 'package:privastead_flutter/keys.dart';
+import 'package:secluso_flutter/routes/camera/list_cameras.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/rust_util.dart';
+import 'package:secluso_flutter/database/entities.dart';
+import 'package:secluso_flutter/database/app_stores.dart';
+import 'package:secluso_flutter/keys.dart';
 
 class CameraSetupStatusDialog extends StatefulWidget {
   final Map<String, dynamic> result;

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'ip_camera_option.dart';
 import 'proprietary_camera_option.dart';
-import 'package:privastead_flutter/utilities/logger.dart';
-import 'package:privastead_flutter/notifications/firebase.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/notifications/firebase.dart';
 import 'package:flutter/services.dart';
 
 //TODO: We need to have a check that checks if they've entered the server options, and if not, tell them to do so to avoid any weird errors
@@ -34,7 +34,7 @@ class ShowNewCameraOptions extends StatelessWidget {
           'Add New Camera',
           style: TextStyle(color: Colors.white),
         ),
-        backgroundColor: const Color.fromARGB(255, 27, 114, 60),
+        backgroundColor: const Color.fromARGB(255, 139, 179, 238),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: ListView(
@@ -65,7 +65,7 @@ class ShowNewCameraOptions extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Use Privastead\'s Official Camera',
+                          'Use Secluso\'s Official Camera',
                           style: Theme.of(
                             context,
                           ).textTheme.titleLarge?.copyWith(

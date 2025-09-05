@@ -5,10 +5,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path/path.dart' as p;
 import 'package:gal/gal.dart';
-import 'package:privastead_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
 
-import 'package:privastead_flutter/database/app_stores.dart';
-import 'package:privastead_flutter/database/entities.dart';
+import 'package:secluso_flutter/database/app_stores.dart';
+import 'package:secluso_flutter/database/entities.dart';
 import '../../objectbox.g.dart';
 
 class VideoViewPage extends StatefulWidget {
@@ -210,7 +210,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
                   style: const TextStyle(color: Colors.white),
                 ),
                 iconTheme: const IconThemeData(color: Colors.white),
-                backgroundColor: const Color.fromARGB(255, 27, 114, 60),
+                backgroundColor: const Color.fromARGB(255, 139, 179, 238),
               ),
       body:
           _initialized
@@ -241,7 +241,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
                 _controller,
                 allowScrubbing: false,
                 colors: const VideoProgressColors(
-                  playedColor: Color.fromARGB(255, 27, 114, 60),
+                  playedColor: Color.fromARGB(255, 139, 179, 238),
                 ),
                 padding: const EdgeInsets.symmetric(vertical: 4),
               ),
@@ -335,7 +335,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
                   VideoProgressIndicator(
                     _controller,
                     colors: const VideoProgressColors(
-                      playedColor: Color.fromARGB(255, 27, 114, 60),
+                      playedColor: Color.fromARGB(255, 139, 179, 238),
                     ),
                     allowScrubbing: false,
                     padding: const EdgeInsets.symmetric(vertical: 8),

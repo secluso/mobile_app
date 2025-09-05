@@ -1,5 +1,5 @@
-import 'package:privastead_flutter/utilities/logger.dart';
-import 'package:privastead_flutter/database/entities.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/database/entities.dart';
 import 'app_stores.dart';
 
 typedef Migration = Future<void> Function();

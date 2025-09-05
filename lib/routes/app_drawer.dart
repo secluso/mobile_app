@@ -4,7 +4,7 @@ import 'server_page.dart';
 import 'theme_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:privastead_flutter/keys.dart';
+import 'package:secluso_flutter/keys.dart';
 
 final GlobalKey<CamerasPageState> camerasPageKey =
     GlobalKey<CamerasPageState>();
@@ -44,7 +44,7 @@ class _AppDrawerState extends State<AppDrawer> {
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF1B723C), Color(0xFF137C3B)],
+                colors: [Color(0xFF8BB3EE), Color(0xFF71A0E7)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -66,7 +66,7 @@ class _AppDrawerState extends State<AppDrawer> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Privastead Camera',
+                            'Secluso Camera',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 22,

@@ -4,10 +4,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'dart:convert';
 
-import 'package:privastead_flutter/utilities/logger.dart';
-import 'package:privastead_flutter/database/entities.dart';
-import 'package:privastead_flutter/database/app_stores.dart';
-import 'package:privastead_flutter/routes/camera/view_camera.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/database/entities.dart';
+import 'package:secluso_flutter/database/app_stores.dart';
+import 'package:secluso_flutter/routes/camera/view_camera.dart';
 import '../../objectbox.g.dart';
 
 /// Used to fix Android's background process not being allowed to acquire ObjectBox references. We store temporary files for each video that needs to be processed later and strictly have the main isolate add them to the database.

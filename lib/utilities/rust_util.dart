@@ -1,9 +1,9 @@
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:privastead_flutter/src/rust/api.dart';
-import 'package:privastead_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/src/rust/api.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
-import 'package:privastead_flutter/keys.dart';
+import 'package:secluso_flutter/keys.dart';
 
 Future<String> addCamera(
   String cameraName,

@@ -1,8 +1,8 @@
-# Privastead Mobile Application  
+# Secluso Mobile Application  
 **Developer Quick-Start Guide (Android & iOS)**
 
-> Use this guide to build the Privastead mobile application from source.  
-> Important: Complete all core setup steps in [`HOW_TO.md`](https://github.com/privastead/privastead/blob/main/HOW_TO.md) before continuing.
+> Use this guide to build the Secluso mobile application from source.  
+> Important: Complete all core setup steps in [`HOW_TO.md`](https://github.com/secluso/secluso/blob/main/HOW_TO.md) before continuing.
 
 ---
 
@@ -34,8 +34,8 @@ You can verify setup with `flutter doctor`.
 ### 3.1 Clone the Repository
 
 ```
-git clone https://github.com/privastead/privastead.git  
-cd privastead
+git clone https://github.com/secluso/secluso.git  
+cd secluso
 ```
 
 ---
@@ -43,7 +43,7 @@ cd privastead
 ### 3.2 Open the Project in Visual Studio Code
 
 - Launch Visual Studio Code
-- Open the privastead/ folder  
+- Open the secluso/ folder  
 - Install any recommended extensions (Flutter, Rust, Dart)
 
 ---
@@ -115,4 +115,4 @@ This will build and launch the app on your connected device.
 | Rust compilation errors | Ensure targets and NDK are properly set 
 ---
 
-> Need help or want to contribute? Visit the [Privastead GitHub Repository](https://github.com/privastead/privastead).
+> Need help or want to contribute? Visit the [Secluso GitHub Repository](https://github.com/secluso/secluso).

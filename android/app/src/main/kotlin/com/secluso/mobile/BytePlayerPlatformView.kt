@@ -1,4 +1,4 @@
-package com.privastead.mobile
+package com.secluso.mobile
 
 import android.content.Context
 import android.graphics.SurfaceTexture

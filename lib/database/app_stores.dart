@@ -1,6 +1,6 @@
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-import 'package:privastead_flutter/objectbox.g.dart';
+import 'package:secluso_flutter/objectbox.g.dart';
 import 'entities.dart';
 
 /// Holds box ObjectBox stores (camera + video) as a single global singleton.

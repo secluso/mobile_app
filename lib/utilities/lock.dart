@@ -1,7 +1,7 @@
 import 'package:path_provider/path_provider.dart';
-import 'package:privastead_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:path/path.dart' as p;
-import 'package:privastead_flutter/src/rust/api/lock_manager.dart';
+import 'package:secluso_flutter/src/rust/api/lock_manager.dart';
 import 'dart:io';
 
 /// Acquire a file lock via Rust-code

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:privastead_flutter/keys.dart';
+import 'package:secluso_flutter/keys.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -242,7 +242,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 border: Border.all(color: Colors.grey.shade400),
               ),
               child: Text(
-                "Camera's Privastead firmware version:  $_firmwareVersion",
+                "Camera's Secluso firmware version:  $_firmwareVersion",
                 style: const TextStyle(fontSize: 14),
               ),
             ),

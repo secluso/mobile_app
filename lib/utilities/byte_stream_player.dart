@@ -6,8 +6,8 @@ class ByteStreamPlayer {
   // Platform-specific MethodChannel
   static final MethodChannel _ch = MethodChannel(
     defaultTargetPlatform == TargetPlatform.iOS
-        ? 'privastead.com/ios/byte_player'
-        : 'privastead.com/android/byte_player',
+        ? 'secluso.com/ios/byte_player'
+        : 'secluso.com/android/byte_player',
   );
 
   /// Allocate a native byte queue and return its id.

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:privastead_flutter/constants.dart';
-import 'package:privastead_flutter/keys.dart';
+import 'package:secluso_flutter/constants.dart';
+import 'package:secluso_flutter/keys.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import 'package:confetti/confetti.dart';
@@ -12,11 +12,11 @@ import 'view_video.dart';
 import 'view_livestream.dart';
 import 'camera_settings.dart';
 import '../../objectbox.g.dart';
-import 'package:privastead_flutter/database/entities.dart';
+import 'package:secluso_flutter/database/entities.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:privastead_flutter/database/app_stores.dart';
-import 'package:privastead_flutter/utilities/logger.dart';
-import 'package:privastead_flutter/main.dart';
+import 'package:secluso_flutter/database/app_stores.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/main.dart';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:intl/intl.dart';
@@ -428,7 +428,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.cameraName, style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color.fromARGB(255, 27, 114, 60),
+        backgroundColor: const Color.fromARGB(255, 139, 179, 238),
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
@@ -457,7 +457,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
                     _primaryBtn(
                       label: 'Go Live',
                       icon: Icons.live_tv,
-                      color: const Color.fromARGB(255, 27, 114, 60),
+                      color: const Color.fromARGB(255, 139, 179, 238),
                       enabled:
                           !Platform
                               .isIOS, // Disable the button if we're on iOS (for now)

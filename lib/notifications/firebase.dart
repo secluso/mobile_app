@@ -3,24 +3,24 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:privastead_flutter/notifications/heartbeat_task.dart';
-import 'package:privastead_flutter/notifications/notifications.dart';
-import 'package:privastead_flutter/notifications/scheduler.dart';
-import 'package:privastead_flutter/notifications/thumbnails.dart';
-import 'package:privastead_flutter/utilities/http_client.dart';
-import 'package:privastead_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/notifications/heartbeat_task.dart';
+import 'package:secluso_flutter/notifications/notifications.dart';
+import 'package:secluso_flutter/notifications/scheduler.dart';
+import 'package:secluso_flutter/notifications/thumbnails.dart';
+import 'package:secluso_flutter/utilities/http_client.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../keys.dart';
 //TODO: import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:privastead_flutter/src/rust/api.dart';
+import 'package:secluso_flutter/src/rust/api.dart';
 import '../utilities/result.dart';
-import 'package:privastead_flutter/database/entities.dart';
-import 'package:privastead_flutter/database/app_stores.dart';
+import 'package:secluso_flutter/database/entities.dart';
+import 'package:secluso_flutter/database/app_stores.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:privastead_flutter/utilities/rust_util.dart';
-import 'package:privastead_flutter/src/rust/frb_generated.dart';
+import 'package:secluso_flutter/utilities/rust_util.dart';
+import 'package:secluso_flutter/src/rust/frb_generated.dart';
 import 'dart:io' show Platform;
 
 class RustBridgeHelper {
