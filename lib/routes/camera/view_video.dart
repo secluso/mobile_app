@@ -77,7 +77,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
   Future<void> _initVideo() async {
     final dir = await getApplicationDocumentsDirectory();
     var cam = widget.cameraName;
-    _videoPath = p.join(dir.path, "camera_dir_$cam", widget.videoTitle);
+    _videoPath = p.join(dir.path, "camera_dir_$cam", 'videos', widget.videoTitle);
     Log.d("Found path: $_videoPath");
     _controller = VideoPlayerController.file(File(_videoPath));
 

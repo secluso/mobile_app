@@ -73,12 +73,12 @@ Future<bool> initializeCore(String cameraName, bool firstTime) async {
   }
 
   var filesDir =
-      (await getApplicationDocumentsDirectory()).absolute.path +
-      "/camera_dir_" +
-      cameraName;
+      "${(await getApplicationDocumentsDirectory()).absolute.path}/camera_dir_$cameraName";
+
+  var videosDir = "$filesDir/videos";
 
   // Create directory if it doesn't exist
-  var dir = await Directory(filesDir);
+  var dir = await Directory(videosDir);
   if (!(await dir.exists())) {
     try {
       await dir.create(recursive: true);

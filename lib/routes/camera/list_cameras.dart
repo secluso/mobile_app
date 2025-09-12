@@ -565,7 +565,7 @@ class CamerasPageState extends State<CamerasPage>
     if (vids.isEmpty) return null;
 
     final docsDir = await getApplicationDocumentsDirectory();
-    return p.join(docsDir.path, 'camera_dir_$cameraName', vids.first.video);
+    return p.join(docsDir.path, 'camera_dir_$cameraName', 'videos', vids.first.video);
   }
 
   Future<Uint8List?> _generateThumb(String cameraName) {
@@ -600,7 +600,7 @@ class CamerasPageState extends State<CamerasPage>
   // TODO: Would a database read be faster?
   Future<String?> _latestThumbnailPath(String cameraName) async {
     final docsDir = await getApplicationDocumentsDirectory();
-    final dir = Directory(p.join(docsDir.path, 'camera_dir_$cameraName'));
+    final dir = Directory(p.join(docsDir.path, 'camera_dir_$cameraName', 'videos'));
 
     if (!await dir.exists()) return null;
 

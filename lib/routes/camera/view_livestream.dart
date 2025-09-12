@@ -214,6 +214,7 @@ class _LivestreamPageState extends State<LivestreamPage>
             final filePath = p.join(
               baseDir.path,
               'camera_dir_$cameraName',
+              'videos',
               videoName,
             );
 

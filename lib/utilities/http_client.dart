@@ -409,7 +409,7 @@ class HttpClientService {
 
   Future<Directory> _ensureCameraDir(String cameraName) async {
     final base = await getApplicationDocumentsDirectory();
-    final dir = Directory('${base.path}/camera_dir_$cameraName');
+    final dir = Directory('${base.path}/camera_dir_$cameraName/videos');
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }

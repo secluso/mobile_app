@@ -234,45 +234,63 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     }
   }
 
+  // Useful for debugging
+  /*
+  Future<void> _printAllFiles(String cameraName) async {
+    Log.d("_printAllFiles called for $cameraName");
+    final docsDir = await getApplicationDocumentsDirectory();
+    final dir = Directory(p.join(docsDir.path, 'camera_dir_$cameraName'));
+
+    if (!await dir.exists()) return;
+
+    Log.d("printing all files in the camera directory");
+    final entries = await dir.list(followLinks: false).toList();
+    for (final ent in entries) {
+      Log.d("_printAllFiles: $cameraName: ${ent.path}");
+    }
+
+    final videosDir = Directory(p.join(dir.path, 'videos'));
+
+    if (!await videosDir.exists()) return;
+
+    Log.d("printing all files in the camera's video directory");
+    final ventries = await videosDir.list(followLinks: false).toList();
+    for (final ent in ventries) {
+      Log.d("_printAllFiles: $cameraName: ${ent.path}");
+    }
+  }
+  */
+
   void _deleteAllVideos() async {
     HapticFeedback.heavyImpact();
     _confetti.play();
+
+    final dir = await getApplicationDocumentsDirectory();
+    final videoDir = Directory('${dir.path}/camera_dir_${widget.cameraName}/videos');
+
+    // Delete the videos directory
+    if (await videoDir.exists()) {
+      try {
+        await videoDir.delete(recursive: true);
+        Log.d('Deleted camera folder: ${videoDir.path}');
+      } catch (e) {
+        Log.e('Error deleting folder: $e');
+      }
+    }
+
+    // FIXME: what if we receive a new video/thumbnail right here, when the videos directory doesn't exist?
+
+    // Create the (empty) videos directory again
+    try {
+      await videoDir.create(recursive: true);
+    } catch (e) {
+      Log.e("Error: Failed to create directory for videos");
+    }
 
     final query =
         _videoBox.query(Video_.camera.equals(widget.cameraName)).build();
     final videosToDelete = query.find();
     query.close();
-
-    final dir = await getApplicationDocumentsDirectory();
-    final base = '${dir.path}/camera_dir_${widget.cameraName}';
-
-    for (final v in videosToDelete) {
-      // delete mp4
-      if (v.received) {
-        final mp4 = File('$base/${v.video}');
-        if (await mp4.exists()) {
-          try {
-            await mp4.delete();
-          } catch (e) {
-            Log.e('Error deleting $mp4: $e');
-          }
-        }
-      }
-
-      // delete png neighbor
-      final ts = _timestampFromVideo(v.video);
-      if (ts != null) {
-        final png = File('$base/thumbnail_$ts.png');
-        if (await png.exists()) {
-          try {
-            await png.delete();
-          } catch (_) {}
-        }
-        // also drop from cache
-        _videoThumbCache.remove('${v.camera}/$ts');
-        _videoThumbFutures.remove('${v.camera}/$ts');
-      }
-    }
 
     _videoBox.removeMany(videosToDelete.map((v) => v.id).toList());
 
@@ -301,7 +319,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     final dir = await getApplicationDocumentsDirectory();
 
     if (v.received) {
-      final videoPath = '${dir.path}/camera_dir_${v.camera}/${v.video}';
+      final videoPath = '${dir.path}/camera_dir_${v.camera}/videos/${v.video}';
       final file = File(videoPath);
       if (await file.exists()) {
         try {
@@ -314,7 +332,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
       final ts = _timestampFromVideo(v.video);
       if (ts != null) {
         final thumbPath =
-            '${dir.path}/camera_dir_${v.camera}/thumbnail_$ts.png';
+            '${dir.path}/camera_dir_${v.camera}/videos/thumbnail_$ts.png';
         final thumb = File(thumbPath);
         if (await thumb.exists()) {
           try {
@@ -352,7 +370,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     if (ts == null) return null;
 
     final docs = await getApplicationDocumentsDirectory();
-    final path = "${docs.path}/camera_dir_$cameraName/thumbnail_$ts.png";
+    final path = "${docs.path}/camera_dir_$cameraName/videos/thumbnail_$ts.png";
     final f = File(path);
     return await f.exists() ? path : null;
   }

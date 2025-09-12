@@ -267,7 +267,7 @@ class PushNotificationService {
 
         final docs = await getApplicationDocumentsDirectory();
         final thumbPath =
-            '${docs.path}/camera_dir_$cameraName/thumbnail_$timestamp.png';
+            '${docs.path}/camera_dir_$cameraName/videos/thumbnail_$timestamp.png';
 
         // Update same notification id with a BigPicture/attachment version.
         await showMotionNotification(

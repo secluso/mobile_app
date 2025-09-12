@@ -24,6 +24,7 @@ class ThumbnailManager {
     final filePath = p.join(
       baseDir.path,
       'camera_dir_$camera',
+      'videos',
       "$timestamp.png",
     );
 
