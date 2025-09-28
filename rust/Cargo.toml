@@ -12,7 +12,7 @@ bincode = "1.2.1"
 rand="0.8"
 lazy_static = "1.4"
 once_cell = "1.19.0"
-parking_lot="0.12.3"
+parking_lot="0.12.4"
 simplelog="0.12.2"
 time="0.3.41"
 log = { version="0.4.27", features=["kv"] }
@@ -21,7 +21,7 @@ tracing-log = "0.2.0"
 
 [dependencies.secluso-app-native]
 git = "https://github.com/secluso/secluso"
-rev = "46f8f83"
+rev = "0a92bba"
 package = "secluso-app-native"
 
 [lints.rust]
