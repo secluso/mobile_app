@@ -30,6 +30,12 @@ final class ByteQueueManager {
         queues[id]?.enqueue(Data())  // empty = EOF sentinel
     }
 
+    static func drop(id: Int) {
+        lock.lock()
+        defer { lock.unlock() }
+        queues[id] = nil
+    }
+
     static func pop(id: Int) -> Data? {
         lock.lock()
         defer { lock.unlock() }

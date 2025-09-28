@@ -16,11 +16,20 @@
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		B1E9AC361A70A735651B9BCB /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A15EA82E4C048CF9287E515A /* Pods_RunnerTests.framework */; };
 		B48F5EE5C2F79AFCBB0427A4 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4951D18A9D78E279B95A8AA2 /* Pods_Runner.framework */; };
-		E33ADD5D2E082FC5007B74FB /* BytePlayerChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E33ADD5C2E082FC5007B74FB /* BytePlayerChannel.swift */; };
-		E33ADD5F2E082FCA007B74FB /* BytePlayerPlatformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E33ADD5E2E082FCA007B74FB /* BytePlayerPlatformView.swift */; };
-		E33ADD612E082FCE007B74FB /* BytePlayerViewFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = E33ADD602E082FCE007B74FB /* BytePlayerViewFactory.swift */; };
-		E33ADD632E082FD2007B74FB /* ByteQueueManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E33ADD622E082FD2007B74FB /* ByteQueueManager.swift */; };
-		E33ADD652E082FD5007B74FB /* ByteQueueResourceLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E33ADD642E082FD5007B74FB /* ByteQueueResourceLoader.swift */; };
+		E323D9E32E89570A003F6F7F /* BitReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9DA2E895704003F6F7F /* BitReader.swift */; };
+		E323D9E42E89570A003F6F7F /* ByteQueueManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9DB2E895704003F6F7F /* ByteQueueManager.swift */; };
+		E323D9E52E89570A003F6F7F /* Data+MP4.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9DC2E895704003F6F7F /* Data+MP4.swift */; };
+		E323D9E62E89570E003F6F7F /* MP4H264Demuxer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9D22E895703003F6F7F /* MP4H264Demuxer.swift */; };
+		E323D9E72E89570E003F6F7F /* MP4H264Demuxer+Boxes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9D32E895703003F6F7F /* MP4H264Demuxer+Boxes.swift */; };
+		E323D9E82E89570E003F6F7F /* MP4H264Demuxer+Emit.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9D42E895703003F6F7F /* MP4H264Demuxer+Emit.swift */; };
+		E323D9E92E89570E003F6F7F /* MP4H264Demuxer+H264.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9D52E895703003F6F7F /* MP4H264Demuxer+H264.swift */; };
+		E323D9EA2E89570E003F6F7F /* MP4H264Demuxer+Moov.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9D62E895703003F6F7F /* MP4H264Demuxer+Moov.swift */; };
+		E323D9EB2E89570E003F6F7F /* MP4H264Demuxer+PublicAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9D72E895703003F6F7F /* MP4H264Demuxer+PublicAPI.swift */; };
+		E323D9EC2E89570E003F6F7F /* MP4H264Demuxer+SampleTables.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9D82E895703003F6F7F /* MP4H264Demuxer+SampleTables.swift */; };
+		E323D9ED2E895714003F6F7F /* BytePlayerChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9DE2E895704003F6F7F /* BytePlayerChannel.swift */; };
+		E323D9EE2E895714003F6F7F /* BytePlayerPlatformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9DF2E895704003F6F7F /* BytePlayerPlatformView.swift */; };
+		E323D9EF2E895714003F6F7F /* BytePlayerViewFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9E02E895704003F6F7F /* BytePlayerViewFactory.swift */; };
+		E323D9F02E895714003F6F7F /* ByteSampleBufferView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9E12E895704003F6F7F /* ByteSampleBufferView.swift */; };
 		E3A63D2C2DB53EA300C0A3D7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = E3A63D2B2DB53EA300C0A3D7 /* GoogleService-Info.plist */; };
 /* End PBXBuildFile section */
 
@@ -71,13 +80,65 @@
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A15EA82E4C048CF9287E515A /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		E323D9BC2E89524C003F6F7F /* MP4H264Demuxer+Emit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "MP4H264Demuxer+Emit.swift"; path = "Runner/MP4H264Demuxer+Emit.swift"; sourceTree = "<group>"; };
+		E323D9BD2E89524C003F6F7F /* MP4H264Demuxer+Boxes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "MP4H264Demuxer+Boxes.swift"; path = "Runner/MP4H264Demuxer+Boxes.swift"; sourceTree = "<group>"; };
+		E323D9BE2E89524C003F6F7F /* MP4H264Demuxer+Moov.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "MP4H264Demuxer+Moov.swift"; path = "Runner/MP4H264Demuxer+Moov.swift"; sourceTree = "<group>"; };
+		E323D9BF2E89524C003F6F7F /* MP4H264Demuxer+H264.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "MP4H264Demuxer+H264.swift"; path = "Runner/MP4H264Demuxer+H264.swift"; sourceTree = "<group>"; };
+		E323D9C02E89524C003F6F7F /* MP4H264Demuxer+PublicAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "MP4H264Demuxer+PublicAPI.swift"; path = "Runner/MP4H264Demuxer+PublicAPI.swift"; sourceTree = "<group>"; };
+		E323D9C12E89524C003F6F7F /* Data+MP4.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "Data+MP4.swift"; path = "Runner/Data+MP4.swift"; sourceTree = "<group>"; };
+		E323D9C22E89524C003F6F7F /* BitReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BitReader.swift; path = Runner/BitReader.swift; sourceTree = "<group>"; };
+		E323D9C32E89524C003F6F7F /* MP4H264Demuxer+SampleTables.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "MP4H264Demuxer+SampleTables.swift"; path = "Runner/MP4H264Demuxer+SampleTables.swift"; sourceTree = "<group>"; };
+		E323D9CC2E8953A2003F6F7F /* ByteSampleBufferView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ByteSampleBufferView.swift; path = Runner/ByteSampleBufferView.swift; sourceTree = "<group>"; };
+		E323D9CE2E895442003F6F7F /* BytePlayerViewFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BytePlayerViewFactory.swift; path = Runner/BytePlayerViewFactory.swift; sourceTree = "<group>"; };
+		E323D9D02E895475003F6F7F /* BytePlayerPlatformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BytePlayerPlatformView.swift; path = Runner/BytePlayerPlatformView.swift; sourceTree = "<group>"; };
+		E323D9D22E895703003F6F7F /* MP4H264Demuxer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MP4H264Demuxer.swift; sourceTree = "<group>"; };
+		E323D9D32E895703003F6F7F /* MP4H264Demuxer+Boxes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MP4H264Demuxer+Boxes.swift"; sourceTree = "<group>"; };
+		E323D9D42E895703003F6F7F /* MP4H264Demuxer+Emit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MP4H264Demuxer+Emit.swift"; sourceTree = "<group>"; };
+		E323D9D52E895703003F6F7F /* MP4H264Demuxer+H264.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MP4H264Demuxer+H264.swift"; sourceTree = "<group>"; };
+		E323D9D62E895703003F6F7F /* MP4H264Demuxer+Moov.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MP4H264Demuxer+Moov.swift"; sourceTree = "<group>"; };
+		E323D9D72E895703003F6F7F /* MP4H264Demuxer+PublicAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MP4H264Demuxer+PublicAPI.swift"; sourceTree = "<group>"; };
+		E323D9D82E895703003F6F7F /* MP4H264Demuxer+SampleTables.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MP4H264Demuxer+SampleTables.swift"; sourceTree = "<group>"; };
+		E323D9DA2E895704003F6F7F /* BitReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitReader.swift; sourceTree = "<group>"; };
+		E323D9DB2E895704003F6F7F /* ByteQueueManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ByteQueueManager.swift; sourceTree = "<group>"; };
+		E323D9DC2E895704003F6F7F /* Data+MP4.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Data+MP4.swift"; sourceTree = "<group>"; };
+		E323D9DE2E895704003F6F7F /* BytePlayerChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BytePlayerChannel.swift; sourceTree = "<group>"; };
+		E323D9DF2E895704003F6F7F /* BytePlayerPlatformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BytePlayerPlatformView.swift; sourceTree = "<group>"; };
+		E323D9E02E895704003F6F7F /* BytePlayerViewFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BytePlayerViewFactory.swift; sourceTree = "<group>"; };
+		E323D9E12E895704003F6F7F /* ByteSampleBufferView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ByteSampleBufferView.swift; sourceTree = "<group>"; };
 		E33ADD5C2E082FC5007B74FB /* BytePlayerChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BytePlayerChannel.swift; sourceTree = "<group>"; };
 		E33ADD5E2E082FCA007B74FB /* BytePlayerPlatformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BytePlayerPlatformView.swift; sourceTree = "<group>"; };
 		E33ADD602E082FCE007B74FB /* BytePlayerViewFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BytePlayerViewFactory.swift; sourceTree = "<group>"; };
 		E33ADD622E082FD2007B74FB /* ByteQueueManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ByteQueueManager.swift; sourceTree = "<group>"; };
 		E33ADD642E082FD5007B74FB /* ByteQueueResourceLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ByteQueueResourceLoader.swift; sourceTree = "<group>"; };
+		E36A3AAE2E85CD2E00BEA7BA /* MP4H264Demuxer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MP4H264Demuxer.swift; path = Runner/MP4H264Demuxer.swift; sourceTree = "<group>"; };
+		E36A3AB02E8720BB00BEA7BA /* VideoOutput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VideoOutput.swift; path = Runner/VideoOutput.swift; sourceTree = "<group>"; };
+		E36A3AB12E8720BB00BEA7BA /* MP4Support.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MP4Support.swift; path = Runner/MP4Support.swift; sourceTree = "<group>"; };
+		E36A3AB22E8720BB00BEA7BA /* H264AUAssembler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = H264AUAssembler.swift; path = Runner/H264AUAssembler.swift; sourceTree = "<group>"; };
+		E36A3AB32E8720BB00BEA7BA /* MP4BoxScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MP4BoxScanner.swift; path = Runner/MP4BoxScanner.swift; sourceTree = "<group>"; };
+		E36A3AB42E8720BB00BEA7BA /* MP4MoovParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MP4MoovParser.swift; path = Runner/MP4MoovParser.swift; sourceTree = "<group>"; };
+		E36A3AB52E8720BB00BEA7BA /* MP4DemuxController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MP4DemuxController.swift; path = Runner/MP4DemuxController.swift; sourceTree = "<group>"; };
 		E38C91122D9C583B009438ED /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 		E3A63D2B2DB53EA300C0A3D7 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		E3B7A8232E8875A0001805D9 /* MdatStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MdatStreamer.swift; path = Runner/MdatStreamer.swift; sourceTree = "<group>"; };
+		E3B7A8242E8875A0001805D9 /* FormatDescriptionBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FormatDescriptionBuilder.swift; path = Runner/FormatDescriptionBuilder.swift; sourceTree = "<group>"; };
+		E3B7A8252E8875A0001805D9 /* BoxScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BoxScanner.swift; path = Runner/BoxScanner.swift; sourceTree = "<group>"; };
+		E3B7A8262E8875A0001805D9 /* ByteQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ByteQueue.swift; path = Runner/ByteQueue.swift; sourceTree = "<group>"; };
+		E3B7A8272E8875A0001805D9 /* DataExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DataExtensions.swift; path = Runner/DataExtensions.swift; sourceTree = "<group>"; };
+		E3B7A8282E8875A0001805D9 /* H264Bitstream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = H264Bitstream.swift; path = Runner/H264Bitstream.swift; sourceTree = "<group>"; };
+		E3B7A8292E8875A1001805D9 /* FrameScheduler.dart */ = {isa = PBXFileReference; lastKnownFileType = text; name = FrameScheduler.dart; path = Runner/FrameScheduler.dart; sourceTree = "<group>"; };
+		E3B7A82A2E8875A1001805D9 /* SampleBufferFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SampleBufferFactory.swift; path = Runner/SampleBufferFactory.swift; sourceTree = "<group>"; };
+		E3B7A82B2E8875A1001805D9 /* AUConcatenator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AUConcatenator.swift; path = Runner/AUConcatenator.swift; sourceTree = "<group>"; };
+		E3B7A82C2E8875A1001805D9 /* AccessUnitAssembler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AccessUnitAssembler.swift; path = Runner/AccessUnitAssembler.swift; sourceTree = "<group>"; };
+		E3B7A82D2E8875A1001805D9 /* VideoSink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = VideoSink.swift; path = Runner/VideoSink.swift; sourceTree = "<group>"; };
+		E3B7A82E2E8875A1001805D9 /* MoovParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MoovParser.swift; path = Runner/MoovParser.swift; sourceTree = "<group>"; };
+		E3B7A82F2E8875A1001805D9 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Logger.swift; path = Runner/Logger.swift; sourceTree = "<group>"; };
+		E3B7A83D2E8878A4001805D9 /* FrameScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FrameScheduler.swift; path = Runner/FrameScheduler.swift; sourceTree = "<group>"; };
+		E3BA66CE2E858E54009683F9 /* SeclusoStreamProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SeclusoStreamProtocol.swift; path = Runner/SeclusoStreamProtocol.swift; sourceTree = "<group>"; };
+		E3BA66D12E85B3AB009683F9 /* H264AnnexBDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = H264AnnexBDecoder.swift; path = Runner/H264AnnexBDecoder.swift; sourceTree = "<group>"; };
+		E3BA66D22E85B3AB009683F9 /* SampleBufferDisplayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SampleBufferDisplayView.swift; path = Runner/SampleBufferDisplayView.swift; sourceTree = "<group>"; };
+		E3BA66D32E85B3AB009683F9 /* ByteLowLevelViewFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ByteLowLevelViewFactory.swift; path = Runner/ByteLowLevelViewFactory.swift; sourceTree = "<group>"; };
+		E3BA66D42E85B3AB009683F9 /* BytePlayerChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BytePlayerChannel.swift; path = Runner/BytePlayerChannel.swift; sourceTree = "<group>"; };
+		E3BA66D52E85B3AB009683F9 /* ByteLowLevelPlatformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ByteLowLevelPlatformView.swift; path = Runner/ByteLowLevelPlatformView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -122,6 +183,47 @@
 		97C146E51CF9000F007C117D = {
 			isa = PBXGroup;
 			children = (
+				E323D9DD2E895704003F6F7F /* Core */,
+				E323D9D92E895703003F6F7F /* Demuxer */,
+				E323D9E22E895704003F6F7F /* Player */,
+				E323D9D02E895475003F6F7F /* BytePlayerPlatformView.swift */,
+				E323D9CE2E895442003F6F7F /* BytePlayerViewFactory.swift */,
+				E323D9CC2E8953A2003F6F7F /* ByteSampleBufferView.swift */,
+				E323D9C22E89524C003F6F7F /* BitReader.swift */,
+				E323D9C12E89524C003F6F7F /* Data+MP4.swift */,
+				E323D9BD2E89524C003F6F7F /* MP4H264Demuxer+Boxes.swift */,
+				E323D9BC2E89524C003F6F7F /* MP4H264Demuxer+Emit.swift */,
+				E323D9BF2E89524C003F6F7F /* MP4H264Demuxer+H264.swift */,
+				E323D9BE2E89524C003F6F7F /* MP4H264Demuxer+Moov.swift */,
+				E323D9C02E89524C003F6F7F /* MP4H264Demuxer+PublicAPI.swift */,
+				E323D9C32E89524C003F6F7F /* MP4H264Demuxer+SampleTables.swift */,
+				E3B7A83D2E8878A4001805D9 /* FrameScheduler.swift */,
+				E3B7A82C2E8875A1001805D9 /* AccessUnitAssembler.swift */,
+				E3B7A82B2E8875A1001805D9 /* AUConcatenator.swift */,
+				E3B7A8252E8875A0001805D9 /* BoxScanner.swift */,
+				E3B7A8262E8875A0001805D9 /* ByteQueue.swift */,
+				E3B7A8272E8875A0001805D9 /* DataExtensions.swift */,
+				E3B7A8242E8875A0001805D9 /* FormatDescriptionBuilder.swift */,
+				E3B7A8292E8875A1001805D9 /* FrameScheduler.dart */,
+				E3B7A8282E8875A0001805D9 /* H264Bitstream.swift */,
+				E3B7A82F2E8875A1001805D9 /* Logger.swift */,
+				E3B7A8232E8875A0001805D9 /* MdatStreamer.swift */,
+				E3B7A82E2E8875A1001805D9 /* MoovParser.swift */,
+				E3B7A82A2E8875A1001805D9 /* SampleBufferFactory.swift */,
+				E3B7A82D2E8875A1001805D9 /* VideoSink.swift */,
+				E36A3AB22E8720BB00BEA7BA /* H264AUAssembler.swift */,
+				E36A3AB32E8720BB00BEA7BA /* MP4BoxScanner.swift */,
+				E36A3AB52E8720BB00BEA7BA /* MP4DemuxController.swift */,
+				E36A3AB42E8720BB00BEA7BA /* MP4MoovParser.swift */,
+				E36A3AB12E8720BB00BEA7BA /* MP4Support.swift */,
+				E36A3AB02E8720BB00BEA7BA /* VideoOutput.swift */,
+				E36A3AAE2E85CD2E00BEA7BA /* MP4H264Demuxer.swift */,
+				E3BA66D52E85B3AB009683F9 /* ByteLowLevelPlatformView.swift */,
+				E3BA66D32E85B3AB009683F9 /* ByteLowLevelViewFactory.swift */,
+				E3BA66D42E85B3AB009683F9 /* BytePlayerChannel.swift */,
+				E3BA66D12E85B3AB009683F9 /* H264AnnexBDecoder.swift */,
+				E3BA66D22E85B3AB009683F9 /* SampleBufferDisplayView.swift */,
+				E3BA66CE2E858E54009683F9 /* SeclusoStreamProtocol.swift */,
 				9740EEB11CF90186004384FC /* Flutter */,
 				97C146F01CF9000F007C117D /* Runner */,
 				97C146EF1CF9000F007C117D /* Products */,
@@ -184,6 +286,44 @@
 			path = Pods;
 			sourceTree = "<group>";
 		};
+		E323D9D92E895703003F6F7F /* Demuxer */ = {
+			isa = PBXGroup;
+			children = (
+				E323D9D22E895703003F6F7F /* MP4H264Demuxer.swift */,
+				E323D9D32E895703003F6F7F /* MP4H264Demuxer+Boxes.swift */,
+				E323D9D42E895703003F6F7F /* MP4H264Demuxer+Emit.swift */,
+				E323D9D52E895703003F6F7F /* MP4H264Demuxer+H264.swift */,
+				E323D9D62E895703003F6F7F /* MP4H264Demuxer+Moov.swift */,
+				E323D9D72E895703003F6F7F /* MP4H264Demuxer+PublicAPI.swift */,
+				E323D9D82E895703003F6F7F /* MP4H264Demuxer+SampleTables.swift */,
+			);
+			name = Demuxer;
+			path = Runner/Demuxer;
+			sourceTree = "<group>";
+		};
+		E323D9DD2E895704003F6F7F /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				E323D9DA2E895704003F6F7F /* BitReader.swift */,
+				E323D9DB2E895704003F6F7F /* ByteQueueManager.swift */,
+				E323D9DC2E895704003F6F7F /* Data+MP4.swift */,
+			);
+			name = Core;
+			path = Runner/Core;
+			sourceTree = "<group>";
+		};
+		E323D9E22E895704003F6F7F /* Player */ = {
+			isa = PBXGroup;
+			children = (
+				E323D9DE2E895704003F6F7F /* BytePlayerChannel.swift */,
+				E323D9DF2E895704003F6F7F /* BytePlayerPlatformView.swift */,
+				E323D9E02E895704003F6F7F /* BytePlayerViewFactory.swift */,
+				E323D9E12E895704003F6F7F /* ByteSampleBufferView.swift */,
+			);
+			name = Player;
+			path = Runner/Player;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -236,6 +376,9 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
+				KnownAssetTags = (
+					New,
+				);
 				LastUpgradeCheck = 1510;
 				ORGANIZATIONNAME = "";
 				TargetAttributes = {
@@ -327,7 +470,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" embed_and_thin";
+			shellScript = "/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" embed_and_thin\n";
 		};
 		64E0840DA4145CE724F64264 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -415,13 +558,22 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E33ADD5F2E082FCA007B74FB /* BytePlayerPlatformView.swift in Sources */,
+				E323D9ED2E895714003F6F7F /* BytePlayerChannel.swift in Sources */,
+				E323D9EE2E895714003F6F7F /* BytePlayerPlatformView.swift in Sources */,
+				E323D9EF2E895714003F6F7F /* BytePlayerViewFactory.swift in Sources */,
+				E323D9F02E895714003F6F7F /* ByteSampleBufferView.swift in Sources */,
+				E323D9E62E89570E003F6F7F /* MP4H264Demuxer.swift in Sources */,
+				E323D9E72E89570E003F6F7F /* MP4H264Demuxer+Boxes.swift in Sources */,
+				E323D9E82E89570E003F6F7F /* MP4H264Demuxer+Emit.swift in Sources */,
+				E323D9E92E89570E003F6F7F /* MP4H264Demuxer+H264.swift in Sources */,
+				E323D9EA2E89570E003F6F7F /* MP4H264Demuxer+Moov.swift in Sources */,
+				E323D9EB2E89570E003F6F7F /* MP4H264Demuxer+PublicAPI.swift in Sources */,
+				E323D9EC2E89570E003F6F7F /* MP4H264Demuxer+SampleTables.swift in Sources */,
+				E323D9E32E89570A003F6F7F /* BitReader.swift in Sources */,
+				E323D9E42E89570A003F6F7F /* ByteQueueManager.swift in Sources */,
+				E323D9E52E89570A003F6F7F /* Data+MP4.swift in Sources */,
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
-				E33ADD5D2E082FC5007B74FB /* BytePlayerChannel.swift in Sources */,
-				E33ADD632E082FD2007B74FB /* ByteQueueManager.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
-				E33ADD612E082FCE007B74FB /* BytePlayerViewFactory.swift in Sources */,
-				E33ADD652E082FD5007B74FB /* ByteQueueResourceLoader.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

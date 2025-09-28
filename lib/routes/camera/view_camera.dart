@@ -266,7 +266,9 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     _confetti.play();
 
     final dir = await getApplicationDocumentsDirectory();
-    final videoDir = Directory('${dir.path}/camera_dir_${widget.cameraName}/videos');
+    final videoDir = Directory(
+      '${dir.path}/camera_dir_${widget.cameraName}/videos',
+    );
 
     // Delete the videos directory
     if (await videoDir.exists()) {
@@ -476,9 +478,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
                       label: 'Go Live',
                       icon: Icons.live_tv,
                       color: const Color.fromARGB(255, 139, 179, 238),
-                      enabled:
-                          !Platform
-                              .isIOS, // Disable the button if we're on iOS (for now)
+                      enabled: true,
                       onTap:
                           () => Navigator.push(
                             context,

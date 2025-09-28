@@ -17,8 +17,6 @@ import 'package:secluso_flutter/routes/camera/view_camera.dart';
 import 'dart:io';
 import '../../objectbox.g.dart';
 
-//TODO: Create iOS native code for this
-
 class LivestreamPage extends StatefulWidget {
   final String cameraName;
   const LivestreamPage({required this.cameraName});
@@ -49,6 +47,11 @@ class _LivestreamPageState extends State<LivestreamPage>
 
   @override
   void dispose() {
+    // Clear method channel after gone
+    try {
+      _methodChannel.setMethodCallHandler(null);
+    } catch (_) {}
+
     _finishNativeStream();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -58,12 +61,22 @@ class _LivestreamPageState extends State<LivestreamPage>
     Log.d('Entered method');
 
     final prefs = await SharedPreferences.getInstance();
-    
-    var recordingMotion = prefs.getBool(PrefKeys.recordingMotionVideosPrefix + widget.cameraName) ?? false;
-    var lastRecordingTimestamp = prefs.getInt(PrefKeys.lastRecordingTimestampPrefix + widget.cameraName) ?? 0;
+
+    var recordingMotion =
+        prefs.getBool(
+          PrefKeys.recordingMotionVideosPrefix + widget.cameraName,
+        ) ??
+        false;
+    var lastRecordingTimestamp =
+        prefs.getInt(
+          PrefKeys.lastRecordingTimestampPrefix + widget.cameraName,
+        ) ??
+        0;
     var nowTimestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     if (recordingMotion && (nowTimestamp - lastRecordingTimestamp) < 60) {
-      _fail('The camera is recording a video to send to the app and cannot livestream now. Please try again in a couple of seconds.');
+      _fail(
+        'The camera is recording a video to send to the app and cannot livestream now. Please try again in a couple of seconds.',
+      );
       return;
     }
 
@@ -89,6 +102,10 @@ class _LivestreamPageState extends State<LivestreamPage>
                     _aspectRatio = ratio;
                   });
                 }
+              } else if (call.method == "debug") {
+                // Plain text log line from swift livestream debug code
+                final msg = call.arguments as String? ?? '';
+                Log.d('[native] $msg');
               }
             });
           } catch (e) {

@@ -29,6 +29,8 @@ final class BytePlayerChannel {
                     result(FlutterError(code: "bad_args", message: nil, details: nil))
                     return
                 }
+
+                print("[SWIFT] push(id:\(id)) recv \(bytes.data.count) bytes")
                 ByteQueueManager.push(id: id, bytes: bytes.data)
                 result(nil)
 

@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.secluso.task</string>
+	</array>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
@@ -22,21 +26,41 @@
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.secluso.mobile</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>seclusostream</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>INIntentsSupported</key>
 	<array>
 		<string>Intent</string>
 	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>seclusostream</string>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Please allow access to the camera to scan QR codes</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>This app requires access to devices on your local network.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>We need access to save videos to your photo library</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
-		<string>remote-notification</string>
 		<string>fetch</string>
 		<string>processing</string>
 	</array>
@@ -57,32 +81,25 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>BGTaskSchedulerPermittedIdentifiers</key>
-	<array>
-		<!-- match _bgTaskId in download_scheduler.dart -->
-		<string>com.secluso.task</string>
-	</array>
-	<key>UIBackgroundModes</key>
-	<array>
-		<!-- “fetch” for legacy < iOS 13 -->
-		<string>fetch</string>
-		<!-- “processing” is required for BGProcessingTask (long-running + network) -->
-		<string>processing</string>
-	</array>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>We need access to save videos to your photo library</string>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>This app requires access to devices on your local network.</string>
-	<key>CFBundleURLTypes</key>
-	<array>
+	<key>NSAppTransportSecurity</key>
 	<dict>
-		<key>CFBundleURLName</key>
-		<string>StreamingScheme</string>
-		<key>CFBundleURLSchemes</key>
-		<array>
-		<string>streaming</string> 
-		</array>
+		<key>NSAllowsArbitraryLoadsInMedia</key><true/>
 	</dict>
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array/>
+			<key>UTTypeDescription</key>
+			<string>test</string>
+			<key>UTTypeIconFiles</key>
+			<array/>
+			<key>UTTypeIdentifier</key>
+			<string>seclusostream</string>
+			<key>UTTypeTagSpecification</key>
+			<dict/>
+			
+		</dict>
 	</array>
 </dict>
 </plist>
