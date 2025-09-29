@@ -1,3 +1,5 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
+
 class Constants {
   static const proprietaryCameraIp = "10.42.0.1";
   static const cameraWaitingLock =

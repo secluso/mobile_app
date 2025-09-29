@@ -1,3 +1,5 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
+
 import 'app_stores.dart';
 import 'migrations.dart';
 import 'entities.dart';

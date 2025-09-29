@@ -1,3 +1,5 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -44,7 +46,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _loadFirmwareVersion() async {
     final prefs = await SharedPreferences.getInstance();
-    final version = prefs.getString(PrefKeys.firmwareVersionPrefix + widget.cameraName) ?? "Not known yet";
+    final version =
+        prefs.getString(PrefKeys.firmwareVersionPrefix + widget.cameraName) ??
+        "Not known yet";
     setState(() {
       _firmwareVersion = version;
     });
@@ -230,7 +234,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 style: TextStyle(fontSize: 16, color: Colors.white),
               ),
             ),
-            
+
             const SizedBox(height: 48),
 
             Container(

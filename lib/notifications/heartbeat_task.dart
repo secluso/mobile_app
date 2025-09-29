@@ -1,3 +1,5 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
+
 import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/notifications/download_task.dart';

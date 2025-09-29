@@ -1,3 +1,4 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
 import Foundation
 
 /// A simple bitstream reader for parsing H.264 SPS and other fields that use

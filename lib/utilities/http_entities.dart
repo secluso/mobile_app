@@ -1,3 +1,4 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
 // JSON for serialization structure matching the server
 
 // Used in bulk check to contain the group name and epochs for each in the list.

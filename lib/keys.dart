@@ -1,3 +1,5 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
+
 class PrefKeys {
   static const needUpdateFcmToken = 'need_update_fcm_token';
   static const cameraSet = 'camera_set';

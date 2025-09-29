@@ -1,3 +1,5 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
+
 import 'dart:async';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/constants.dart';

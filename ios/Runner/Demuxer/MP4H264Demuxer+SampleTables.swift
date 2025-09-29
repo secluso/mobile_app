@@ -1,3 +1,5 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
+
 import Foundation
 
 extension MP4H264Demuxer {

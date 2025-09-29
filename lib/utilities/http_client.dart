@@ -1,3 +1,5 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';

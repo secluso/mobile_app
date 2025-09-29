@@ -1,3 +1,5 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:collection/collection.dart';
@@ -565,7 +567,12 @@ class CamerasPageState extends State<CamerasPage>
     if (vids.isEmpty) return null;
 
     final docsDir = await getApplicationDocumentsDirectory();
-    return p.join(docsDir.path, 'camera_dir_$cameraName', 'videos', vids.first.video);
+    return p.join(
+      docsDir.path,
+      'camera_dir_$cameraName',
+      'videos',
+      vids.first.video,
+    );
   }
 
   Future<Uint8List?> _generateThumb(String cameraName) {
@@ -600,7 +607,9 @@ class CamerasPageState extends State<CamerasPage>
   // TODO: Would a database read be faster?
   Future<String?> _latestThumbnailPath(String cameraName) async {
     final docsDir = await getApplicationDocumentsDirectory();
-    final dir = Directory(p.join(docsDir.path, 'camera_dir_$cameraName', 'videos'));
+    final dir = Directory(
+      p.join(docsDir.path, 'camera_dir_$cameraName', 'videos'),
+    );
 
     if (!await dir.exists()) return null;
 
@@ -831,7 +840,12 @@ class CamerasPageState extends State<CamerasPage>
                                   },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.white,
-                                    foregroundColor: const Color.fromARGB(255, 139, 179, 238),
+                                    foregroundColor: const Color.fromARGB(
+                                      255,
+                                      139,
+                                      179,
+                                      238,
+                                    ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
@@ -954,7 +968,12 @@ class CamerasPageState extends State<CamerasPage>
                               ),
                             );
                           },
-                          backgroundColor: const Color.fromARGB(255, 139, 179, 238),
+                          backgroundColor: const Color.fromARGB(
+                            255,
+                            139,
+                            179,
+                            238,
+                          ),
                           tooltip: "Pair New Camera",
                           child: const Icon(Icons.add, color: Colors.white),
                         ),

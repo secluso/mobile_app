@@ -1,3 +1,5 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
+
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/database/entities.dart';
 import 'app_stores.dart';

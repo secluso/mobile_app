@@ -1,3 +1,5 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
+
 import 'package:path_provider/path_provider.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/keys.dart';

@@ -1,3 +1,4 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
 import Foundation
 
 /// Utilities for reading big-endian values and FourCCs directly from Data.

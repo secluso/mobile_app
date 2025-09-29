@@ -1,3 +1,5 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:secluso_flutter/src/rust/api.dart';

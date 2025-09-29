@@ -1,3 +1,5 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
+
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -52,7 +54,9 @@ class _CameraSetupStatusDialogState extends State<CameraSetupStatusDialog> {
 
     Log.d("CameraSetup: begin for $cameraName");
 
-    addCamera(cameraName, ip, qrCode, false, '', '', '').then((firmwareVersion) async {
+    addCamera(cameraName, ip, qrCode, false, '', '', '').then((
+      firmwareVersion,
+    ) async {
       if (!mounted) return;
 
       final success = (firmwareVersion != "Error");
@@ -81,10 +85,19 @@ class _CameraSetupStatusDialogState extends State<CameraSetupStatusDialog> {
       existingCameraSet.add(cameraName);
       await prefs.setStringList(PrefKeys.cameraSet, existingCameraSet);
       await prefs.setInt(PrefKeys.numIgnoredHeartbeatsPrefix + cameraName, 0);
-      await prefs.setInt(PrefKeys.cameraStatusPrefix + cameraName, CameraStatus.online);
-      await prefs.setInt(PrefKeys.numHeartbeatNotificationsPrefix + cameraName, 0);
+      await prefs.setInt(
+        PrefKeys.cameraStatusPrefix + cameraName,
+        CameraStatus.online,
+      );
+      await prefs.setInt(
+        PrefKeys.numHeartbeatNotificationsPrefix + cameraName,
+        0,
+      );
       await prefs.setInt(PrefKeys.lastHeartbeatTimestampPrefix + cameraName, 0);
-      await prefs.setString(PrefKeys.firmwareVersionPrefix + cameraName, firmwareVersion);
+      await prefs.setString(
+        PrefKeys.firmwareVersionPrefix + cameraName,
+        firmwareVersion,
+      );
     }
 
     final box = AppStores.instance.cameraStore.box<Camera>();

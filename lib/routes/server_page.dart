@@ -1,3 +1,5 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
+
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -44,7 +46,9 @@ class _ServerPageState extends State<ServerPage> {
       final credentialsFull = prefs.getString(PrefKeys.credentialsFull);
 
       hasSynced =
-          serverAddr != null && serverAddr!.isNotEmpty && credentialsFull != null;
+          serverAddr != null &&
+          serverAddr!.isNotEmpty &&
+          credentialsFull != null;
       _ipController.text = serverAddr ?? '';
     });
   }
@@ -54,7 +58,8 @@ class _ServerPageState extends State<ServerPage> {
       String credentialsFullString = utf8.decode(credentialsFull);
 
       // TODO: Check how this handles on failure... bad QR code
-      if (credentialsFullString.length <= (Constants.usernameLength + Constants.passwordLength)) {
+      if (credentialsFullString.length <=
+          (Constants.usernameLength + Constants.passwordLength)) {
         var len = credentialsFull.length;
         Log.e(
           "Server Page Save: User credentials should be more than 28 characters. Current is $len",

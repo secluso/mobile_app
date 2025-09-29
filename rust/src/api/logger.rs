@@ -1,3 +1,5 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
+
 use std::sync::Once;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 

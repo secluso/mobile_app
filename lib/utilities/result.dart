@@ -1,3 +1,5 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
+
 class Result<T> {
   const Result._({this.value, this.error});
 

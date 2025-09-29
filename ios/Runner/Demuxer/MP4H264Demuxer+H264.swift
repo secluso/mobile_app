@@ -1,3 +1,4 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
 import CoreMedia
 import Foundation
 
@@ -136,7 +137,7 @@ extension MP4H264Demuxer {
         guard num_units_in_tick != 0, time_scale != 0 else { return nil }
 
         // Convert timing into CMTime: duration = (2 * num_units_in_tick) / time_scale seconds.
-        // We clamp the CMTime timescale to Int32.max to satisfy CoreMedia API constraints.  [oai_citation:2‡GitHub](https://github.com/gpac/gpac/issues/812?utm_source=chatgpt.com)
+        // We clamp the CMTime timescale to Int32.max to satisfy CoreMedia API constraints.
         let num = Int64(2 * num_units_in_tick)
         let den = Int32(time_scale > Int32.max ? Int32.max : Int32(time_scale))
         let dur = CMTime(value: num, timescale: den)

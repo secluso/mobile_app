@@ -1,3 +1,4 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
 import Foundation
 
 extension MP4H264Demuxer {
@@ -47,7 +48,7 @@ extension MP4H264Demuxer {
                 headerLen = 16
 
                 // Size==0 means “extends to end of file”. In practice this is used for media data.
-                // We treat it as valid only for 'mdat' and defer other boxes until more bytes arrive.
+                // We treat it as valid only for mdat and defer other boxes until more bytes arrive.
             } else if boxSize == 0 && typ != "mdat" {
                 // Only mdat sensibly uses to EOF here—others: wait for more bytes.
                 emitDebug("[MP4] box '\(typ)' has size==0 (to EOF) – waiting for more bytes")
@@ -111,7 +112,7 @@ extension MP4H264Demuxer {
                             buffer.removeAll(keepingCapacity: false)
                         }
                     } else {
-                        // Header-only so far; drop just the header from the live buffer.
+                        // Header-only so far, drop just the header from the live buffer.
                         if headerLen <= buffer.count {
                             buffer.removeFirst(headerLen)
                         } else {
@@ -127,7 +128,7 @@ extension MP4H264Demuxer {
                     }
                 }
 
-                // Switch to streaming mode; actual NAL/sample emission happens in drainMdatIfPossible().
+                // Switch to streaming mode, actual NAL/sample emission happens in drainMdatIfPossible().
                 state = .streamingMdat
                 break
             }
@@ -223,7 +224,7 @@ extension MP4H264Demuxer {
     /// data remains. It first moves any newly received bytes from the main buffer
     /// into an internal mdatPayload, then ensures a format description and frame
     /// duration exist before emitting samples. If a sample size table is present,
-    /// it slices fixed or per-sample lengths into discrete AVCC samples; otherwise
+    /// it slices fixed or per-sample lengths into discrete AVCC samples. Otherwise,
     /// it falls back to length-prefixed NAL parsing directly from the payload.
     /// When the declared mdat byte count reaches zero and the payload is empty,
     /// it returns to header parsing to look for subsequent boxes.
@@ -254,7 +255,7 @@ extension MP4H264Demuxer {
                 parseBoxesIfNeeded()
                 return
             }
-            // else: we still have leftover payload from a fully-seeded mdat; keep draining below.
+            // else: we still have leftover payload from a fully-seeded mdat, keep draining below.
         }
 
         emitDebug(
@@ -263,7 +264,7 @@ extension MP4H264Demuxer {
 
         // We cannot emit samples until a CMVideoFormatDescription exists and we’ve derived
         // a frame duration from the SPS timing (VUI). Format description is required for
-        // CMSampleBuffer creation; timing is required to schedule against the layer timebase.
+        // CMSampleBuffer creation, timing is required to schedule against the layer timebase.
         ensureFormatDescription()
         let frameDur = currentFrameDuration()
         guard fmtDesc != nil, frameDur.isValid else {
@@ -289,8 +290,8 @@ extension MP4H264Demuxer {
             }
         }
 
-        // If we had a bounded 'mdat' and we’ve consumed its payload, switch back to header parsing
-        // to look for subsequent boxes (e.g., another 'mdat' or trailer metadata).
+        // If we had a bounded mdat and we’ve consumed its payload, switch back to header parsing
+        // to look for subsequent boxes (e.g., another mdat or trailer metadata).
         if let rem = mdatRemaining, rem <= 0, mdatPayload.isEmpty {
             emitDebug("[MP4] mdat drained → back to readingHeaders")
             inMdat = false
@@ -301,7 +302,7 @@ extension MP4H264Demuxer {
     }
 
     /// Returns the next sample size according to stsz. If a default size was
-    /// specified, that fixed size is used for every sample; otherwise the method
+    /// specified, that fixed size is used for every sample, otherwise the method
     /// reads the next entry from the per-sample size array and advances the
     /// running index. A nil return indicates there are no more samples described
     /// by the table.

@@ -1,3 +1,5 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
+
 import 'dart:io' show Platform;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:secluso_flutter/constants.dart';
@@ -96,9 +98,7 @@ class HeartbeatScheduler {
       _periodicTaskName,
       frequency: Duration(hours: 6),
       existingWorkPolicy: ExistingWorkPolicy.keep,
-      constraints: Constraints(
-        networkType: NetworkType.connected,
-      ),
+      constraints: Constraints(networkType: NetworkType.connected),
     );
   }
 }
@@ -142,8 +142,7 @@ class DownloadScheduler {
 
     Log.d("Network statuses: wifi = $wifi, cell = $cell");
     // TODO: We can't do work now in Android due to the ObjectBox error where we can't double instantiate (as Android background work doesn't hold the lock that the main process does, so it can't touch the database)
-    if (!camera.isEmpty &&
-        (wifi || (cell && allowCellular))) {
+    if (!camera.isEmpty && (wifi || (cell && allowCellular))) {
       Log.d("Trying to do work now for $camera");
       final ok = await doWorkNonBackground(camera);
       if (ok) return; // Success in foreground

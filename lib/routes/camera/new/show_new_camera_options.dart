@@ -1,3 +1,5 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'ip_camera_option.dart';
 import 'proprietary_camera_option.dart';

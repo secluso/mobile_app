@@ -1,3 +1,5 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
+
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/src/rust/api.dart';
 import 'package:secluso_flutter/utilities/logger.dart';

@@ -1,3 +1,5 @@
+//! SPDX-License-Identifier: GPL-3.0-or-later
+
 import 'package:flutter/material.dart';
 import 'package:secluso_flutter/notifications/heartbeat_task.dart';
 import 'package:secluso_flutter/notifications/scheduler.dart';
@@ -39,8 +41,7 @@ void main() async {
     var tag = event.tag; // Represents the calling file
 
     // For now, we filter out all Rust code that isn't from us in release mode.
-    if (kReleaseMode &&
-        (!tag.contains("secluso") && !tag.startsWith("src"))) {
+    if (kReleaseMode && (!tag.contains("secluso") && !tag.startsWith("src"))) {
       return;
     }
 
