@@ -120,6 +120,26 @@ class _AppDrawerState extends State<AppDrawer> {
                   'Settings',
                   () => _showSettingsSheet(context, themeProvider),
                 ),
+
+                _buildDrawerItem(
+                  themeProvider,
+                  Icons.description,
+                  'Licenses',
+                  () {
+                    showLicensePage(
+                      context: context,
+                      applicationName: 'Secluso Camera',
+                      applicationVersion:
+                          'v0.1', //TODO: Update this dynamically
+                      applicationIcon: Image.asset(
+                        'assets/icon_centered.png',
+                        width: 200,
+                        height: 200,
+                      ),
+                      applicationLegalese: '© 2025 Secluso',
+                    );
+                  },
+                ),
               ],
             ),
           ),
