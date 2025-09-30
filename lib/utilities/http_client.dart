@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/notifications/epoch.dart';
 import 'package:secluso_flutter/src/rust/api.dart';
 import 'package:secluso_flutter/utilities/http_entities.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -59,10 +60,8 @@ class HttpClientService {
         continue;
       }
 
-      final SharedPreferencesAsync sharedPreferencesAsync =
-          SharedPreferencesAsync();
       final int epoch =
-          (await sharedPreferencesAsync.getInt("epoch$cameraName")) ?? 2;
+          await readEpoch(cameraName, "video");
 
       convertedCameraList.add(MotionPair(motionGroup, epoch));
       associatedNameToGroup[motionGroup] = cameraName;

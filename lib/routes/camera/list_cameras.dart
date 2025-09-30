@@ -447,10 +447,6 @@ class CamerasPageState extends State<CamerasPage>
 
     await prefs.remove("first_time_" + cameraName);
 
-    final SharedPreferencesAsync asyncPrefs = SharedPreferencesAsync();
-    await asyncPrefs.remove("epoch" + cameraName);
-    await asyncPrefs.remove("thumbnailEpoch$cameraName");
-
     var existingCameraSet = prefs.getStringList(PrefKeys.cameraSet) ?? [];
     existingCameraSet.remove(cameraName);
     await prefs.setStringList(PrefKeys.cameraSet, existingCameraSet);

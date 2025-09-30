@@ -3,6 +3,7 @@
 import 'package:path_provider/path_provider.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/notifications/epoch.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/src/rust/api.dart';
@@ -248,9 +249,7 @@ List<List<T>> batch<T>(List<T> items, int batchSize) {
 
 Future<bool> retrieveVideos(String cameraName) async {
   Log.d("Entered for $cameraName");
-  final SharedPreferencesAsync sharedPreferencesAsync =
-      SharedPreferencesAsync();
-  var epoch = (await sharedPreferencesAsync.getInt("epoch$cameraName")) ?? 2;
+  var epoch = await readEpoch(cameraName, "video");
 
   // We could crash/be terminated at any point during execution.
   // We need to perform the following steps carefully so that we
@@ -329,7 +328,7 @@ Future<bool> retrieveVideos(String cameraName) async {
         }
       }
 
-      await sharedPreferencesAsync.setInt("epoch$cameraName", epoch + 1);
+      await writeEpoch(cameraName, "video", epoch + 1);
 
       await HttpClientService.instance.delete(
         destinationFile: fileName,

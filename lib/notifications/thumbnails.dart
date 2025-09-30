@@ -1,6 +1,7 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
 import 'dart:async';
+import 'package:secluso_flutter/notifications/epoch.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/routes/camera/list_cameras.dart';
@@ -94,10 +95,9 @@ class ThumbnailManager {
       try {
         final sw = Stopwatch()..start();
 
-        var prefs = SharedPreferencesAsync();
         while (sw.elapsed <= timeBudget) {
           // Epoch for this starts at 2 when not set from before.
-          final epoch = await prefs.getInt('thumbnailEpoch$camera') ?? 2;
+          final epoch = await readEpoch(camera, "thumbnail");
           Log.d("Thumbnail Epoch = $epoch");
           final fileName = "encThumbnail$epoch";
           var result = await HttpClientService.instance.download(
@@ -141,7 +141,7 @@ class ThumbnailManager {
             return;
           }
 
-          await prefs.setInt("thumbnailEpoch$camera", epoch + 1);
+          await writeEpoch(camera, "thumbnail", epoch + 1);
 
           await HttpClientService.instance.delete(
             destinationFile: fileName,
