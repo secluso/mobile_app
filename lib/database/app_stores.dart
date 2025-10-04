@@ -11,11 +11,18 @@ class AppStores {
   AppStores._internal();
 
   static bool _initialized = false;
+  static Future<AppStores>? _opening;
+  static bool _closing = false;
 
   /// Initialization ran once in runApp
   static Future<AppStores> init() async {
     if (_initialized) return _singleton; // already ready
+    if (_opening != null) return _opening!;
+    _opening = _initInternal().whenComplete(() => _opening = null);
+   return _opening!;
+  }
 
+  static Future<AppStores> _initInternal() async {
     final docsDir = await getApplicationDocumentsDirectory();
     _singleton._cameraStore = await openStore(
       directory: p.join(docsDir.path, 'camera-db'),
@@ -47,10 +54,17 @@ class AppStores {
   Store get videoStore => _videoStore;
   Store get detectionStore => _detectionStore;
 
-  void close() async {
-    _cameraStore.close();
-    _videoStore.close();
-    _detectionStore.close();
-    _initialized = false;
+  Future<void> close() async {
+    if (_closing) return;
+    _closing = true;
+    try {
+      // These are sync methods, but wrap in try/finally so all close even if one throws.
+      _cameraStore.close();
+      _videoStore.close();
+      _detectionStore.close();
+      _initialized = false;
+    } finally {
+      _closing = false;
+    }
   }
 }

@@ -2,6 +2,8 @@
 
 use std::sync::Once;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::sync::atomic::{AtomicBool, Ordering};
+use once_cell::sync::Lazy;
 
 use crate::frb_generated::StreamSink;
 use lazy_static::lazy_static;
@@ -32,10 +34,26 @@ pub fn create_log_stream(s: StreamSink<LogEntry>) {
 
 #[flutter_rust_bridge::frb]
 pub fn rust_set_up() {
+    LOGGING_ACTIVE.store(true, Ordering::SeqCst);
     init_logger();
 }
 
+#[flutter_rust_bridge::frb]
+pub fn rust_shutdown() -> Result<(), String> {
+    // Stop future sends
+    LOGGING_ACTIVE.store(false, Ordering::SeqCst);
+
+    // Drop the StreamSink so no one can post to Dart anymore
+    {
+        let mut guard = SEND_TO_DART_LOGGER_STREAM_SINK.write();
+        *guard = None;
+    }
+
+    Ok(())
+}
+
 static INIT_LOGGER_ONCE: Once = Once::new();
+static LOGGING_ACTIVE: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(true));
 
 pub fn init_logger() {
     // https://stackoverflow.com/questions/30177845/how-to-initialize-the-logger-for-integration-tests
@@ -89,16 +107,14 @@ impl SendToDartLogger {
     pub fn set_stream_sink(stream_sink: StreamSink<LogEntry>) {
         let mut guard = SEND_TO_DART_LOGGER_STREAM_SINK.write();
         let overriding = guard.is_some();
-
         *guard = Some(stream_sink);
-
         drop(guard);
 
+        // If a new sink is set while active, ensure the flag is true.
+        LOGGING_ACTIVE.store(true, Ordering::SeqCst);
+
         if overriding {
-            warn!(
-                "SendToDartLogger::set_stream_sink but already exist a sink, thus overriding. \
-                (This may or may not be a problem. It will happen normally if hot-reload Flutter app.)"
-            );
+            warn!("SendToDartLogger::set_stream_sink overriding existing sink (hot reload/restart is normal).");
         }
     }
 
@@ -144,20 +160,22 @@ impl Log for SendToDartLogger {
         if metadata.target().starts_with("openmls") {
             return false;
         }
-
         metadata.level() <= self.level
     }
 
     fn log(&self, record: &Record) {
+        if !LOGGING_ACTIVE.load(Ordering::SeqCst) {
+            return;
+        }
+
         let entry = Self::record_to_entry(record);
+
         if let Some(sink) = &*SEND_TO_DART_LOGGER_STREAM_SINK.read() {
-            let _ = sink.add(entry).expect("Failed to add entry");
+            let _ = sink.add(entry);
         }
     }
 
-    fn flush(&self) {
-        // no need
-    }
+    fn flush(&self) {}
 }
 
 impl SharedLogger for SendToDartLogger {

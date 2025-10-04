@@ -435,6 +435,7 @@ class HttpClientService {
       clientTag: clientTag,
       cameraName: cameraName,
     );
+
     if (groupName == "Error") {
       throw Exception('Incorrect clientTag or invalid camera');
     }

@@ -16,6 +16,9 @@ Stream<LogEntry> createLogStream() =>
 
 Future<void> rustSetUp() => RustLib.instance.api.crateApiLoggerRustSetUp();
 
+Future<void> rustShutdown() =>
+    RustLib.instance.api.crateApiLoggerRustShutdown();
+
 Future<void> initLogger() => RustLib.instance.api.crateApiLoggerInitLogger();
 
 // Rust type: RustOpaqueMoi<flutter_rust_bridge::for_generated::RustAutoOpaqueInner<SendToDartLogger>>

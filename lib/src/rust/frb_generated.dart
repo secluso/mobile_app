@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.10.0';
 
   @override
-  int get rustContentHash => -1461222479;
+  int get rustContentHash => 1501830740;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -167,6 +167,10 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiLockManagerReleaseLock({required String path});
 
   Future<void> crateApiLoggerRustSetUp();
+
+  Future<void> crateApiLoggerRustShutdown();
+
+  Future<void> crateApiShutdownApp();
 
   Future<bool> crateApiLockManagerTryAcquireLock({required String path});
 
@@ -944,6 +948,60 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "rust_set_up", argNames: []);
 
   @override
+  Future<void> crateApiLoggerRustShutdown() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 23,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiLoggerRustShutdownConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLoggerRustShutdownConstMeta =>
+      const TaskConstMeta(debugName: "rust_shutdown", argNames: []);
+
+  @override
+  Future<void> crateApiShutdownApp() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 24,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiShutdownAppConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiShutdownAppConstMeta =>
+      const TaskConstMeta(debugName: "shutdown_app", argNames: []);
+
+  @override
   Future<bool> crateApiLockManagerTryAcquireLock({required String path}) {
     return handler.executeNormal(
       NormalTask(
@@ -953,7 +1011,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 23,
+            funcId: 25,
             port: port_,
           );
         },

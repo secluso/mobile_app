@@ -1,10 +1,14 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:secluso_flutter/notifications/heartbeat_task.dart';
 import 'package:secluso_flutter/notifications/scheduler.dart';
-import 'package:secluso_flutter/src/rust/frb_generated.dart';
+import 'package:secluso_flutter/src/rust/api.dart';
 import 'package:secluso_flutter/src/rust/api/logger.dart';
+import 'package:secluso_flutter/src/rust/guard.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/notifications/thumbnails.dart';
 import 'routes/home_page.dart';
@@ -29,89 +33,106 @@ import 'dart:isolate';
 
 final ReceivePort _mainReceivePort = ReceivePort();
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+const queueProcessorPortName = 'queue_processor_signal_port';
 
 void main() async {
-  Log.init();
-  Log.i('main() started');
-  WidgetsFlutterBinding.ensureInitialized();
-  Log.d("After intiialize app");
-  await RustLib.init();
-  createLogStream().listen((event) {
-    var level = event.level;
-    var tag = event.tag; // Represents the calling file
+  // Wrap main() with a zone so if something throws during init, we still attempt to close the DB.
+  runZonedGuarded(() async {
+    Log.init();
+    Log.i('main() started');
+    WidgetsFlutterBinding.ensureInitialized();
+    Log.d("After intiialize app");
+    await RustLibGuard.initOnce();
 
-    // For now, we filter out all Rust code that isn't from us in release mode.
-    if (kReleaseMode && (!tag.contains("secluso") && !tag.startsWith("src"))) {
-      return;
+    Log.d("After RustLibGuard.initOnce");
+
+    // The native logger causes some reentrancy deadlocks.
+    // Only enable if needed.
+    /*
+    createLogStream().listen((event) {
+      var level = event.level;
+      var tag = event.tag; // Represents the calling file
+
+      // For now, we filter out all Rust code that isn't from us in release mode.
+      if (kReleaseMode && (!tag.contains("secluso") && !tag.startsWith("src"))) {
+        return;
+      }
+
+      // We filter out OpenMLS as we don't need OpenMLS logging leaking data (although this shouldn't be a risk regardless due to release only allowing info and above in logging)
+      if (tag.contains("openmls")) {
+        return;
+      }
+
+      if (level == 0 || level == 1) {
+        Log.d(event.msg, customLocation: event.tag);
+      } else if (level == 2) {
+        Log.i(event.msg, customLocation: event.tag);
+      } else {
+        Log.e(event.msg, customLocation: event.tag);
+      }
+    });
+    */
+
+    Log.d("After createLogStream().listen()");
+    await AppStores.init();
+    await runMigrations(); // Must run right after App Store initialization
+
+    _initAllCameras(); // Must come after App Store and Rust Lib initialization
+
+    // We wait to initialize Firebase and the download scheduler until our cameras have been initialized
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+    // If we face some kind of HTTP error, we don't want this to interrupt our flow
+    try {
+      // TODO: Should all of these be awaited? It might mess with how long our app takes to start up. Maybe we should decouple most of these tasks from the UI processing thread
+      await _checkForUpdates(); // Must come before download scheduler
+      await ThumbnailManager.checkThumbnailsForAll();
+    } catch (e) {
+      Log.d("Caught error - $e");
     }
 
-    // We filter out OpenMLS as we don't need OpenMLS logging leaking data (although this shouldn't be a risk regardless due to release only allowing info and above in logging)
-    if (tag.contains("openmls")) {
-      return;
-    }
+    await DownloadScheduler.init();
+    // (Re-)schedule the recurring heartbeat task.
+    await HeartbeatScheduler.registerPeriodicTask();
+    // Run the heartbeat tasks.
+    Future.delayed(Duration.zero, () {
+      doAllHeartbeatTasks(false);
+    });
 
-    if (level == 0 || level == 1) {
-      Log.d(event.msg, customLocation: event.tag);
-    } else if (level == 2) {
-      Log.i(event.msg, customLocation: event.tag);
-    } else {
-      Log.e(event.msg, customLocation: event.tag);
-    }
+    QueueProcessor.instance.start();
+    QueueProcessor.instance.signalNewFile();
+
+    _mainReceivePort.listen((message) {
+      if (message == 'signal_new_file') {
+        QueueProcessor.instance.signalNewFile();
+      }
+    });
+
+    IsolateNameServer.removePortNameMapping(queueProcessorPortName);
+    IsolateNameServer.registerPortWithName(
+      _mainReceivePort.sendPort,
+      queueProcessorPortName,
+    );
+
+    await PushNotificationService.instance.init();
+
+    // Load saved dark mode state before starting the app
+    bool isDarkMode = await ThemeProvider.loadThemePreference();
+    Log.d("Loaded darkTheme value: $isDarkMode");
+
+    runApp(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => ThemeProvider(isDarkMode)),
+        ],
+        child: MyApp(),
+      ),
+    );
+  }, (error, stack) async {
+    try {
+      await AppStores.instance.close();
+    } catch (_) {}
   });
-  Log.d("After rust lib init");
-  await AppStores.init();
-  await runMigrations(); // Must run right after App Store initialization
-
-  _initAllCameras(); // Must come after App Store and Rust Lib initialization
-
-  // We wait to initialize Firebase and the download scheduler until our cameras have been initialized
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-  // If we face some kind of HTTP error, we don't want this to interrupt our flow
-  try {
-    // TODO: Should all of these be awaited? It might mess with how long our app takes to start up. Maybe we should decouple most of these tasks from the UI processing thread
-    await _checkForUpdates(); // Must come before download scheduler
-    await ThumbnailManager.checkThumbnailsForAll();
-  } catch (e) {
-    Log.d("Caught error - $e");
-  }
-
-  await DownloadScheduler.init();
-  // (Re-)schedule the recurring heartbeat task.
-  await HeartbeatScheduler.registerPeriodicTask();
-  // Run the heartbeat tasks.
-  Future.delayed(Duration.zero, () {
-    doAllHeartbeatTasks(false);
-  });
-
-  QueueProcessor.instance.start();
-  QueueProcessor.instance.signalNewFile();
-
-  _mainReceivePort.listen((message) {
-    if (message == 'signal_new_file') {
-      QueueProcessor.instance.signalNewFile();
-    }
-  });
-
-  IsolateNameServer.registerPortWithName(
-    _mainReceivePort.sendPort,
-    'queue_processor_signal_port',
-  );
-
-  await PushNotificationService.instance.init();
-
-  // Load saved dark mode state before starting the app
-  bool isDarkMode = await ThemeProvider.loadThemePreference();
-  Log.d("Loaded darkTheme value: $isDarkMode");
-
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => ThemeProvider(isDarkMode)),
-      ],
-      child: MyApp(),
-    ),
-  );
 }
 
 Future<void> _initAllCameras() async {
@@ -210,12 +231,20 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       QueueProcessor.instance
           .signalNewFile(); // Try to process any new uploads now
     }
+
+    if (state == AppLifecycleState.detached) {
+      // App is about to be terminated – close the DB to release file locks.
+      // No 'await' here since Flutter may be tearing down the isolate; this is best-effort.
+      RustLibGuard.shutdownOnce(); 
+      AppStores.instance.close();
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+    IsolateNameServer.removePortNameMapping(queueProcessorPortName);
   }
 
   @override
@@ -227,7 +256,23 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       navigatorKey: navigatorKey,
       navigatorObservers: [routeObserver],
       theme: themeProvider.isDarkMode ? ThemeData.dark() : ThemeData.light(),
-      home: HomePage(),
+      home: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) async {
+          if (didPop) return;
+          try {
+            await RustLibGuard.shutdownOnce();
+            await AppStores.instance.close();
+          } catch (_) {}
+          final nav = navigatorKey.currentState;
+          if (nav != null && nav.canPop()) {
+            nav.pop(result);
+          } else {
+            SystemNavigator.pop();
+          }
+        },
+        child: HomePage(),
+      ),
     );
   }
 }
