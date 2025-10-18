@@ -68,3 +68,7 @@ rust/build/
 # Debug files
 *.debug
 .vscode
+
+# Google Play Store related
+android/key.properties
+*.jks
