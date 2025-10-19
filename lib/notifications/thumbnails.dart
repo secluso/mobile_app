@@ -159,4 +159,65 @@ class ThumbnailManager {
       Log.e("Failed to acquire thumbnail session lock");
     }
   }
+
+  // RetriveAllThumbnails of a camera
+  static Future<void> retrieveThumbnails({
+    required String camera,
+  }) async {
+    Log.d("Entered retrieveThumbnails");
+    if (await lock("thumbnail$camera.lock")) {
+      try {
+        // Epoch for this starts at 2 when not set from before.
+        final epoch = await readEpoch(camera, "thumbnail");
+        Log.d("Thumbnail Epoch = $epoch");
+        final fileName = "encThumbnail$epoch";
+        var result = await HttpClientService.instance.download(
+          destinationFile: fileName,
+          cameraName: camera,
+          serverFile: epoch.toString(),
+          type: Group.thumbnail,
+        );
+
+        if (result.isFailure) return;
+
+        Log.d("Proceeding after thumbnail download");
+        final baseDir = await getApplicationDocumentsDirectory();
+        final metaDir = Directory(p.join(baseDir.path, 'waiting', 'meta'));
+        await metaDir.create(recursive: true);
+
+        // Decode the thumbnail
+        var file = result.value!.file!;
+        var decFileName = await decryptThumbnail(
+          cameraName: camera,
+          encFilename: fileName,
+          pendingMetaDirectory: metaDir.path,
+        );
+
+        Log.d("Thumbnail dec file name = $decFileName");
+
+        if (decFileName != "Error") {
+          await file.delete();
+          ThumbnailNotifier.instance.notify(camera);
+        } else {
+          // TODO: What do we do here? We probably shouldn't increment the epoch if we hit an error..
+          return;
+        }
+
+        await writeEpoch(camera, "thumbnail", epoch + 1);
+
+        await HttpClientService.instance.delete(
+          destinationFile: fileName,
+          cameraName: camera,
+          serverFile: epoch.toString(),
+          type: Group.thumbnail,
+        );
+      } finally {
+        await unlock(
+          "thumbnail$camera.lock",
+        ); // Always ensure this unlocks, even on exceptions
+      }
+    } else {
+      Log.e("Failed to acquire thumbnail session lock");
+    }
+  }
 }

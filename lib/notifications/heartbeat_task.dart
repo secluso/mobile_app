@@ -4,6 +4,7 @@ import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/notifications/download_task.dart';
 import 'package:secluso_flutter/notifications/notifications.dart';
+import 'package:secluso_flutter/notifications/thumbnails.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/src/rust/api.dart';
 import 'package:secluso_flutter/src/rust/frb_generated.dart';
@@ -83,9 +84,10 @@ Future<bool> _doHeartbeatTask(String cameraName) async {
     (_) async {
       for (int i = 0; i < 30 && !successful; i++) {
         await Future.delayed(Duration(seconds: 2));
-        // Download pending videos before processing the heartbeat response.
+        // Download pending videos and thumbnails before processing the heartbeat response.
         // This prevents thinking that the MLS channel is corrupted if there
         // are pending video files in the server.
+        await ThumbnailManager.retrieveThumbnails(camera: cameraName);
         await retrieveVideos(cameraName);
 
         final fetchRes = await HttpClientService.instance.fetchConfigResponse(
