@@ -7,6 +7,8 @@ import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import 'package:confetti/confetti.dart';
 import 'package:objectbox/objectbox.dart';
+import 'package:secluso_flutter/notifications/download_task.dart';
+import 'package:secluso_flutter/notifications/thumbnails.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../theme_provider.dart';
@@ -442,6 +444,11 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
         .toList();
   }
 
+  Future<void> _onPullToRefresh() async {
+    await ThumbnailManager.retrieveThumbnails(camera: widget.cameraName);
+    await retrieveVideos(widget.cameraName);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Provider.of<ThemeProvider>(context);
@@ -507,7 +514,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
                   vertical: 8,
                 ),
                 child: Text(
-                  'Tap to play. Long-press to delete.',
+                  'Pull down to download missing videos (if any). Long-press to delete.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16,
@@ -516,90 +523,93 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
                 ),
               ),
               Expanded(
-                child: ListView.builder(
-                  controller: _scrollController,
-                  itemCount: _videos.length + (_hasMore ? 1 : 0),
-                  itemBuilder: (ctx, i) {
-                    if (i >= _videos.length) {
-                      // spinner row
-                      return const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 24),
-                        child: Center(child: CircularProgressIndicator()),
-                      );
-                    }
-                    final v = _videos[i];
-                    final videoType = v.motion ? 'Detected' : 'Livestream';
+                child: RefreshIndicator(
+                  onRefresh: _onPullToRefresh,
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    itemCount: _videos.length + (_hasMore ? 1 : 0),
+                    itemBuilder: (ctx, i) {
+                      if (i >= _videos.length) {
+                        // spinner row
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      final v = _videos[i];
+                      final videoType = v.motion ? 'Detected' : 'Livestream';
 
-                    return Card(
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: ListTile(
-                        leading: FutureBuilder<Widget>(
-                          future: _thumbPlaceholder(v.camera, v.video),
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState ==
-                                    ConnectionState.done &&
-                                snapshot.hasData) {
-                              return snapshot.data!;
-                            } else {
-                              return const SizedBox(
-                                width: 80,
-                                height: 80,
-                                child: Center(
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              );
-                            }
-                          },
+                      return Card(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
                         ),
-                        title: Text(
-                          repackageVideoTitle(v.video),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        subtitle: Row(
-                          children: [
-                            Text(
-                              videoType,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
-                              ),
-                            ),
-                            if (v.received && v.motion) ..._iconsForVideo(v),
-                          ],
-                        ),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap:
-                            () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder:
-                                    (_) => VideoViewPage(
-                                      cameraName: v.camera,
-                                      videoTitle: v.video,
-                                      visibleVideoTitle: repackageVideoTitle(
-                                        v.video,
-                                      ),
-                                      canDownload: v.received,
+                        child: ListTile(
+                          leading: FutureBuilder<Widget>(
+                            future: _thumbPlaceholder(v.camera, v.video),
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState ==
+                                      ConnectionState.done &&
+                                  snapshot.hasData) {
+                                return snapshot.data!;
+                              } else {
+                                return const SizedBox(
+                                  width: 80,
+                                  height: 80,
+                                  child: Center(
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
                                     ),
-                              ),
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                          title: Text(
+                            repackageVideoTitle(v.video),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
                             ),
-                        onLongPress: () => _deleteOne(v, i),
-                      ),
-                    );
-                  },
+                          ),
+                          subtitle: Row(
+                            children: [
+                              Text(
+                                videoType,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              if (v.received && v.motion) ..._iconsForVideo(v),
+                            ],
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap:
+                              () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder:
+                                      (_) => VideoViewPage(
+                                        cameraName: v.camera,
+                                        videoTitle: v.video,
+                                        visibleVideoTitle: repackageVideoTitle(
+                                          v.video,
+                                        ),
+                                        canDownload: v.received,
+                                      ),
+                                ),
+                              ),
+                          onLongPress: () => _deleteOne(v, i),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
             ],
