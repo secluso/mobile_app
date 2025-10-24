@@ -1,8 +1,11 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
+import 'dart:io';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:secluso_flutter/utilities/firebase_init.dart';
 import 'package:flutter/services.dart';
 import 'package:secluso_flutter/notifications/heartbeat_task.dart';
 import 'package:secluso_flutter/notifications/scheduler.dart';
@@ -37,18 +40,19 @@ const queueProcessorPortName = 'queue_processor_signal_port';
 
 void main() async {
   // Wrap main() with a zone so if something throws during init, we still attempt to close the DB.
-  runZonedGuarded(() async {
-    Log.init();
-    Log.i('main() started');
-    WidgetsFlutterBinding.ensureInitialized();
-    Log.d("After intiialize app");
-    await RustLibGuard.initOnce();
+  runZonedGuarded(
+    () async {
+      Log.init();
+      Log.i('main() started');
+      WidgetsFlutterBinding.ensureInitialized();
+      Log.d("After intiialize app");
+      await RustLibGuard.initOnce();
 
-    Log.d("After RustLibGuard.initOnce");
+      Log.d("After RustLibGuard.initOnce");
 
-    // The native logger causes some reentrancy deadlocks.
-    // Only enable if needed.
-    /*
+      // The native logger causes some reentrancy deadlocks.
+      // Only enable if needed.
+      /*
     createLogStream().listen((event) {
       var level = event.level;
       var tag = event.tag; // Represents the calling file
@@ -73,66 +77,68 @@ void main() async {
     });
     */
 
-    Log.d("After createLogStream().listen()");
-    await AppStores.init();
-    await runMigrations(); // Must run right after App Store initialization
+      Log.d("After createLogStream().listen()");
+      await AppStores.init();
+      await runMigrations(); // Must run right after App Store initialization
 
-    _initAllCameras(); // Must come after App Store and Rust Lib initialization
+      _initAllCameras(); // Must come after App Store and Rust Lib initialization
 
-    // We wait to initialize Firebase and the download scheduler until our cameras have been initialized
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+      // We wait to initialize Firebase and the download scheduler until our cameras have been initialized
+      await FirebaseInit.ensure();
 
-    // If we face some kind of HTTP error, we don't want this to interrupt our flow
-    try {
-      // TODO: Should all of these be awaited? It might mess with how long our app takes to start up. Maybe we should decouple most of these tasks from the UI processing thread
-      await _checkForUpdates(); // Must come before download scheduler
-      await ThumbnailManager.checkThumbnailsForAll();
-    } catch (e) {
-      Log.d("Caught error - $e");
-    }
-
-    await DownloadScheduler.init();
-    // (Re-)schedule the recurring heartbeat task.
-    await HeartbeatScheduler.registerPeriodicTask();
-    // Run the heartbeat tasks.
-    Future.delayed(Duration.zero, () {
-      doAllHeartbeatTasks(false);
-    });
-
-    QueueProcessor.instance.start();
-    QueueProcessor.instance.signalNewFile();
-
-    _mainReceivePort.listen((message) {
-      if (message == 'signal_new_file') {
-        QueueProcessor.instance.signalNewFile();
+      // If we face some kind of HTTP error, we don't want this to interrupt our flow
+      try {
+        // TODO: Should all of these be awaited? It might mess with how long our app takes to start up. Maybe we should decouple most of these tasks from the UI processing thread
+        await _checkForUpdates(); // Must come before download scheduler
+        await ThumbnailManager.checkThumbnailsForAll();
+      } catch (e) {
+        Log.d("Caught error - $e");
       }
-    });
 
-    IsolateNameServer.removePortNameMapping(queueProcessorPortName);
-    IsolateNameServer.registerPortWithName(
-      _mainReceivePort.sendPort,
-      queueProcessorPortName,
-    );
+      await DownloadScheduler.init();
+      // (Re-)schedule the recurring heartbeat task.
+      await HeartbeatScheduler.registerPeriodicTask();
+      // Run the heartbeat tasks.
+      Future.delayed(Duration.zero, () {
+        doAllHeartbeatTasks(false);
+      });
 
-    await PushNotificationService.instance.init();
+      QueueProcessor.instance.start();
+      QueueProcessor.instance.signalNewFile();
 
-    // Load saved dark mode state before starting the app
-    bool isDarkMode = await ThemeProvider.loadThemePreference();
-    Log.d("Loaded darkTheme value: $isDarkMode");
+      _mainReceivePort.listen((message) {
+        if (message == 'signal_new_file') {
+          QueueProcessor.instance.signalNewFile();
+        }
+      });
 
-    runApp(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider(create: (_) => ThemeProvider(isDarkMode)),
-        ],
-        child: MyApp(),
-      ),
-    );
-  }, (error, stack) async {
-    try {
-      await AppStores.instance.close();
-    } catch (_) {}
-  });
+      IsolateNameServer.removePortNameMapping(queueProcessorPortName);
+      IsolateNameServer.registerPortWithName(
+        _mainReceivePort.sendPort,
+        queueProcessorPortName,
+      );
+
+      await PushNotificationService.instance.init();
+
+      // Load saved dark mode state before starting the app
+      bool isDarkMode = await ThemeProvider.loadThemePreference();
+      Log.d("Loaded darkTheme value: $isDarkMode");
+
+      runApp(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => ThemeProvider(isDarkMode)),
+          ],
+          child: MyApp(),
+        ),
+      );
+    },
+    (error, stack) async {
+      try {
+        await AppStores.instance.close();
+      } catch (_) {}
+    },
+  );
 }
 
 Future<void> _initAllCameras() async {
@@ -235,7 +241,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (state == AppLifecycleState.detached) {
       // App is about to be terminated – close the DB to release file locks.
       // No 'await' here since Flutter may be tearing down the isolate; this is best-effort.
-      RustLibGuard.shutdownOnce(); 
+      RustLibGuard.shutdownOnce();
       AppStores.instance.close();
     }
   }

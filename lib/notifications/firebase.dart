@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:secluso_flutter/utilities/firebase_init.dart';
 import 'package:secluso_flutter/notifications/heartbeat_task.dart';
 import 'package:secluso_flutter/notifications/notifications.dart';
 import 'package:secluso_flutter/notifications/scheduler.dart';
@@ -20,7 +21,6 @@ import 'package:secluso_flutter/src/rust/api.dart';
 import '../utilities/result.dart';
 import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/src/rust/frb_generated.dart';
 import 'dart:io' show Platform;
@@ -50,7 +50,8 @@ class RustBridgeHelper {
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Re-init Firebase
-  await Firebase.initializeApp();
+  Log.d("In background handler - calling ensure()");
+  await FirebaseInit.ensure();
 
   if (Platform.isAndroid) {
     await RustBridgeHelper.ensureInitialized();

@@ -11,6 +11,7 @@ import 'package:secluso_flutter/utilities/logger.dart';
 
 import 'package:secluso_flutter/database/app_stores.dart';
 import 'package:secluso_flutter/database/entities.dart';
+import 'package:secluso_flutter/utilities/mp4_fix.dart';
 import '../../objectbox.g.dart';
 
 class VideoViewPage extends StatefulWidget {
@@ -18,6 +19,7 @@ class VideoViewPage extends StatefulWidget {
   final String visibleVideoTitle;
   final bool canDownload;
   final String cameraName;
+  final bool isLivestream;
 
   const VideoViewPage({
     Key? key,
@@ -25,6 +27,7 @@ class VideoViewPage extends StatefulWidget {
     required this.visibleVideoTitle,
     required this.canDownload,
     required this.cameraName,
+    required this.isLivestream,
   }) : super(key: key);
 
   @override
@@ -86,6 +89,40 @@ class _VideoViewPageState extends State<VideoViewPage> {
       widget.videoTitle,
     );
     Log.d("Found path: $_videoPath");
+
+    // apply patch only for livestreams, and only once
+    if (widget.isLivestream) {
+      final markerPath = '$_videoPath.patched_livestream';
+      final marker = File(markerPath);
+      final alreadyFixed = await marker.exists();
+
+      if (alreadyFixed) {
+        Log.d("[fix] skip: marker exists ($markerPath)");
+      } else {
+        Log.d("Attempting to fix (livestream only)");
+        final res = await Mp4DurationFixer(File(_videoPath), log: Log.d).fix();
+
+        // Only mark if it actually patched something
+        if (res.patched) {
+          try {
+            await marker.writeAsString(
+              "ok ${res.duration.inMilliseconds}ms fps=${res.fps.toStringAsFixed(3)}",
+              flush: true,
+            );
+            Log.d("[fix] marker written ($markerPath)");
+          } catch (e) {
+            Log.d("[fix] could not write marker: $e");
+          }
+        } else {
+          Log.d(
+            "[fix] no patch applied (res.patched=false) — not writing marker",
+          );
+        }
+      }
+    } else {
+      Log.d("[fix] not a livestream — skipping patch");
+    }
+
     _controller = VideoPlayerController.file(File(_videoPath));
 
     await _controller.initialize();
@@ -116,7 +153,9 @@ class _VideoViewPageState extends State<VideoViewPage> {
     }
 
     try {
-      await Permission.mediaLibrary
+      var permission =
+          Platform.isIOS ? Permission.photosAddOnly : Permission.mediaLibrary;
+      await permission
           .onDeniedCallback(() {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(

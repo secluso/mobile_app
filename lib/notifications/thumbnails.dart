@@ -161,9 +161,7 @@ class ThumbnailManager {
   }
 
   // RetriveAllThumbnails of a camera
-  static Future<void> retrieveThumbnails({
-    required String camera,
-  }) async {
+  static Future<void> retrieveThumbnails({required String camera}) async {
     Log.d("Entered retrieveThumbnails");
     if (await lock("thumbnail$camera.lock")) {
       try {

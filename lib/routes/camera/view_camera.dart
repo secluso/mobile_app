@@ -601,6 +601,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
                                         visibleVideoTitle: repackageVideoTitle(
                                           v.video,
                                         ),
+                                        isLivestream: !v.motion,
                                         canDownload: v.received,
                                       ),
                                 ),

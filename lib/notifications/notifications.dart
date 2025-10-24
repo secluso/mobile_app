@@ -91,6 +91,7 @@ Future<void> initLocalNotifications() async {
                         visibleVideoTitle: repackageVideoTitle(
                           foundVideo.video,
                         ),
+                        isLivestream: !foundVideo.motion,
                         canDownload: foundVideo.received,
                       ),
                 ),
