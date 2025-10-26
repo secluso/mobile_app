@@ -30,6 +30,9 @@ actor MP4H264Demuxer {
     /// here once the format description is ready.
     let view: ByteSampleBufferView
 
+    // Latency overlay that displays latency timing info on top of the video.
+    let latencyOverlay = SeiLatencyOverlay()
+
     /// Client callbacks. onAspectRatio is invoked once coded width, height,
     /// and pixel aspect ratio are known so that UI can adjust its layout.
     /// onDebug is invoked whenever notable parsing or scheduling events occur.

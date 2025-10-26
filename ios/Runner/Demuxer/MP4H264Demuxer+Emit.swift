@@ -43,6 +43,11 @@ extension MP4H264Demuxer {
             emitDebug(
                 "[MP4] fmtDesc created \(dims.width)x\(dims.height), nalLenSize=\(nalLengthSize)")
 
+            // Start the latency overlay on the main thread
+            Task { @MainActor in
+                latencyOverlay.start(on: self.view)
+            }
+
             // Only call the aspect callback when dimensions are valid
             if dims.width > 0 && dims.height > 0 {
                 onAspectRatio?(Double(dims.width) / Double(dims.height))
@@ -136,6 +141,10 @@ extension MP4H264Demuxer {
         // Compute frame duration from SPS/VUI; then pick the next PTS in sync with the display layer timebase.
         let frameDur = currentFrameDuration()
         let (pts, isFirst) = nextClockAlignedPTS(frameDur)
+
+        // Start latency overlay processing before building sample buffer
+        latencyOverlay.onAvccNalArray(nals: nals, pts: pts)
+
         var timing = CMSampleTimingInfo(
             duration: frameDur, presentationTimeStamp: pts, decodeTimeStamp: .invalid)
 
@@ -191,6 +200,9 @@ extension MP4H264Demuxer {
         // Use the derived frame duration from SPS/VUI
         let frameDur = currentFrameDuration()
         let (pts, isFirst) = nextClockAlignedPTS(frameDur)
+
+        // Notify latency overlay of the sample being emitted
+        latencyOverlay.onAvccSample(sample: sample, nalLengthSize: nalLengthSize, pts: pts)
 
         // Build a CMBlockBuffer for the sample bytes
         var block: CMBlockBuffer?
@@ -320,7 +332,7 @@ extension MP4H264Demuxer {
 
     private func postToUI(_ sb: CMSampleBuffer, isIDR: Bool, isFirst: Bool) {
         Task { @MainActor in
-            self.view.enqueue(sb, isIDR: isIDR, isFirst: isFirst)
+            view.enqueue(sb, isIDR: isIDR, isFirst: isFirst)
         }
     }
 

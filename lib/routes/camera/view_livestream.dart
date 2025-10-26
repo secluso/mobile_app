@@ -201,7 +201,10 @@ class _LivestreamPageState extends State<LivestreamPage>
     final String cameraName = widget.cameraName;
     File? _videoFile;
 
+    var lastChunkTime = DateTime.now().millisecondsSinceEpoch;
+
     while (isStreaming) {
+      final startDownloading = DateTime.now().millisecondsSinceEpoch;
       final res = await HttpClientService.instance.livestreamRetrieve(
         cameraName: cameraName,
         chunkNumber: chunk,
@@ -209,12 +212,19 @@ class _LivestreamPageState extends State<LivestreamPage>
 
       await res.fold(
         (enc) async {
+          final doneDownloading = DateTime.now().millisecondsSinceEpoch;
           updateCameraStatusLivestream(cameraName);
           final dec = await livestreamDecrypt(
             cameraName: cameraName,
             data: enc,
             expectedChunkNumber: BigInt.from(chunk),
           );
+          final doneDecrypting = DateTime.now().millisecondsSinceEpoch;
+          Log.d(
+            'Timings: chunk $chunk, curr = $doneDecrypting download ${doneDownloading - startDownloading} ms, decrypt ${doneDecrypting - doneDownloading} ms, since last chunk ${doneDecrypting - lastChunkTime} ms',
+          );
+          lastChunkTime = doneDecrypting;
+
           if (chunk == 1) {
             final first16 = dec
                 .take(16)

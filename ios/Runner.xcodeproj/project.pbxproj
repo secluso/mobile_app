@@ -16,6 +16,7 @@
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		B1E9AC361A70A735651B9BCB /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A15EA82E4C048CF9287E515A /* Pods_RunnerTests.framework */; };
 		B48F5EE5C2F79AFCBB0427A4 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4951D18A9D78E279B95A8AA2 /* Pods_Runner.framework */; };
+		E3020CC52EAE4D78002D5B3A /* MP4H264Demuxer+Overlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3020CC42EAE4D78002D5B3A /* MP4H264Demuxer+Overlay.swift */; };
 		E323D9E32E89570A003F6F7F /* BitReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9DA2E895704003F6F7F /* BitReader.swift */; };
 		E323D9E42E89570A003F6F7F /* ByteQueueManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9DB2E895704003F6F7F /* ByteQueueManager.swift */; };
 		E323D9E52E89570A003F6F7F /* Data+MP4.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9DC2E895704003F6F7F /* Data+MP4.swift */; };
@@ -80,6 +81,8 @@
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A15EA82E4C048CF9287E515A /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		E3020CC22EAE41FB002D5B3A /* SeiLatencyOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SeiLatencyOverlay.swift; path = Runner/Demuxer/SeiLatencyOverlay.swift; sourceTree = "<group>"; };
+		E3020CC42EAE4D78002D5B3A /* MP4H264Demuxer+Overlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "MP4H264Demuxer+Overlay.swift"; path = "Runner/Demuxer/MP4H264Demuxer+Overlay.swift"; sourceTree = "<group>"; };
 		E323D9BC2E89524C003F6F7F /* MP4H264Demuxer+Emit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "MP4H264Demuxer+Emit.swift"; path = "Runner/MP4H264Demuxer+Emit.swift"; sourceTree = "<group>"; };
 		E323D9BD2E89524C003F6F7F /* MP4H264Demuxer+Boxes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "MP4H264Demuxer+Boxes.swift"; path = "Runner/MP4H264Demuxer+Boxes.swift"; sourceTree = "<group>"; };
 		E323D9BE2E89524C003F6F7F /* MP4H264Demuxer+Moov.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "MP4H264Demuxer+Moov.swift"; path = "Runner/MP4H264Demuxer+Moov.swift"; sourceTree = "<group>"; };
@@ -183,6 +186,8 @@
 		97C146E51CF9000F007C117D = {
 			isa = PBXGroup;
 			children = (
+				E3020CC42EAE4D78002D5B3A /* MP4H264Demuxer+Overlay.swift */,
+				E3020CC22EAE41FB002D5B3A /* SeiLatencyOverlay.swift */,
 				E323D9DD2E895704003F6F7F /* Core */,
 				E323D9D92E895703003F6F7F /* Demuxer */,
 				E323D9E22E895704003F6F7F /* Player */,
@@ -558,6 +563,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E3020CC52EAE4D78002D5B3A /* MP4H264Demuxer+Overlay.swift in Sources */,
 				E323D9ED2E895714003F6F7F /* BytePlayerChannel.swift in Sources */,
 				E323D9EE2E895714003F6F7F /* BytePlayerPlatformView.swift in Sources */,
 				E323D9EF2E895714003F6F7F /* BytePlayerViewFactory.swift in Sources */,
