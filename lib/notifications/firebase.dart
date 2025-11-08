@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/material.dart';
 import 'package:secluso_flutter/utilities/firebase_init.dart';
 import 'package:secluso_flutter/notifications/heartbeat_task.dart';
 import 'package:secluso_flutter/notifications/notifications.dart';
@@ -49,8 +50,9 @@ class RustBridgeHelper {
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Re-init Firebase
-  Log.d("In background handler - calling ensure()");
+  // Initialize the background isolate
+  WidgetsFlutterBinding.ensureInitialized();
+
   await FirebaseInit.ensure();
 
   if (Platform.isAndroid) {
