@@ -7,12 +7,12 @@ import 'package:secluso_flutter/utilities/logger.dart';
 
 Future<void> runMigrations() async {
   final metaBox = AppStores.instance.cameraStore.box<Meta>();
-  List<Meta> metas = metaBox.getAll();
+  List<Meta> metas = await metaBox.getAllAsync();
   Meta? meta;
 
   if (metas.length == 0) {
     meta = Meta(dbVersion: 0);
-    metaBox.put(meta);
+    meta.id = await metaBox.putAsync(meta);
     Log.d("Assuming legacy user. Performing all migrations");
   } else {
     meta = metas.first;
@@ -24,7 +24,7 @@ Future<void> runMigrations() async {
     Log.d("Applying migration ${i + 1}...");
     await migrations[i]();
     meta.dbVersion = i + 1;
-    metaBox.put(meta);
+    meta.id = await metaBox.putAsync(meta);
     Log.d("Updated DB version to ${meta.dbVersion}");
   }
 

@@ -14,7 +14,7 @@ import 'package:secluso_flutter/utilities/lock.dart';
 import 'package:path/path.dart' as p;
 import 'dart:io';
 import 'dart:ui';
-import 'dart:isolate';
+import 'dart:isolate' hide IsolateNameServer;
 import 'pending_processor.dart';
 
 // We have another instance of this due to Android requiring another RustLib for our DownloadTasks. This isn't necessary for iOS. We can only have one instance per process, thus needing this.

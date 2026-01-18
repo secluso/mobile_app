@@ -521,8 +521,7 @@ class CamerasPageState extends State<CamerasPage>
   Future<void> _loadCamerasFromDatabase([bool forceRun = false]) async {
     final box = AppStores.instance.cameraStore.box<Camera>();
     final all =
-        box
-            .getAll()
+        (await box.getAllAsync())
             .map(
               (c) => {
                 "name": c.name,

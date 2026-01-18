@@ -10,6 +10,11 @@ class ThemeProvider extends ChangeNotifier {
 
   bool get isDarkMode => _isDarkMode;
 
+  void setTheme(bool isDarkMode) {
+    _isDarkMode = isDarkMode;
+    notifyListeners();
+  }
+
   void toggleTheme() async {
     _isDarkMode = !_isDarkMode;
     notifyListeners(); // Notify UI

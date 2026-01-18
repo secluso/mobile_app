@@ -161,7 +161,7 @@ class _ServerPageState extends State<ServerPage> {
       //initialize all cameras again
       final box = AppStores.instance.cameraStore.box<Camera>();
 
-      final allCameras = box.getAll();
+      final allCameras = await box.getAllAsync();
       for (var camera in allCameras) {
         // TODO: Check if false, perhaps there's some weird error we might need to look into...
         await initialize(camera.name);
