@@ -19,7 +19,6 @@ import "routes/theme_provider.dart";
 import 'package:provider/provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:secluso_flutter/notifications/firebase_options.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/notifications/firebase.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
@@ -84,7 +83,21 @@ void main() async {
       _initAllCameras(); // Must come after App Store and Rust Lib initialization
 
       // We wait to initialize Firebase and the download scheduler until our cameras have been initialized
-      await FirebaseInit.ensure();
+      var prefs = await SharedPreferences.getInstance();
+
+      if (prefs.containsKey(PrefKeys.serverAddr)) {
+        final fcmConfig = FcmConfig.fromPrefs(prefs);
+        if (fcmConfig == null) {
+          Log.e("Missing cached FCM config; clearing server credentials");
+          await _invalidateServerCredentials(prefs);
+        } else {
+          try {
+            await FirebaseInit.ensure(fcmConfig);
+          } catch (e, st) {
+            Log.e("Firebase init failed: $e\n$st");
+          }
+        }
+      }
 
       // If we face some kind of HTTP error, we don't want this to interrupt our flow
       try {
@@ -118,7 +131,11 @@ void main() async {
         queueProcessorPortName,
       );
 
-      await PushNotificationService.instance.init();
+      if (FirebaseInit.isInitialized) {
+        await PushNotificationService.instance.init();
+      } else {
+        Log.d("Skipping PushNotificationService.init; Firebase not initialized");
+      }
 
       // Load saved dark mode state before starting the app
       bool isDarkMode = await ThemeProvider.loadThemePreference();
@@ -149,6 +166,14 @@ Future<void> _initAllCameras() async {
     // TODO: Check if false, perhaps there's some weird error we might need to look into...
     await initialize(camera.name);
   }
+}
+
+Future<void> _invalidateServerCredentials(SharedPreferences prefs) async {
+  await prefs.remove(PrefKeys.serverAddr);
+  await prefs.remove(PrefKeys.serverUsername);
+  await prefs.remove(PrefKeys.serverPassword);
+  await prefs.remove(PrefKeys.credentialsFull);
+  await prefs.remove(PrefKeys.fcmConfigJson);
 }
 
 /// Query server for cameras that have video updates and proceed to queue them for download

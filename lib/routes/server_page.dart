@@ -16,6 +16,8 @@ import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'home_page.dart';
+import 'package:secluso_flutter/utilities/firebase_init.dart';
+import 'package:secluso_flutter/utilities/http_client.dart';
 
 class ServerPage extends StatefulWidget {
   final bool showBackButton;
@@ -83,7 +85,7 @@ class _ServerPageState extends State<ServerPage> {
         Constants.usernameLength + Constants.passwordLength,
       );
 
-      serverAddr = credentialsFullString.substring(
+      final newServerAddr = credentialsFullString.substring(
         Constants.usernameLength + Constants.passwordLength,
         credentialsFullString.length,
       );
@@ -91,16 +93,68 @@ class _ServerPageState extends State<ServerPage> {
       //TODO: check to make sure serverIp is a valid IP address.
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(PrefKeys.serverAddr, serverAddr!);
+      final prevServerAddr = prefs.getString(PrefKeys.serverAddr);
+      final prevUsername = prefs.getString(PrefKeys.serverUsername);
+      final prevPassword = prefs.getString(PrefKeys.serverPassword);
+      final prevCredentialsFull = prefs.getString(PrefKeys.credentialsFull);
+      final prevHasSynced =
+          prevServerAddr != null &&
+          prevServerAddr.isNotEmpty &&
+          prevCredentialsFull != null;
+
+      await prefs.setString(PrefKeys.serverAddr, newServerAddr);
       await prefs.setString(PrefKeys.serverUsername, serverUsername);
       await prefs.setString(PrefKeys.serverPassword, serverPassword);
+
+      final fetched = await HttpClientService.instance.fetchFcmConfig();
+      if (fetched.isFailure || fetched.value == null) {
+        if (prevServerAddr == null) {
+          await prefs.remove(PrefKeys.serverAddr);
+        } else {
+          await prefs.setString(PrefKeys.serverAddr, prevServerAddr);
+        }
+        if (prevUsername == null) {
+          await prefs.remove(PrefKeys.serverUsername);
+        } else {
+          await prefs.setString(PrefKeys.serverUsername, prevUsername);
+        }
+        if (prevPassword == null) {
+          await prefs.remove(PrefKeys.serverPassword);
+        } else {
+          await prefs.setString(PrefKeys.serverPassword, prevPassword);
+        }
+        if (prevCredentialsFull == null) {
+          await prefs.remove(PrefKeys.credentialsFull);
+        } else {
+          await prefs.setString(PrefKeys.credentialsFull, prevCredentialsFull);
+        }
+
+        setState(() {
+          serverAddr = prevServerAddr;
+          hasSynced = prevHasSynced;
+          _ipController.text = prevServerAddr ?? '';
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red,
+            content: Text(
+              "Failed to fetch FCM config. Server settings not saved.",
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        );
+        return;
+      }
+
+      await prefs.setString(
+        PrefKeys.fcmConfigJson,
+        jsonEncode(fetched.value!.toJson()),
+      );
       await prefs.setString(PrefKeys.credentialsFull, credentialsFullString);
 
-      Log.d("Before try upload");
-      await PushNotificationService.tryUploadIfNeeded(true);
-      Log.d("After try upload");
-
       setState(() {
+        serverAddr = newServerAddr;
         hasSynced = true;
       });
 
@@ -111,6 +165,23 @@ class _ServerPageState extends State<ServerPage> {
       for (var camera in allCameras) {
         // TODO: Check if false, perhaps there's some weird error we might need to look into...
         await initialize(camera.name);
+      }
+
+      bool firebaseReady = false;
+      try {
+        await FirebaseInit.ensure(fetched.value!);
+        firebaseReady = true;
+      } catch (e, st) {
+        Log.e("Firebase init failed: $e\n$st");
+      }
+
+      if (firebaseReady) {
+        await PushNotificationService.instance.init();
+        Log.d("Before try upload");
+        await PushNotificationService.tryUploadIfNeeded(true);
+        Log.d("After try upload");
+      } else {
+        Log.d("Skipping push setup; Firebase not initialized");
       }
 
       ScaffoldMessenger.of(
@@ -136,6 +207,7 @@ class _ServerPageState extends State<ServerPage> {
     await prefs.remove(PrefKeys.serverUsername);
     await prefs.remove(PrefKeys.serverPassword);
     await prefs.remove(PrefKeys.credentialsFull);
+    await prefs.remove(PrefKeys.fcmConfigJson);
     _isDialogOpen.value = false;
     setState(() {
       serverAddr = null;

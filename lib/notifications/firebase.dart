@@ -53,7 +53,21 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Initialize the background isolate
   WidgetsFlutterBinding.ensureInitialized();
 
-  await FirebaseInit.ensure();
+  var prefs = await SharedPreferences.getInstance();
+
+  if (prefs.containsKey(PrefKeys.serverAddr)) {
+    final fcmConfig = FcmConfig.fromPrefs(prefs);
+    if (fcmConfig == null) {
+      Log.e("Missing cached FCM config; clearing server credentials");
+      await _invalidateServerCredentials(prefs);
+    } else {
+      try {
+        await FirebaseInit.ensure(fcmConfig);
+      } catch (e, st) {
+        Log.e("Firebase init failed: $e\n$st");
+      }
+    }
+  }
 
   if (Platform.isAndroid) {
     await RustBridgeHelper.ensureInitialized();
@@ -64,11 +78,23 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await PushNotificationService.instance._process(message.data);
 }
 
+Future<void> _invalidateServerCredentials(SharedPreferences prefs) async {
+  await prefs.remove(PrefKeys.serverAddr);
+  await prefs.remove(PrefKeys.serverUsername);
+  await prefs.remove(PrefKeys.serverPassword);
+  await prefs.remove(PrefKeys.credentialsFull);
+  await prefs.remove(PrefKeys.fcmConfigJson);
+}
+
 class PushNotificationService {
   PushNotificationService._();
   static final instance = PushNotificationService._();
+  bool _initialized = false;
 
   Future<void> init() async {
+    if (_initialized) {
+      return;
+    }
     Log.d("Initializing PushNotificationService");
 
     await FirebaseMessaging.instance
@@ -96,9 +122,14 @@ class PushNotificationService {
       Log.d("Set FCM token to $tok");
       if (tok != null) await _updateToken(tok);
     }
+    _initialized = true;
   }
 
   static Future<void> tryUploadIfNeeded(bool force) async {
+    if (!FirebaseInit.isInitialized) {
+      Log.d("Skipping FCM token upload; Firebase not initialized");
+      return;
+    }
     final prefs = await SharedPreferences.getInstance();
     var needUpdate = prefs.getBool(PrefKeys.needUpdateFcmToken) ?? false;
     var token = prefs.getString(PrefKeys.fcmToken) ?? '';

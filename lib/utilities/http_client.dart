@@ -30,6 +30,88 @@ class _SilentException implements Exception {
   String toString() => message;
 }
 
+class FcmConfig {
+  final String api_key_ios;
+  final String api_key_android;
+  final String app_id_ios;
+  final String app_id_android;
+  final String messaging_sender_id;
+  final String project_id;
+  final String storage_bucket;
+  final String bundle_id;
+
+  FcmConfig({
+    required this.api_key_ios,
+    required this.api_key_android,
+    required this.app_id_ios,
+    required this.app_id_android,
+    required this.messaging_sender_id,
+    required this.project_id,
+    required this.storage_bucket,
+    required this.bundle_id,
+  });
+
+  static String? _readString(Map<String, dynamic> json, String key) {
+    final value = json[key];
+    if (value is String && value.isNotEmpty) {
+      return value;
+    }
+    return null;
+  }
+
+  static String _requireString(Map<String, dynamic> json, String key) {
+    final primary = _readString(json, key);
+    if (primary != null) {
+      return primary;
+    }
+    throw Exception('Missing $key in FCM config');
+  }
+
+  factory FcmConfig.fromJson(Map<String, dynamic> json) {
+    return FcmConfig(
+      api_key_ios: _requireString(json, 'api_key_ios'),
+      api_key_android: _requireString(json, 'api_key_android'),
+      app_id_ios: _requireString(json, 'app_id_ios'),
+      app_id_android: _requireString(json, 'app_id_android'),
+      messaging_sender_id: _requireString(json, 'messaging_sender_id'),
+      project_id: _requireString(json, 'project_id'),
+      storage_bucket: _requireString(json, 'storage_bucket'),
+      bundle_id: _requireString(json, 'bundle_id'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'api_key_ios': api_key_ios,
+      'api_key_android': api_key_android,
+      'app_id_ios': app_id_ios,
+      'app_id_android': app_id_android,
+      'messaging_sender_id': messaging_sender_id,
+      'project_id': project_id,
+      'storage_bucket': storage_bucket,
+      'bundle_id': bundle_id,
+    };
+  }
+
+  static FcmConfig? fromPrefs(SharedPreferences prefs) {
+    final cached = prefs.getString(PrefKeys.fcmConfigJson);
+    if (cached == null || cached.isEmpty) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(cached);
+      if (decoded is! Map<String, dynamic>) {
+        Log.e("Invalid cached FCM config format");
+        return null;
+      }
+      return FcmConfig.fromJson(decoded);
+    } catch (e, st) {
+      Log.e("Failed to parse cached FCM config: $e\n$st");
+      return null;
+    }
+  }
+}
+
 class HttpClientService {
   HttpClientService._();
   static final HttpClientService instance = HttpClientService._();
@@ -60,8 +142,7 @@ class HttpClientService {
         continue;
       }
 
-      final int epoch =
-          await readEpoch(cameraName, "video");
+      final int epoch = await readEpoch(cameraName, "video");
 
       convertedCameraList.add(MotionPair(motionGroup, epoch));
       associatedNameToGroup[motionGroup] = cameraName;
@@ -157,6 +238,33 @@ class HttpClientService {
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
     return await http.post(url, headers: headers, body: encryptedMessage);
+  });
+
+  /// Downloads fcm config
+  Future<Result<FcmConfig>> fetchFcmConfig() => _wrap(() async {
+    Log.d("Fetching fcm config from server");
+
+    final creds = await _getValidatedCredentials();
+    final url = _buildUrl(creds.serverAddr, ['fcm_config']);
+    final headers = await _basicAuthHeaders(creds.username, creds.password);
+
+    // Fetch fcm config action
+    final response = await http.get(url, headers: headers);
+    if (response.statusCode != 200) {
+      if (response.statusCode == 404) {
+        throw _SilentException(
+          'Failed to fetch fcm config: ${response.statusCode} ${response.reasonPhrase}',
+        );
+      } else {
+        throw Exception(
+          'Failed to fetch fcm config: ${response.statusCode} ${response.reasonPhrase}',
+        );
+      }
+    }
+
+    print(response.body);
+    Log.d("Success fetching fcm config");
+    return FcmConfig.fromJson(jsonDecode(response.body));
   });
 
   /// Downloads file and saves as [fileName]
