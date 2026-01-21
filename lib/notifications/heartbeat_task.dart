@@ -133,6 +133,8 @@ Future<bool> _doHeartbeatTask(String cameraName) async {
                     msg:
                         "Camera's Secluso firmware version has been updated to $firmwareVersion.",
                   );
+
+                  // TODO: We should compare it with the app version. If they don't match, display notice to user.
                 }
                 await prefs.setString(
                   PrefKeys.firmwareVersionPrefix + cameraName,

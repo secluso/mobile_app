@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:secluso_flutter/src/rust/api.dart';
 import 'package:secluso_flutter/utilities/firebase_init.dart';
 import 'package:flutter/services.dart';
 import 'package:secluso_flutter/notifications/heartbeat_task.dart';
@@ -23,8 +24,10 @@ import 'package:secluso_flutter/database/migration_runner.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/lock.dart';
+import 'package:secluso_flutter/utilities/version_gate.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/constants.dart';
+import 'routes/server_page.dart';
 import 'dart:isolate';
 
 final ReceivePort _mainReceivePort = ReceivePort();
@@ -32,6 +35,9 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 const queueProcessorPortName = 'queue_processor_signal_port';
 const _startupPhaseCameraInit = 'camera_init';
 const _startupPhasePostFirebase = 'post_firebase';
+const _versionCheckRetryDelay = Duration(seconds: 30);
+Timer? _versionCheckRetryTimer;
+bool _versionCheckInFlight = false;
 
 void main() {
   // Wrap main() with a zone so if something throws during init, we still attempt to close the DB.
@@ -51,6 +57,10 @@ void main() {
 }
 
 Future<void> _runStartupPhase(String phase, List<String> cameraNames) async {
+  if (phase == _startupPhaseCameraInit) {
+    _checkServerVersion();
+  }
+
   if (phase == _startupPhaseCameraInit && cameraNames.isEmpty) {
     return;
   }
@@ -122,15 +132,13 @@ Future<void> _runStartupPhaseOnMain(
 void _startupPhaseEntry(Map<String, dynamic> message) async {
   final SendPort sendPort = message['sendPort'] as SendPort;
   try {
-    final RootIsolateToken rootToken =
-        message['rootToken'] as RootIsolateToken;
+    final RootIsolateToken rootToken = message['rootToken'] as RootIsolateToken;
     BackgroundIsolateBinaryMessenger.ensureInitialized(rootToken);
     DartPluginRegistrant.ensureInitialized();
     Log.init();
 
     final phase = message['phase'] as String;
-    final cameraNames =
-        (message['cameraNames'] as List).cast<String>();
+    final cameraNames = (message['cameraNames'] as List).cast<String>();
     await _runStartupPhaseOnMain(phase, cameraNames);
     sendPort.send({'ok': true});
   } catch (e, st) {
@@ -199,10 +207,7 @@ Future<void> _initializeApp(ThemeProvider themeProvider) async {
     }
   }
 
-  await _runStartupPhase(
-    _startupPhasePostFirebase,
-    cameraNames,
-  );
+  await _runStartupPhase(_startupPhasePostFirebase, cameraNames);
 
   QueueProcessor.instance.start();
   QueueProcessor.instance.signalNewFile();
@@ -331,6 +336,131 @@ class SplashScreen extends StatelessWidget {
   }
 }
 
+class VersionBlockScreen extends StatelessWidget {
+  const VersionBlockScreen({super.key, required this.info});
+
+  final VersionGateInfo info;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [colors.surface, colors.surfaceVariant],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Image.asset(
+                      'assets/icon_centered.png',
+                      width: 96,
+                      height: 96,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      info.title,
+                      style: theme.textTheme.headlineSmall,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      info.message,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    Card(
+                      elevation: 0,
+                      color: colors.surface.withOpacity(0.7),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: colors.outline.withOpacity(0.4),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          children: [
+                            _VersionRow(
+                              label: 'Server version',
+                              value: info.serverVersion,
+                            ),
+                            const SizedBox(height: 8),
+                            _VersionRow(
+                              label: 'App version',
+                              value: info.clientVersion,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Update or install a compatible build to continue.',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: _handleChangeServer,
+                      child: const Text('Change server'),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: _checkServerVersion,
+                      child: const Text('Retry version check'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VersionRow extends StatelessWidget {
+  const _VersionRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Expanded(child: Text(label, style: theme.textTheme.labelMedium)),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: theme.textTheme.bodyMedium,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 Future<List<String>> _cameraNamesFromStore() async {
   final box = AppStores.instance.cameraStore.box<Camera>();
   final cameras = await box.getAllAsync();
@@ -343,6 +473,95 @@ Future<void> _initAllCameras({List<String>? cameraNames}) async {
     // TODO: Check if false, perhaps there's some weird error we might need to look into...
     await initialize(cameraName);
   }
+}
+
+Future<void> _handleChangeServer() async {
+  final prefs = await SharedPreferences.getInstance();
+  await _invalidateServerCredentials(prefs);
+  HttpClientService.instance.resetVersionGateState();
+  VersionGate.clear();
+  _cancelVersionCheckRetry();
+  final nav = navigatorKey.currentState;
+  if (nav == null) {
+    return;
+  }
+  await nav.push(
+    MaterialPageRoute(
+      builder: (context) => const ServerPage(showBackButton: true),
+    ),
+  );
+}
+
+Future<void> _checkServerVersion() async {
+  if (_versionCheckInFlight) {
+    return;
+  }
+  _versionCheckInFlight = true;
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final hasCredentials =
+        prefs.containsKey(PrefKeys.serverAddr) &&
+        prefs.containsKey(PrefKeys.serverUsername) &&
+        prefs.containsKey(PrefKeys.serverPassword);
+    if (!hasCredentials) {
+      Log.i('Skipping server version check; missing server credentials');
+      _cancelVersionCheckRetry();
+      return;
+    }
+
+    // Call the status endpoint and compare versions
+    final serverVersionResult =
+        await HttpClientService.instance.fetchServerVersion();
+
+    if (serverVersionResult.isFailure) {
+      Log.w("Failed to fetch server version: ${serverVersionResult.error}");
+
+      // Require client to upgrade (or downgrade) their app to go further. Block screen.
+      _scheduleVersionCheckRetry();
+      return;
+    }
+
+    final serverVersion = serverVersionResult.value!;
+    final clientVersion = await rustLibVersion();
+
+    if (serverVersion != clientVersion) {
+      Log.i(
+        "Server version ($serverVersion) differs from client version ($clientVersion)",
+      );
+      // Require client to upgrade (or downgrade) their app to go further. Block screen.
+      VersionGate.block(
+        VersionGateInfo.mismatch(
+          serverVersion: serverVersion,
+          clientVersion: clientVersion,
+        ),
+      );
+      _cancelVersionCheckRetry();
+      return;
+    }
+
+    VersionGate.clear();
+    _cancelVersionCheckRetry();
+  } catch (e, st) {
+    Log.e("Error checking server version: $e\n$st");
+    _scheduleVersionCheckRetry();
+  } finally {
+    _versionCheckInFlight = false;
+  }
+}
+
+void _scheduleVersionCheckRetry() {
+  if (_versionCheckRetryTimer != null) {
+    return;
+  }
+  _versionCheckRetryTimer = Timer(_versionCheckRetryDelay, () {
+    _versionCheckRetryTimer = null;
+    _checkServerVersion();
+  });
+}
+
+void _cancelVersionCheckRetry() {
+  _versionCheckRetryTimer?.cancel();
+  _versionCheckRetryTimer = null;
 }
 
 Future<void> _invalidateServerCredentials(SharedPreferences prefs) async {
@@ -439,6 +658,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       Log.i("App Lifecycle State set to RESUMED");
       PushNotificationService.tryUploadIfNeeded(false);
       _initAllCameras(); // I'm not sure if this is necessary or not. It could be good to periodically check for initialization though.
+      _checkServerVersion();
       _checkForUpdates();
       ThumbnailManager.checkThumbnailsForAll();
       QueueProcessor.instance
@@ -492,6 +712,23 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       navigatorObservers: [routeObserver],
       theme: themeProvider.isDarkMode ? ThemeData.dark() : ThemeData.light(),
       home: home,
+      builder: (context, child) {
+        final base = child ?? const SizedBox.shrink();
+        return ValueListenableBuilder<VersionGateInfo?>(
+          valueListenable: VersionGate.notifier,
+          builder: (context, gateInfo, _) {
+            if (gateInfo == null) {
+              return base;
+            }
+            return Stack(
+              children: [
+                base,
+                Positioned.fill(child: VersionBlockScreen(info: gateInfo)),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

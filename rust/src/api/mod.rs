@@ -281,6 +281,11 @@ pub fn livestream_decrypt(camera_name: String, data: Vec<u8>, expected_chunk_num
 }
 
 #[flutter_rust_bridge::frb]
+pub fn rust_lib_version() -> String {
+    return env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[flutter_rust_bridge::frb]
 pub fn generate_heartbeat_request_config_command(camera_name: String, timestamp: u64) -> Vec<u8> {
     let client_mutex = get_or_create_client_mutex(&camera_name);
     let mut client_guard = client_mutex.lock();

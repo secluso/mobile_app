@@ -108,6 +108,9 @@ Future<Uint8List> livestreamDecrypt({
   expectedChunkNumber: expectedChunkNumber,
 );
 
+Future<String> rustLibVersion() =>
+    RustLib.instance.api.crateApiRustLibVersion();
+
 Future<Uint8List> generateHeartbeatRequestConfigCommand({
   required String cameraName,
   required BigInt timestamp,

@@ -105,6 +105,7 @@ class _ServerPageState extends State<ServerPage> {
       await prefs.setString(PrefKeys.serverAddr, newServerAddr);
       await prefs.setString(PrefKeys.serverUsername, serverUsername);
       await prefs.setString(PrefKeys.serverPassword, serverPassword);
+      HttpClientService.instance.resetVersionGateState();
 
       final fetched = await HttpClientService.instance.fetchFcmConfig();
       if (fetched.isFailure || fetched.value == null) {
@@ -128,6 +129,7 @@ class _ServerPageState extends State<ServerPage> {
         } else {
           await prefs.setString(PrefKeys.credentialsFull, prevCredentialsFull);
         }
+        HttpClientService.instance.resetVersionGateState();
 
         setState(() {
           serverAddr = prevServerAddr;
@@ -208,6 +210,7 @@ class _ServerPageState extends State<ServerPage> {
     await prefs.remove(PrefKeys.serverPassword);
     await prefs.remove(PrefKeys.credentialsFull);
     await prefs.remove(PrefKeys.fcmConfigJson);
+    HttpClientService.instance.resetVersionGateState();
     _isDialogOpen.value = false;
     setState(() {
       serverAddr = null;

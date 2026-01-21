@@ -42,7 +42,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.10.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1501830740;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1190205978;
 
 // Section: executor
 
@@ -828,6 +828,38 @@ fn wire__crate__api__lock_manager__release_lock_impl(
         },
     )
 }
+fn wire__crate__api__rust_lib_version_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "rust_lib_version",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(crate::api::rust_lib_version())?;
+                    Ok(output_ok)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__logger__rust_set_up_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1159,10 +1191,11 @@ fn pde_ffi_dispatcher_primary_impl(
             data_len,
         ),
         21 => wire__crate__api__lock_manager__release_lock_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__logger__rust_set_up_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__logger__rust_shutdown_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__shutdown_app_impl(port, ptr, rust_vec_len, data_len),
-        25 => {
+        22 => wire__crate__api__rust_lib_version_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__logger__rust_set_up_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__logger__rust_shutdown_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__shutdown_app_impl(port, ptr, rust_vec_len, data_len),
+        26 => {
             wire__crate__api__lock_manager__try_acquire_lock_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),

@@ -11,6 +11,7 @@ import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/notifications/epoch.dart';
 import 'package:secluso_flutter/src/rust/api.dart';
 import 'package:secluso_flutter/utilities/http_entities.dart';
+import 'package:secluso_flutter/utilities/version_gate.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'result.dart';
 import 'logger.dart';
@@ -115,6 +116,13 @@ class FcmConfig {
 class HttpClientService {
   HttpClientService._();
   static final HttpClientService instance = HttpClientService._();
+  Future<void>? _versionCheckInFlight;
+  bool _versionMatchConfirmed = false;
+
+  void resetVersionGateState() {
+    _versionCheckInFlight = null;
+    _versionMatchConfirmed = false;
+  }
 
   /// bulk check the list of camera names against the server to check for updates
   /// returns list of corresponding cameras that have available videos/thumbnails for download
@@ -160,6 +168,7 @@ class HttpClientService {
 
     // Bulk check fetch action
     final response = await http.post(url, headers: headers, body: jsonContent);
+    await _handleServerVersionHeader(response);
     final responseBody =
         response
             .body; // Format is comma separated strings representing the associated motion groups
@@ -185,6 +194,9 @@ class HttpClientService {
     return convertedToGroups;
   });
 
+  Future<Result<String>> fetchServerVersion() =>
+      _wrap(() async => _fetchServerVersionRaw(), bypassVersionGate: true);
+
   /// POST /pair — waits for camera to join pairing
   Future<Result<String>> waitForPairingStatus({
     required String pairingToken,
@@ -204,6 +216,7 @@ class HttpClientService {
     Log.d("Pairing body: $body");
 
     final response = await http.post(url, headers: headers, body: body);
+    await _handleServerVersionHeader(response);
 
     Log.d("Response code: ${response.statusCode}");
 
@@ -237,7 +250,13 @@ class HttpClientService {
     final url = _buildUrl(creds.serverAddr, [configGroup, 'app']);
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
-    return await http.post(url, headers: headers, body: encryptedMessage);
+    final response = await http.post(
+      url,
+      headers: headers,
+      body: encryptedMessage,
+    );
+    await _handleServerVersionHeader(response);
+    return response;
   });
 
   /// Downloads fcm config
@@ -250,6 +269,7 @@ class HttpClientService {
 
     // Fetch fcm config action
     final response = await http.get(url, headers: headers);
+    await _handleServerVersionHeader(response);
     if (response.statusCode != 200) {
       if (response.statusCode == 404) {
         throw _SilentException(
@@ -284,6 +304,7 @@ class HttpClientService {
 
     // Video download action
     final response = await http.get(url, headers: headers);
+    await _handleServerVersionHeader(response);
     if (response.statusCode != 200) {
       if (response.statusCode == 404) {
         throw _SilentException(
@@ -332,6 +353,7 @@ class HttpClientService {
 
     // Delete action TODO: Should we retry if fail?
     final delResponse = await http.delete(url, headers: headers);
+    await _handleServerVersionHeader(delResponse);
     if (delResponse.statusCode != 200) {
       if (delResponse.statusCode == 404) {
         throw _SilentException(
@@ -354,6 +376,7 @@ class HttpClientService {
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
     final response = await http.post(url, headers: headers, body: token);
+    await _handleServerVersionHeader(response);
 
     if (response.statusCode != 200) {
       throw Exception(
@@ -373,6 +396,7 @@ class HttpClientService {
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
     final response = await http.post(url, headers: headers);
+    await _handleServerVersionHeader(response);
     if (response.statusCode != 200) {
       throw Exception(
         'Failed to send data: ${response.statusCode} ${response.reasonPhrase}',
@@ -393,6 +417,7 @@ class HttpClientService {
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
     final response = await http.get(url, headers: headers);
+    await _handleServerVersionHeader(response);
     if (response.statusCode != 200) {
       throw Exception(
         'Failed to fetch data: ${response.statusCode} ${response.reasonPhrase}',
@@ -402,6 +427,7 @@ class HttpClientService {
     // Delete action
     final delUrl = _buildUrl(creds.serverAddr, [group, chunkNumber]);
     final delResponse = await http.delete(delUrl, headers: headers);
+    await _handleServerVersionHeader(delResponse);
     if (delResponse.statusCode != 200) {
       throw Exception(
         'Failed to delete video from server: ${delResponse.statusCode} ${delResponse.reasonPhrase}',
@@ -419,6 +445,7 @@ class HttpClientService {
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
     final response = await http.post(url, headers: headers);
+    await _handleServerVersionHeader(response);
     if (response.statusCode != 200) {
       throw Exception(
         'Failed to send data: ${response.statusCode} ${response.reasonPhrase}',
@@ -437,6 +464,7 @@ class HttpClientService {
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
     final response = await http.post(url, headers: headers, body: command);
+    await _handleServerVersionHeader(response);
 
     if (response.statusCode != 200) {
       throw Exception(
@@ -458,6 +486,7 @@ class HttpClientService {
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
     final response = await http.get(url, headers: headers);
+    await _handleServerVersionHeader(response);
     if (response.statusCode != 200) {
       if (response.statusCode == 404) {
         throw _SilentException(
@@ -477,8 +506,14 @@ class HttpClientService {
 
   /// Utility methods below
 
-  Future<Result<T>> _wrap<T>(Future<T> Function() block) async {
+  Future<Result<T>> _wrap<T>(
+    Future<T> Function() block, {
+    bool bypassVersionGate = false,
+  }) async {
     try {
+      if (!bypassVersionGate) {
+        await _ensureVersionCompatible();
+      }
       return Result.success(await block());
     } catch (e, st) {
       if (e is _SilentException) {
@@ -488,6 +523,93 @@ class HttpClientService {
       }
       return Result.failure(Exception(e.toString()));
     }
+  }
+
+  Future<void> _ensureVersionCompatible() async {
+    if (VersionGate.isBlocked) {
+      throw _SilentException('Version gate active');
+    }
+    if (_versionMatchConfirmed) {
+      return;
+    }
+    _versionCheckInFlight ??= _checkServerVersionAndGate();
+    await _versionCheckInFlight;
+    _versionCheckInFlight = null;
+    if (VersionGate.isBlocked) {
+      throw _SilentException('Version gate active');
+    }
+  }
+
+  Future<void> _handleServerVersionHeader(http.Response response) async {
+    final serverVersion = response.headers['x-server-version'];
+    if (serverVersion == null || serverVersion.isEmpty) {
+      return;
+    }
+
+    final clientVersion = await rustLibVersion();
+    if (serverVersion != clientVersion) {
+      Log.i(
+        'Server version ($serverVersion) differs from client version ($clientVersion)',
+      );
+      _versionMatchConfirmed = false;
+      VersionGate.block(
+        VersionGateInfo.mismatch(
+          serverVersion: serverVersion,
+          clientVersion: clientVersion,
+        ),
+      );
+      throw _SilentException('Server/client version mismatch');
+    }
+
+    _versionMatchConfirmed = true;
+  }
+
+  Future<void> _checkServerVersionAndGate() async {
+    try {
+      final serverVersion = await _fetchServerVersionRaw();
+      final clientVersion = await rustLibVersion();
+
+      if (serverVersion != clientVersion) {
+        Log.i(
+          'Server version ($serverVersion) differs from client version ($clientVersion)',
+        );
+        _versionMatchConfirmed = false;
+        VersionGate.block(
+          VersionGateInfo.mismatch(
+            serverVersion: serverVersion,
+            clientVersion: clientVersion,
+          ),
+        );
+        return;
+      }
+
+      _versionMatchConfirmed = true;
+      VersionGate.clear();
+    } catch (e) {
+      Log.d('Version check failed: $e');
+    }
+  }
+
+  Future<String> _fetchServerVersionRaw() async {
+    final creds = await _getValidatedCredentials();
+
+    final url = _buildUrl(creds.serverAddr, ['status']);
+    final headers = await _basicAuthHeaders(creds.username, creds.password);
+
+    final response = await http.get(url, headers: headers);
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Failed to fetch server version: ${response.statusCode} ${response.reasonPhrase}',
+      );
+    }
+
+    // Check the X-Server-Version response header.
+    final serverVersion = response.headers['x-server-version'];
+    if (serverVersion == null || serverVersion.isEmpty) {
+      throw Exception('Missing X-Server-Version header in response');
+    }
+
+    return serverVersion;
   }
 
   Future<String?> _pref(String key) async {
