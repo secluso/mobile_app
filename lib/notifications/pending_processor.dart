@@ -42,16 +42,27 @@ Map<String, dynamic> _collectPendingWork(String baseDirPath) {
     );
     final metaExists = metaFile.existsSync();
     var metaParsed = false;
+    var metaPending = false;
     var detections = <String>[];
+    var metaAgeMs = 0;
 
     if (metaExists) {
       try {
+        final stat = metaFile.statSync();
+        metaAgeMs =
+            DateTime.now().millisecondsSinceEpoch -
+            stat.modified.millisecondsSinceEpoch;
         final raw = metaFile.readAsStringSync();
-        final List<dynamic> decoded = jsonDecode(raw);
-        detections = decoded.cast<String>();
-        metaParsed = true;
-      } catch (e) {
-        errors.add('Failed to parse meta for $videoFile: $e');
+        if (raw.trim().isEmpty) {
+          metaPending = true;
+        } else {
+          final List<dynamic> decoded = jsonDecode(raw);
+          detections = decoded.cast<String>();
+          metaParsed = true;
+        }
+      } catch (_) {
+        // Likely still being written; retry on next pass.
+        metaPending = true;
       }
     }
 
@@ -61,6 +72,8 @@ Map<String, dynamic> _collectPendingWork(String baseDirPath) {
       'pendingPath': entry.path,
       'metaPath': metaExists ? metaFile.path : null,
       'metaParsed': metaParsed,
+      'metaPending': metaPending,
+      'metaAgeMs': metaAgeMs,
       'detections': detections,
     });
   }
@@ -86,6 +99,7 @@ class QueueProcessor {
   final StreamController<void> _signalController = StreamController.broadcast();
   bool _isRunning = false;
   bool _isStarted = false;
+  static const int _metaGraceMs = 3000;
 
   QueueProcessor._() {
     Log.d('New instance created');
@@ -120,6 +134,17 @@ class QueueProcessor {
   }
 
   Future<void> _processPendingFiles() async {
+    try {
+      await AppStores.init();
+    } catch (e, st) {
+      Log.e("Failed to initialize AppStores: $e\n$st");
+      return;
+    }
+    if (!AppStores.isInitialized) {
+      Log.e("AppStores not initialized; skipping pending processing");
+      return;
+    }
+
     final baseDir = await getApplicationDocumentsDirectory();
     final receivePort = ReceivePort();
     try {
@@ -165,9 +190,17 @@ class QueueProcessor {
 
     if (items.isEmpty) return;
 
-    final cameraBox = AppStores.instance.cameraStore.box<Camera>();
-    final videoBox = AppStores.instance.videoStore.box<Video>();
-    final detectionBox = AppStores.instance.detectionStore.box<Detection>();
+    final AppStores stores;
+    try {
+      stores = AppStores.instance;
+    } catch (e, st) {
+      Log.e("AppStores instance unavailable: $e\n$st");
+      return;
+    }
+
+    final cameraBox = stores.cameraStore.box<Camera>();
+    final videoBox = stores.videoStore.box<Video>();
+    final detectionBox = stores.detectionStore.box<Detection>();
     final cameras = await cameraBox.getAllAsync();
     final cameraByName = {for (final cam in cameras) cam.name: cam};
 
@@ -184,14 +217,24 @@ class QueueProcessor {
       final pendingPath = item['pendingPath'] as String?;
       final metaPath = item['metaPath'] as String?;
       final metaParsed = item['metaParsed'] == true;
+      final metaPending = item['metaPending'] == true;
+      final metaAgeMs = item['metaAgeMs'] as int? ?? 0;
       final detections =
           (item['detections'] as List?)?.cast<String>() ?? const [];
+
+      if (metaPath != null && metaPending && metaAgeMs < _metaGraceMs) {
+        // Wait for meta to finish writing.
+        continue;
+      }
+
+      final discardMeta =
+          metaPath != null && metaPending && metaAgeMs >= _metaGraceMs;
 
       if (cameraName == null || videoFile == null) {
         if (pendingPath != null) {
           pendingPathsToDelete.add(pendingPath);
         }
-        if (metaParsed && metaPath != null) {
+        if ((metaParsed || discardMeta) && metaPath != null) {
           metaPathsToDelete.add(metaPath);
         }
         continue;
@@ -205,7 +248,7 @@ class QueueProcessor {
         if (pendingPath != null) {
           pendingPathsToDelete.add(pendingPath);
         }
-        if (metaParsed && metaPath != null) {
+        if ((metaParsed || discardMeta) && metaPath != null) {
           metaPathsToDelete.add(metaPath);
         }
         continue;
@@ -228,7 +271,7 @@ class QueueProcessor {
       if (pendingPath != null) {
         pendingPathsToDelete.add(pendingPath);
       }
-      if (metaParsed && metaPath != null) {
+      if ((metaParsed || discardMeta) && metaPath != null) {
         metaPathsToDelete.add(metaPath);
       }
     }

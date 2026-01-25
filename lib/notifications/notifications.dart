@@ -107,7 +107,10 @@ Future<void> initLocalNotifications() async {
   // await _ensureNotificationPermissions();
 
   // Create Android channel (no effect on iOS)
-  if (Platform.isAndroid) await _ensureMotionChannelAndroid();
+  if (Platform.isAndroid) {
+    await _ensureMotionChannelAndroid();
+    await _ensureSupportChannelAndroid();
+  }
 }
 
 int _motionNotifId(String cameraName, String timestamp) {
@@ -213,6 +216,21 @@ Future<void> _ensureMotionChannelAndroid() async {
       ?.createNotificationChannel(channel);
 }
 
+Future<void> _ensureSupportChannelAndroid() async {
+  const channel = AndroidNotificationChannel(
+    'support_channel',
+    'Support Alerts',
+    description: 'Support and diagnostic notifications',
+    importance: Importance.high,
+  );
+
+  await _notifs
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >()
+      ?.createNotificationChannel(channel);
+}
+
 String _formatTimestamp(String unixSeconds) {
   final secs = int.tryParse(unixSeconds) ?? 0;
   final date =
@@ -255,6 +273,40 @@ Future<void> showCameraStatusNotification({
     DateTime.now().millisecondsSinceEpoch ~/ 1000, // unique id
     cameraName, // title
     msg, // body
+    details,
+  );
+}
+
+Future<void> showSupportLogNotification() async {
+  // Android
+  final androidDetails = AndroidNotificationDetails(
+    'support_channel',
+    'Support Alerts',
+    channelDescription: 'Support and diagnostic notifications',
+    importance: Importance.high,
+    priority: Priority.high,
+    icon: 'ic_notification',
+    vibrationPattern: Int64List.fromList([200, 200, 200]),
+    enableLights: true,
+    color: const Color(0xFF8BB3EE),
+    ledColor: const Color(0xFF8BB3EE),
+    ledOnMs: 1000,
+    ledOffMs: 1000,
+  );
+
+  // iOS
+  final iosDetails = const DarwinNotificationDetails(
+    interruptionLevel: InterruptionLevel.timeSensitive,
+    sound: 'default',
+    badgeNumber: 1,
+  );
+
+  final details = NotificationDetails(android: androidDetails, iOS: iosDetails);
+
+  await _notifs.show(
+    DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    'Secluso support',
+    'An error occurred in the background. Open the app to copy logs for support.',
     details,
   );
 }

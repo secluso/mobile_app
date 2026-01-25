@@ -13,6 +13,7 @@ import 'package:secluso_flutter/notifications/scheduler.dart';
 import 'package:secluso_flutter/src/rust/guard.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/notifications/thumbnails.dart';
+import 'package:secluso_flutter/notifications/notifications.dart';
 import 'routes/home_page.dart';
 import "routes/theme_provider.dart";
 import 'package:provider/provider.dart';
@@ -47,15 +48,74 @@ void main() {
       Log.init();
       Log.i('main() started');
       WidgetsFlutterBinding.ensureInitialized();
+      FlutterError.onError = (details) {
+        Log.e('FlutterError: ${details.exceptionAsString()}');
+        final stack = details.stack;
+        if (stack != null) {
+          Log.e(stack.toString());
+        }
+        if (_isAppInBackground()) {
+          unawaited(
+            _handleBackgroundError(
+              'FlutterError: ${details.exceptionAsString()}',
+            ),
+          );
+        }
+        FlutterError.presentError(details);
+      };
+      ErrorWidget.builder = (details) {
+        Log.e('ErrorWidget: ${details.exceptionAsString()}');
+        final stack = details.stack;
+        if (stack != null) {
+          Log.e(stack.toString());
+        }
+        if (_isAppInBackground()) {
+          unawaited(
+            _handleBackgroundError(
+              'ErrorWidget: ${details.exceptionAsString()}',
+            ),
+          );
+        }
+        return ErrorWidget(details.exception);
+      };
+      PlatformDispatcher.instance.onError = (error, stack) {
+        Log.e('PlatformDispatcher: $error');
+        Log.e(stack.toString());
+        if (_isAppInBackground()) {
+          unawaited(
+            _handleBackgroundError('PlatformDispatcher: $error'),
+          );
+        }
+        return true;
+      };
+      unawaited(Log.ensureStorageReady());
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
       runApp(const AppBootstrap());
     },
     (error, stack) async {
+      Log.e('Zone error: $error');
+      Log.e(stack.toString());
+      if (_isAppInBackground()) {
+        unawaited(_handleBackgroundError('Zone error: $error'));
+      }
       try {
         await AppStores.instance.close();
       } catch (_) {}
     },
   );
+}
+
+bool _isAppInBackground() {
+  final state = WidgetsBinding.instance.lifecycleState;
+  return state == AppLifecycleState.inactive ||
+      state == AppLifecycleState.paused ||
+      state == AppLifecycleState.detached;
+}
+
+Future<void> _handleBackgroundError(String reason) async {
+  await Log.saveBackgroundSnapshot(reason: reason);
+  await initLocalNotifications();
+  await showSupportLogNotification();
 }
 
 Future<void> _runStartupPhase(String phase, List<String> cameraNames) async {

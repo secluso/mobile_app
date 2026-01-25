@@ -22,6 +22,7 @@ import 'package:secluso_flutter/database/app_stores.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/main.dart';
 import 'dart:io';
+import 'dart:ui' show decodeImageFromList;
 import 'package:path/path.dart' as p;
 import 'package:intl/intl.dart';
 
@@ -381,6 +382,16 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     return await f.exists() ? path : null;
   }
 
+  Future<bool> _isValidImageBytes(Uint8List bytes) async {
+    try {
+      final image = await decodeImageFromList(bytes);
+      image.dispose();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<Uint8List?> _loadVideoThumbBytes(String cameraName, String videoFile) {
     final ts = _timestampFromVideo(videoFile);
     if (ts == null) return Future.value(null);
@@ -401,6 +412,15 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
           return null;
         }
         final bytes = await File(path).readAsBytes();
+        final ok = await _isValidImageBytes(bytes);
+        if (!ok) {
+          Log.e("Invalid thumbnail bytes for $key; deleting $path");
+          try {
+            await File(path).delete();
+          } catch (_) {}
+          _videoThumbCache[key] = null;
+          return null;
+        }
         _videoThumbCache[key] = bytes;
         return bytes;
       } catch (e) {

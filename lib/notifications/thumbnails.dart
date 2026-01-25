@@ -12,8 +12,62 @@ import 'package:secluso_flutter/utilities/lock.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:secluso_flutter/utilities/rust_util.dart';
 
 class ThumbnailManager {
+  static const Duration _stableWaitTimeout = Duration(seconds: 2);
+  static const Duration _stableWaitPoll = Duration(milliseconds: 120);
+  static const int _minPngSizeBytes = 32;
+
+  static const List<int> _pngSignature = [
+    0x89,
+    0x50,
+    0x4E,
+    0x47,
+    0x0D,
+    0x0A,
+    0x1A,
+    0x0A,
+  ];
+
+  static bool _looksLikePngHeader(Uint8List bytes) {
+    if (bytes.length < _pngSignature.length) return false;
+    for (var i = 0; i < _pngSignature.length; i++) {
+      if (bytes[i] != _pngSignature[i]) return false;
+    }
+    return true;
+  }
+
+  static Future<bool> _waitForStablePng(String filePath) async {
+    final file = File(filePath);
+    final deadline = DateTime.now().add(_stableWaitTimeout);
+    int? lastSize;
+
+    while (DateTime.now().isBefore(deadline)) {
+      if (!await file.exists()) return false;
+      final stat = await file.stat();
+      final size = stat.size;
+      if (size >= _minPngSizeBytes &&
+          lastSize != null &&
+          size == lastSize) {
+        RandomAccessFile? raf;
+        try {
+          raf = await file.open(mode: FileMode.read);
+          final header = await raf.read(_pngSignature.length);
+          return _looksLikePngHeader(header);
+        } catch (_) {
+          return false;
+        } finally {
+          await raf?.close();
+        }
+      }
+      lastSize = size;
+      await Future.delayed(_stableWaitPoll);
+    }
+    return false;
+  }
+
   // Return early if the specified timestamp is found (but still continue as long as possible)
   static Future<bool> checkThumbnailsForCamera(
     String camera,
@@ -28,7 +82,7 @@ class ThumbnailManager {
       baseDir.path,
       'camera_dir_$camera',
       'videos',
-      "$timestamp.png",
+      "thumbnail_$timestamp.png",
     );
 
     if (await File(filePath).exists()) {
@@ -93,6 +147,11 @@ class ThumbnailManager {
     // There's a chance a thumbnail could be requested multiple times at once for a given camera. So we need to lock this function per-camera to ensure that doesn't occur.
     if (await lock("thumbnail$camera.lock")) {
       try {
+        if (!await initialize(camera)) {
+          Log.e("Thumbnail init failed for camera $camera");
+          return;
+        }
+
         final sw = Stopwatch()..start();
 
         while (sw.elapsed <= timeBudget) {
@@ -125,6 +184,18 @@ class ThumbnailManager {
           Log.d("Thumbnail dec file name = $decFileName");
 
           if (decFileName != "Error") {
+            final decPath = p.join(
+              baseDir.path,
+              'camera_dir_$camera',
+              'videos',
+              decFileName,
+            );
+            final ready = await _waitForStablePng(decPath);
+            if (!ready) {
+              Log.e("Thumbnail file not ready or invalid: $decPath");
+              return;
+            }
+
             await file.delete();
             var result = decFileName == "thumbnail_$targetTimestamp.png";
             Log.d(
@@ -165,6 +236,11 @@ class ThumbnailManager {
     Log.d("Entered retrieveThumbnails");
     if (await lock("thumbnail$camera.lock")) {
       try {
+        if (!await initialize(camera)) {
+          Log.e("Thumbnail init failed for camera $camera");
+          return;
+        }
+
         // Epoch for this starts at 2 when not set from before.
         final epoch = await readEpoch(camera, "thumbnail");
         Log.d("Thumbnail Epoch = $epoch");
@@ -194,6 +270,18 @@ class ThumbnailManager {
         Log.d("Thumbnail dec file name = $decFileName");
 
         if (decFileName != "Error") {
+          final decPath = p.join(
+            baseDir.path,
+            'camera_dir_$camera',
+            'videos',
+            decFileName,
+          );
+          final ready = await _waitForStablePng(decPath);
+          if (!ready) {
+            Log.e("Thumbnail file not ready or invalid: $decPath");
+            return;
+          }
+
           await file.delete();
           ThumbnailNotifier.instance.notify(camera);
         } else {

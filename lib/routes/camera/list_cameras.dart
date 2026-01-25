@@ -281,6 +281,8 @@ class CamerasPageState extends State<CamerasPage>
   bool _hasPlayedLockAnimation = false;
 
   bool _showNotificationWarning = false;
+  bool _showRecentError = false;
+  bool _backgroundDialogShown = false;
 
   /// cache: cam-name to thumbnail bytes (null = tried but failed)
   final Map<String, Uint8List?> _thumbCache = {};
@@ -293,11 +295,126 @@ class CamerasPageState extends State<CamerasPage>
 
   // Poll the database every so often and update if there's currently read messages or not
   Timer? _pollingTimer;
+  late final VoidCallback _errorListener;
 
   void invalidateThumbnail(String cameraName) {
     _thumbCache.remove(cameraName);
     _thumbFutures.remove(cameraName);
     setState(() {}); // triggers a rebuild so FutureBuilder runs again
+  }
+
+  Future<void> _loadRecentError() async {
+    final hasError = await Log.hasRecentError();
+    if (!mounted) return;
+    setState(() => _showRecentError = hasError);
+  }
+
+  Future<void> _copyLogs(BuildContext context) async {
+    final logs = await Log.getLogDump();
+    final message =
+        logs.trim().isEmpty ? 'No logs available yet.' : 'Logs copied to clipboard.';
+    if (logs.trim().isNotEmpty) {
+      await Clipboard.setData(ClipboardData(text: logs));
+      await Log.clearErrorFlag();
+    }
+    if (!mounted) return;
+    setState(() => _showRecentError = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+
+  Future<void> _maybeShowBackgroundLogDialog() async {
+    if (_backgroundDialogShown) return;
+    final snapshot = await Log.getBackgroundSnapshot();
+    if (snapshot == null || !mounted) return;
+    _backgroundDialogShown = true;
+
+    final when =
+        snapshot.timestamp == null
+            ? ''
+            : 'Time: ${snapshot.timestamp!.toLocal()}';
+    final reason =
+        snapshot.reason.isEmpty ? '' : 'Reason: ${snapshot.reason}';
+    final lines = [reason, when]..removeWhere((line) => line.isEmpty);
+    final detailText = lines.isEmpty ? '' : '\n${lines.join('\n')}';
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Background error detected'),
+            content: Text(
+              'An error occurred while the app was in the background. '
+              'These are the logs from that event. '
+              'Tap Copy Logs to share with support.$detailText',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  await Log.clearBackgroundSnapshot();
+                  await Log.clearErrorFlag();
+                  if (mounted) {
+                    setState(() => _showRecentError = false);
+                    Navigator.of(ctx).pop();
+                  }
+                },
+                child: const Text('Dismiss'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await Clipboard.setData(
+                    ClipboardData(text: snapshot.logs),
+                  );
+                  await Log.clearBackgroundSnapshot();
+                  await Log.clearErrorFlag();
+                  if (mounted) {
+                    setState(() => _showRecentError = false);
+                    Navigator.of(ctx).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Logs copied to clipboard.')),
+                    );
+                  }
+                },
+                child: const Text('Copy logs'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Widget _recentErrorBanner() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.red.shade200),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.error_outline, color: Colors.red),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Error recently occurred! Please press this button to copy your logs, which you can then email to us for support!',
+              style: TextStyle(fontSize: 14, color: Colors.black87),
+            ),
+          ),
+          TextButton(
+            onPressed: () => _copyLogs(context),
+            child: const Text(
+              'Copy logs',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -325,6 +442,17 @@ class CamerasPageState extends State<CamerasPage>
 
     _prefsFuture = SharedPreferences.getInstance();
     _prefsFuture.then((_) => _checkNotificationStatus());
+    _loadRecentError();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeShowBackgroundLogDialog();
+    });
+
+    _errorListener = () {
+      if (!_showRecentError && mounted) {
+        setState(() => _showRecentError = true);
+      }
+    };
+    Log.errorNotifier.addListener(_errorListener);
 
     WidgetsBinding.instance.addObserver(this);
     CameraListNotifier.instance.refreshCallback = _loadCamerasFromDatabase;
@@ -350,6 +478,7 @@ class CamerasPageState extends State<CamerasPage>
 
   @override
   void dispose() {
+    Log.errorNotifier.removeListener(_errorListener);
     _thumbSub.cancel();
     _controller.dispose();
     routeObserver.unsubscribe(this);
@@ -783,141 +912,163 @@ class CamerasPageState extends State<CamerasPage>
                 tooltip: "Need Help?",
                 onPressed: () => _showHelpSheet(context),
               ),
+              IconButton(
+                icon: const Icon(Icons.copy, color: Colors.white),
+                tooltip: "Copy logs",
+                onPressed: () => _copyLogs(context),
+              ),
             ],
           ),
           body:
               cameras.isEmpty
-                  ? Center(
-                    child: Container(
-                      margin: const EdgeInsets.all(24),
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Colors.black26,
-                            offset: Offset(0, 4),
-                            blurRadius: 6,
-                          ),
-                        ],
-                        gradient: const LinearGradient(
-                          colors: [
-                            Color.fromARGB(255, 139, 179, 238),
-                            Color.fromARGB(255, 113, 160, 231),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                  ? Column(
+                    children: [
+                      if (_showRecentError) _recentErrorBanner(),
+                      Expanded(
+                        child: Center(
                           child: Container(
+                            margin: const EdgeInsets.all(24),
                             padding: const EdgeInsets.all(24),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.2),
-                              ),
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Lottie.asset(
-                                  'assets/animations/lock_animation.json',
-                                  width: 180,
-                                  controller: _controller,
-                                  onLoaded: (composition) {
-                                    _controller.duration = composition.duration;
-
-                                    if (!_hasPlayedLockAnimation) {
-                                      _controller.forward();
-                                      _hasPlayedLockAnimation = true;
-                                    }
-                                  },
-                                ),
-
-                                const Text(
-                                  'Private. Secure. Yours.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'End-to-end encrypted access. Always.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontStyle: FontStyle.italic,
-                                    color: Colors.white60,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'You’re in control.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.white54,
-                                  ),
-                                ),
-
-                                const SizedBox(height: 16),
-                                ElevatedButton(
-                                  onPressed: () async {
-                                    if (serverHasSynced) {
-                                      await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder:
-                                              (context) =>
-                                                  const ShowNewCameraOptions(),
-                                        ),
-                                      );
-                                    } else {
-                                      await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder:
-                                              (context) => ServerPage(
-                                                showBackButton: true,
-                                              ),
-                                        ),
-                                      );
-                                    }
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.white,
-                                    foregroundColor: const Color.fromARGB(
-                                      255,
-                                      139,
-                                      179,
-                                      238,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                  child:
-                                      !serverHasSynced
-                                          ? const Text("Connect to Your Server")
-                                          : const Text("Add Your First Camera"),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Colors.black26,
+                                  offset: Offset(0, 4),
+                                  blurRadius: 6,
                                 ),
                               ],
+                              gradient: const LinearGradient(
+                                colors: [
+                                  Color.fromARGB(255, 139, 179, 238),
+                                  Color.fromARGB(255, 113, 160, 231),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: BackdropFilter(
+                                filter: ImageFilter.blur(
+                                  sigmaX: 12,
+                                  sigmaY: 12,
+                                ),
+                                child: Container(
+                                  padding: const EdgeInsets.all(24),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: Colors.white.withOpacity(0.2),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Lottie.asset(
+                                        'assets/animations/lock_animation.json',
+                                        width: 180,
+                                        controller: _controller,
+                                        onLoaded: (composition) {
+                                          _controller.duration =
+                                              composition.duration;
+
+                                          if (!_hasPlayedLockAnimation) {
+                                            _controller.forward();
+                                            _hasPlayedLockAnimation = true;
+                                          }
+                                        },
+                                      ),
+
+                                      const Text(
+                                        'Private. Secure. Yours.',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      const Text(
+                                        'End-to-end encrypted access. Always.',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontStyle: FontStyle.italic,
+                                          color: Colors.white60,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      const Text(
+                                        'You’re in control.',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.white54,
+                                        ),
+                                      ),
+
+                                      const SizedBox(height: 16),
+                                      ElevatedButton(
+                                        onPressed: () async {
+                                          if (serverHasSynced) {
+                                            await Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder:
+                                                    (context) =>
+                                                        const ShowNewCameraOptions(),
+                                              ),
+                                            );
+                                          } else {
+                                            await Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder:
+                                                    (context) => ServerPage(
+                                                      showBackButton: true,
+                                                    ),
+                                              ),
+                                            );
+                                          }
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.white,
+                                          foregroundColor: const Color.fromARGB(
+                                            255,
+                                            139,
+                                            179,
+                                            238,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                        ),
+                                        child:
+                                            !serverHasSynced
+                                                ? const Text(
+                                                  "Connect to Your Server",
+                                                )
+                                                : const Text(
+                                                  "Add Your First Camera",
+                                                ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
+                    ],
                   )
                   : Column(
                     children: [
+                      if (_showRecentError) _recentErrorBanner(),
                       if (_showNotificationWarning)
                         Container(
                           margin: const EdgeInsets.symmetric(

@@ -152,7 +152,8 @@ class DownloadScheduler {
     Log.d("Continuing to queue one 15 min task for $camera");
 
     // Adds the camera to the waiting list if not already in there.
-    if (!camera.isEmpty && await lock(Constants.cameraWaitingLock)) {
+    var lockSucceeded = await lock(Constants.cameraWaitingLock);
+    if (!camera.isEmpty && lockSucceeded) {
       Log.d("Adding to queue for $camera");
       try {
         var sharedPref = SharedPreferencesAsync();
@@ -181,7 +182,7 @@ class DownloadScheduler {
         await unlock(Constants.cameraWaitingLock);
       }
     } else {
-      Log.e("Failed to acquire motion lock OR didn't need to");
+      if (!lockSucceeded) Log.e("Failed to acquire motion lock");
     }
 
     // Enqueue ONE BG task (15-min rule on iOS)

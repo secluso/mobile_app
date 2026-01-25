@@ -22,6 +22,8 @@ class AppStores {
    return _opening!;
   }
 
+  static bool get isInitialized => _initialized;
+
   static Future<AppStores> _initInternal() async {
     final docsDir = await getApplicationDocumentsDirectory();
     _singleton._cameraStore = await openStore(

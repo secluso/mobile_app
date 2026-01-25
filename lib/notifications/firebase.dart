@@ -25,7 +25,7 @@ import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/src/rust/frb_generated.dart';
-import 'dart:io' show Platform;
+import 'dart:io' show File, Platform;
 
 class RustBridgeHelper {
   static bool _initialized = false;
@@ -55,31 +55,38 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
   Log.init();
   DartPluginRegistrant.ensureInitialized();
+  unawaited(Log.ensureStorageReady());
   await initLocalNotifications();
 
-  var prefs = await SharedPreferences.getInstance();
+  try {
+    var prefs = await SharedPreferences.getInstance();
 
-  if (prefs.containsKey(PrefKeys.serverAddr)) {
-    final fcmConfig = FcmConfig.fromPrefs(prefs);
-    if (fcmConfig == null) {
-      Log.e("Missing cached FCM config; clearing server credentials");
-      await _invalidateServerCredentials(prefs);
-    } else {
-      try {
-        await FirebaseInit.ensure(fcmConfig);
-      } catch (e, st) {
-        Log.e("Firebase init failed: $e\n$st");
+    if (prefs.containsKey(PrefKeys.serverAddr)) {
+      final fcmConfig = FcmConfig.fromPrefs(prefs);
+      if (fcmConfig == null) {
+        Log.e("Missing cached FCM config; clearing server credentials");
+        await _invalidateServerCredentials(prefs);
+      } else {
+        try {
+          await FirebaseInit.ensure(fcmConfig);
+        } catch (e, st) {
+          Log.e("Firebase init failed: $e\n$st");
+        }
       }
     }
+
+    if (Platform.isAndroid) {
+      await RustBridgeHelper.ensureInitialized();
+    }
+
+    Log.d("received message");
+
+    await PushNotificationService.instance._process(message.data);
+  } catch (e, st) {
+    Log.e("Background handler error: $e\n$st");
+    await Log.saveBackgroundSnapshot(reason: 'FCM background handler error');
+    await showSupportLogNotification();
   }
-
-  if (Platform.isAndroid) {
-    await RustBridgeHelper.ensureInitialized();
-  }
-
-  Log.d("received message");
-
-  await PushNotificationService.instance._process(message.data);
 }
 
 Future<void> _invalidateServerCredentials(SharedPreferences prefs) async {
@@ -320,6 +327,14 @@ class PushNotificationService {
         final docs = await getApplicationDocumentsDirectory();
         final thumbPath =
             '${docs.path}/camera_dir_$cameraName/videos/thumbnail_$timestamp.png';
+
+        try {
+          final bytes = await File(thumbPath).readAsBytes();
+          await decodeImageFromList(bytes);
+        } catch (e) {
+          Log.e("Invalid notification thumbnail $thumbPath: $e");
+          return;
+        }
 
         // Update same notification id with a BigPicture/attachment version.
         await showMotionNotification(
