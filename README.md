@@ -56,19 +56,7 @@ flutter pub get
 
 ---
 
-## 4. Firebase Setup (Push Notifications)
-
-1. Follow the [official Firebase guide](https://firebase.google.com/docs/flutter/setup?platform=ios)
-2. When asked which platforms to support, select **iOS** and **Android** only.
-3. After setup, move the generated file:
-
-```
-lib/firebase_options.dart → lib/notifications/firebase_options.dart
-```
-
----
-
-## 5. Compile Rust Code for Android
+## 4. Compile Rust Code for Android
 
 From the project root:
 
@@ -92,7 +80,7 @@ This will generate .so files for each architecture and place them in the appropr
 
 ---
 
-## 6. Run on a Physical Android Device
+## 5. Run on a Physical Android Device
 
 1. Plug in your Android device via USB
 2. Enable Developer Mode and USB Debugging
@@ -107,7 +95,7 @@ This will build and launch the app on your connected device.
 
 ---
 
-## 7. Debugging Tips
+## 6. Debugging Tips
 
 | Problem | Solution |
 |--------|----------|

@@ -18,6 +18,7 @@ import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/notifications/firebase.dart';
+import 'package:secluso_flutter/utilities/firebase_init.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/main.dart';
 import 'view_camera.dart';
@@ -411,11 +412,15 @@ class CamerasPageState extends State<CamerasPage>
             setState(() => _showNotificationWarning = false);
 
             //TODO: This might be necessary to work on iOS. Not 100% sure.
-            await FirebaseMessaging.instance.requestPermission(
-              alert: true,
-              badge: true,
-              sound: true,
-            );
+            if (!FirebaseInit.isInitialized) {
+              Log.d("Skipping FCM permission request; Firebase not initialized");
+            } else {
+              await FirebaseMessaging.instance.requestPermission(
+                alert: true,
+                badge: true,
+                sound: true,
+              );
+            }
 
             // This may be the first time we have access to this after adding a camera.
             PushNotificationService.tryUploadIfNeeded(true);

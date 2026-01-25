@@ -14,6 +14,11 @@ class VersionGateInfo {
   final String message;
   final String serverVersion;
   final String clientVersion;
+  //TODO: Incorporate a secondary check that will incorporate each camera connected version. If a camera isn't updated,
+  // then it shouldn't be accessible from the app for new *decryptions*. We could still download encrypted bin files I suppose,
+  // but we can't decrypt them without ensuring there aren't new standards in place. So, we need to somehow version those,
+  // delegate so that we notify the user that the camera isn't up-to-date (through push and through an in-app block), and then block the decryptions of those files until the
+  // correct app version is in place.
 
   factory VersionGateInfo.mismatch({
     required String serverVersion,

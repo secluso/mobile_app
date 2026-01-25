@@ -1,6 +1,5 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 import AVFoundation
-import Firebase
 import Flutter
 import NetworkExtension
 import SystemConfiguration.CaptiveNetwork
@@ -13,8 +12,6 @@ import workmanager
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
-        FirebaseApp.configure()  // Native Firebase init BEFORE plugins
-
         // REQUIRED so iOS knows which task id belongs to Workmanager
         WorkmanagerPlugin.registerTask(withIdentifier: "com.secluso.task")
 

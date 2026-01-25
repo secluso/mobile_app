@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -52,6 +53,8 @@ class RustBridgeHelper {
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Initialize the background isolate
   WidgetsFlutterBinding.ensureInitialized();
+  DartPluginRegistrant.ensureInitialized();
+  await initLocalNotifications();
 
   var prefs = await SharedPreferences.getInstance();
 
@@ -97,12 +100,25 @@ class PushNotificationService {
     }
     Log.d("Initializing PushNotificationService");
 
-    await FirebaseMessaging.instance
-        .setForegroundNotificationPresentationOptions(
-          alert: true,
-          badge: true,
-          sound: true,
-        );
+    if (!FirebaseInit.isInitialized) {
+      Log.d("Skipping push setup; Firebase not initialized");
+      return;
+    }
+    final messaging = FirebaseMessaging.instance;
+
+    try {
+      await messaging.setAutoInitEnabled(true);
+      final autoInit = await messaging.isAutoInitEnabled;
+      Log.d("[FCM] auto-init enabled: $autoInit");
+    } catch (e, st) {
+      Log.e("[FCM] auto-init toggle failed: $e\n$st");
+    }
+
+    await messaging.setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
 
     //FCM streams
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
@@ -111,14 +127,13 @@ class PushNotificationService {
       _handleMessage(msg);
     });
 
-    FirebaseMessaging.instance.onTokenRefresh.listen(_updateToken);
+    messaging.onTokenRefresh.listen(_updateToken);
 
     await initLocalNotifications();
 
     if (Platform.isAndroid ||
-        (Platform.isIOS &&
-            await FirebaseMessaging.instance.getAPNSToken() != null)) {
-      final tok = await FirebaseMessaging.instance.getToken();
+        (Platform.isIOS && await messaging.getAPNSToken() != null)) {
+      final tok = await messaging.getToken();
       Log.d("Set FCM token to $tok");
       if (tok != null) await _updateToken(tok);
     }
@@ -130,6 +145,7 @@ class PushNotificationService {
       Log.d("Skipping FCM token upload; Firebase not initialized");
       return;
     }
+    final messaging = FirebaseMessaging.instance;
     final prefs = await SharedPreferences.getInstance();
     var needUpdate = prefs.getBool(PrefKeys.needUpdateFcmToken) ?? false;
     var token = prefs.getString(PrefKeys.fcmToken) ?? '';
@@ -139,11 +155,10 @@ class PushNotificationService {
       var android = Platform.isAndroid;
       Log.d("Attempting to capture token $android");
       if (Platform.isAndroid ||
-          (Platform.isIOS &&
-              await FirebaseMessaging.instance.getAPNSToken() != null)) {
+          (Platform.isIOS && await messaging.getAPNSToken() != null)) {
         Log.d("Entered capturing area");
 
-        final tok = await FirebaseMessaging.instance.getToken();
+        final tok = await messaging.getToken();
         Log.d("Set FCM token to $tok");
         if (tok != null) {
           final prefs = await SharedPreferences.getInstance();

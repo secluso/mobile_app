@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:ui';
 
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:secluso_flutter/src/rust/api.dart';
 import 'package:secluso_flutter/utilities/firebase_init.dart';
@@ -46,6 +47,7 @@ void main() {
       Log.init();
       Log.i('main() started');
       WidgetsFlutterBinding.ensureInitialized();
+      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
       runApp(const AppBootstrap());
     },
     (error, stack) async {

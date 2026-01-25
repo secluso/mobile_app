@@ -7,15 +7,17 @@ import 'package:secluso_flutter/utilities/logger.dart';
 class FirebaseInit {
   static Completer<FirebaseApp>? _c;
   static bool _initialized = false;
+  static FirebaseApp? _app;
 
   static bool get isInitialized => _initialized;
+  static FirebaseApp? get app => _app;
 
   static Future<FirebaseApp> ensure(FcmConfig fcmConfig) {
     if (_c != null) return _c!.future;
     _c = Completer<FirebaseApp>();
     () async {
       try {
-        // If already initialized natively or earlier in Dart, this succeeds.
+        // If already initialized earlier in Dart, this succeeds.
         FirebaseApp app;
         try {
           app = Firebase.app();
@@ -52,14 +54,13 @@ class FirebaseInit {
 
           if (e.code == 'no-app') {
             app = await Firebase.initializeApp(
-              name:
-                  "Secluso", // Note: Without a name, this is [DEFAULT] which conflicts with other apps (like the old app we had with a different name)
               options: options,
             );
           } else {
             rethrow;
           }
         }
+        _app = app;
         _initialized = true;
         _c!.complete(app);
       } catch (e, st) {
