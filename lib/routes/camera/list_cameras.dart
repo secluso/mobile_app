@@ -285,6 +285,9 @@ class CamerasPageState extends State<CamerasPage>
   /// cache: cam-name to thumbnail bytes (null = tried but failed)
   final Map<String, Uint8List?> _thumbCache = {};
 
+  /// last known-good thumbnails to fall back on if a new file is corrupted
+  final Map<String, Uint8List?> _thumbFallback = {};
+
   /// avoid running the DB query + channel call more than once at a time
   final Map<String, Future<Uint8List?>> _thumbFutures = {};
 
@@ -577,31 +580,82 @@ class CamerasPageState extends State<CamerasPage>
 
   Future<Uint8List?> _generateThumb(String cameraName) {
     if (_thumbCache.containsKey(cameraName)) {
-      return Future.value(_thumbCache[cameraName]);
+      return Future.value(_thumbCache[cameraName] ?? _thumbFallback[cameraName]);
     }
     if (_thumbFutures.containsKey(cameraName)) {
       return _thumbFutures[cameraName]!;
     }
 
     final future = () async {
+      final fallback = _thumbFallback[cameraName];
       try {
-        final path = await _latestThumbnailPath(cameraName);
-        if (path == null) {
-          _thumbCache[cameraName] = null;
-          return null;
+        final bytes = await _latestThumbnailBytes(cameraName);
+        if (bytes == null) {
+          _thumbCache[cameraName] = fallback;
+          return fallback;
         }
-        final bytes = await File(path).readAsBytes();
         _thumbCache[cameraName] = bytes;
+        _thumbFallback[cameraName] = bytes;
         return bytes;
       } catch (e) {
         Log.e('Thumb load error [$cameraName]: $e');
-        _thumbCache[cameraName] = null;
-        return null;
+        _thumbCache[cameraName] = fallback;
+        return fallback;
       }
     }();
 
     _thumbFutures[cameraName] = future;
     return future;
+  }
+
+  Future<bool> _isValidImageBytes(Uint8List bytes) async {
+    try {
+      final image = await decodeImageFromList(bytes);
+      image.dispose();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<Uint8List?> _latestThumbnailBytes(String cameraName) async {
+    final docsDir = await getApplicationDocumentsDirectory();
+    final dir = Directory(
+      p.join(docsDir.path, 'camera_dir_$cameraName', 'videos'),
+    );
+
+    if (!await dir.exists()) return null;
+
+    final entries = await dir.list(followLinks: false).toList();
+    final candidates = <MapEntry<int, File>>[];
+
+    for (final ent in entries) {
+      if (ent is! File) continue;
+      if (!ent.path.toLowerCase().endsWith('.png')) continue;
+
+      final base = p
+          .basenameWithoutExtension(ent.path)
+          .replaceAll("thumbnail_", "");
+
+      final ts = int.tryParse(base);
+      if (ts == null) continue;
+      candidates.add(MapEntry(ts, ent));
+    }
+
+    candidates.sort((a, b) => b.key.compareTo(a.key));
+
+    for (final candidate in candidates) {
+      try {
+        final bytes = await candidate.value.readAsBytes();
+        if (await _isValidImageBytes(bytes)) {
+          return bytes;
+        }
+      } catch (e) {
+        Log.e("Thumbnail read error [$cameraName]: $e");
+      }
+    }
+
+    return null;
   }
 
   // TODO: Would a database read be faster?
