@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:secluso_flutter/src/rust/api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/routes/camera/new/ip_camera_waiting.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'qr_scan.dart';
@@ -68,6 +69,7 @@ class _IpCameraDialogState extends State<IpCameraDialog> {
       if (prefs.containsKey(PrefKeys.lastCameraAdd)) {
         var lastCameraName = prefs.getString(PrefKeys.lastCameraAdd)!;
         await deregisterCamera(cameraName: lastCameraName);
+        invalidateCameraInit(lastCameraName);
         prefs.remove(PrefKeys.lastCameraAdd);
 
         final docsDir = await getApplicationDocumentsDirectory();

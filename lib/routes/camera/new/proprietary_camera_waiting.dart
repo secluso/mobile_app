@@ -97,7 +97,7 @@ class _ProprietaryCameraWaitingDialogState
         pairingToken,
       );
 
-      if (firmwareVersion == "Error") {
+      if (firmwareVersion.startsWith("Error")) {
         setState(
           () => _errorMessage = "Failed to send pairing data to camera.",
         );
@@ -223,6 +223,7 @@ class _ProprietaryCameraWaitingDialogState
 
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await deregisterCamera(cameraName: cameraName);
+    invalidateCameraInit(cameraName);
     prefs.remove(PrefKeys.lastCameraAdd);
 
     final docsDir = await getApplicationDocumentsDirectory();

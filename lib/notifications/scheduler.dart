@@ -132,7 +132,20 @@ class DownloadScheduler {
 
   /// Attempts now, else queues BG task.
   static Future<void> scheduleVideoDownload(String camera) async {
-    Log.d("Scheduling video download for $camera");
+    final trimmedCamera = camera.trim();
+    final isBroadcast = trimmedCamera.isEmpty;
+    String? cameraName = isBroadcast ? null : trimmedCamera;
+    final sharedPref = SharedPreferencesAsync();
+    final cameraSet = await sharedPref.getStringList(PrefKeys.cameraSet);
+    if (cameraName != null &&
+        cameraSet != null &&
+        cameraSet.isNotEmpty &&
+        !cameraSet.contains(cameraName)) {
+      Log.w("Skipping schedule for unknown camera $cameraName");
+      cameraName = null;
+    }
+
+    Log.d("Scheduling video download for ${cameraName ?? ''}");
     // Try right now if network policy allows
     final List<ConnectivityResult> connectivityResult =
         await (Connectivity().checkConnectivity());
@@ -142,39 +155,38 @@ class DownloadScheduler {
 
     Log.d("Network statuses: wifi = $wifi, cell = $cell");
     // TODO: We can't do work now in Android due to the ObjectBox error where we can't double instantiate (as Android background work doesn't hold the lock that the main process does, so it can't touch the database)
-    if (!camera.isEmpty && (wifi || (cell && allowCellular))) {
-      Log.d("Trying to do work now for $camera");
-      final ok = await doWorkNonBackground(camera);
+    if (cameraName != null && (wifi || (cell && allowCellular))) {
+      Log.d("Trying to do work now for $cameraName");
+      final ok = await doWorkNonBackground(cameraName);
       if (ok) return; // Success in foreground
       // Else, fall through to queue
     }
 
-    Log.d("Continuing to queue one 15 min task for $camera");
+    Log.d("Continuing to queue one 15 min task for ${cameraName ?? ''}");
 
     // Adds the camera to the waiting list if not already in there.
     var lockSucceeded = await lock(Constants.cameraWaitingLock);
-    if (!camera.isEmpty && lockSucceeded) {
-      Log.d("Adding to queue for $camera");
+    if (cameraName != null && lockSucceeded) {
+      Log.d("Adding to queue for $cameraName");
       try {
-        var sharedPref = SharedPreferencesAsync();
         if (await sharedPref.containsKey(PrefKeys.downloadCameraQueue)) {
           var currentCameraList = await sharedPref.getStringList(
             PrefKeys.downloadCameraQueue,
           );
-          if (!currentCameraList!.contains(camera)) {
-            Log.d("Added to pre-existing list for $camera");
-            currentCameraList.add(camera);
+          if (!currentCameraList!.contains(cameraName)) {
+            Log.d("Added to pre-existing list for $cameraName");
+            currentCameraList.add(cameraName);
             await sharedPref.setStringList(
               PrefKeys.downloadCameraQueue,
               currentCameraList,
             );
           } else {
-            Log.d("List already contained $camera");
+            Log.d("List already contained $cameraName");
           }
         } else {
-          Log.d("Created new string list for $camera");
+          Log.d("Created new string list for $cameraName");
           await sharedPref.setStringList(PrefKeys.downloadCameraQueue, [
-            camera,
+            cameraName,
           ]);
         }
       } finally {
@@ -187,9 +199,10 @@ class DownloadScheduler {
 
     // Enqueue ONE BG task (15-min rule on iOS)
     // It's not an issue if this doesn't run due to a currently running task. The currently running task will see a new camera added and queue another from itself.
-    if (Platform.isIOS ||
+    if ((isBroadcast || cameraName != null) &&
+        (Platform.isIOS ||
         (Platform.isAndroid &&
-            !await Workmanager().isScheduledByUniqueName(_bgTaskId))) {
+            !await Workmanager().isScheduledByUniqueName(_bgTaskId)))) {
       await Workmanager().cancelByUniqueName(_bgTaskId); // ensure none pending
       await Workmanager().registerOneOffTask(
         _bgTaskId,

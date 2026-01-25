@@ -6,7 +6,9 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `get_or_create_client_mutex`
+// These functions are ignored because they are not marked as `pub`: `ensure_client_initialized`, `get_or_create_channel_mutex`, `lock_client`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `ClientKey`, `InitParams`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `clone`, `clone`, `eq`, `hash`
 
 Future<bool> initializeCamera({
   required String cameraName,
@@ -24,19 +26,23 @@ Future<void> deregisterCamera({required String cameraName}) =>
 Future<String> decryptVideo({
   required String cameraName,
   required String encFilename,
+  required BigInt assumedEpoch,
 }) => RustLib.instance.api.crateApiDecryptVideo(
   cameraName: cameraName,
   encFilename: encFilename,
+  assumedEpoch: assumedEpoch,
 );
 
 Future<String> decryptThumbnail({
   required String cameraName,
   required String encFilename,
   required String pendingMetaDirectory,
+  required BigInt assumedEpoch,
 }) => RustLib.instance.api.crateApiDecryptThumbnail(
   cameraName: cameraName,
   encFilename: encFilename,
   pendingMetaDirectory: pendingMetaDirectory,
+  assumedEpoch: assumedEpoch,
 );
 
 Future<String> flutterAddCamera({

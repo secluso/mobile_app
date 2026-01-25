@@ -6,8 +6,8 @@ pub mod lock_manager;
 use secluso_app_native::{self, Clients};
 
 use std::collections::HashMap;
-use parking_lot::Mutex;
-use log::{info, error};
+use parking_lot::{Mutex, MutexGuard};
+use log::{info, error, warn};
 use once_cell::sync::Lazy;
 
 use std::net::SocketAddr;
@@ -16,104 +16,306 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::panic;
+use std::time::{Duration, Instant};
 
-static CLIENTS: Lazy<Mutex<Option<HashMap<String, Arc<Mutex<Option<Box<Clients>>>>>>>> = Lazy::new(|| Mutex::new(None));
+#[derive(Hash, Eq, PartialEq, Clone)]
+struct ClientKey {
+    camera: String,
+    channel: String,
+}
+
+#[derive(Clone)]
+struct InitParams {
+    file_dir: String,
+    first_time: bool,
+}
+
+static CLIENTS: Lazy<Mutex<HashMap<ClientKey, Arc<Mutex<Option<Box<Clients>>>>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+static INIT_PARAMS: Lazy<Mutex<HashMap<String, InitParams>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
 static IS_SHUTTING_DOWN: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false));
 
-fn get_or_create_client_mutex(camera_name: &str) -> Arc<Mutex<Option<Box<Clients>>>> {
+const CLIENT_LOCK_TIMEOUT: Duration = Duration::from_secs(8);
+const CLIENT_LOCK_WARN: Duration = Duration::from_millis(250);
+const CHANNEL_MOTION: &str = "motion";
+const CHANNEL_THUMBNAIL: &str = "thumbnail";
+const CHANNEL_FCM: &str = "fcm";
+const CHANNEL_CONFIG: &str = "config";
+const CHANNEL_LIVESTREAM: &str = "livestream";
+const CHANNEL_SETUP: &str = "setup";
+
+macro_rules! lock_client_or_return {
+    ($client_mutex:expr, $camera_name:expr, $op:expr, $ret:expr) => {{
+        let start = Instant::now();
+        match $client_mutex.try_lock_for(CLIENT_LOCK_TIMEOUT) {
+            Some(guard) => {
+                let elapsed = start.elapsed();
+                if elapsed >= CLIENT_LOCK_WARN {
+                    warn!(
+                        "Lock wait {:?} for {} on camera {}",
+                        elapsed, $op, $camera_name
+                    );
+                }
+                guard
+            }
+            None => {
+                error!(
+                    "Lock timeout after {:?} for {} on camera {}",
+                    CLIENT_LOCK_TIMEOUT, $op, $camera_name
+                );
+                return $ret;
+            }
+        }
+    }};
+}
+
+fn get_or_create_channel_mutex(
+    camera_name: &str,
+    channel: &str,
+) -> Arc<Mutex<Option<Box<Clients>>>> {
     let mut guard = CLIENTS.lock();
-    let map = guard.get_or_insert_with(HashMap::new);
-    map.entry(camera_name.to_owned())
+    let key = ClientKey {
+        camera: camera_name.to_owned(),
+        channel: channel.to_owned(),
+    };
+    guard
+        .entry(key)
         .or_insert_with(|| Arc::new(Mutex::new(None)))
-        .clone() // clone the Arc so we can drop the map lock now
+        .clone()
+}
+
+fn lock_client<'a>(
+    client_mutex: &'a Arc<Mutex<Option<Box<Clients>>>>,
+    camera_name: &str,
+    op: &str,
+) -> Option<MutexGuard<'a, Option<Box<Clients>>>> {
+    let start = Instant::now();
+    match client_mutex.try_lock_for(CLIENT_LOCK_TIMEOUT) {
+        Some(guard) => {
+            let elapsed = start.elapsed();
+            if elapsed >= CLIENT_LOCK_WARN {
+                warn!(
+                    "Lock wait {:?} for {} on camera {}",
+                    elapsed, op, camera_name
+                );
+            }
+            Some(guard)
+        }
+        None => {
+            error!(
+                "Lock timeout after {:?} for {} on camera {}",
+                CLIENT_LOCK_TIMEOUT, op, camera_name
+            );
+            None
+        }
+    }
+}
+
+fn ensure_client_initialized(
+    client_guard: &mut Option<Box<Clients>>,
+    camera_name: &str,
+    channel: &str,
+) -> bool {
+    if client_guard.is_some() {
+        return true;
+    }
+
+    let params = {
+        let guard = INIT_PARAMS.lock();
+        guard.get(camera_name).cloned()
+    };
+
+    let Some(params) = params else {
+        warn!(
+            "No init params for camera {} (channel {})",
+            camera_name, channel
+        );
+        return false;
+    };
+
+    match secluso_app_native::initialize(
+        client_guard,
+        params.file_dir,
+        params.first_time,
+    ) {
+        Ok(_) => true,
+        Err(e) => {
+            info!(
+                "initialize error for camera {} channel {}: {}",
+                camera_name, channel, e
+            );
+            false
+        }
+    }
 }
 
 #[flutter_rust_bridge::frb]
 pub fn initialize_camera(camera_name: String, file_dir: String, first_time: bool) -> bool {
-    let client_mutex = get_or_create_client_mutex(&camera_name);
-    let mut client_guard = client_mutex.lock();
+    {
+        let mut guard = INIT_PARAMS.lock();
+        guard.insert(
+            camera_name.clone(),
+            InitParams {
+                file_dir: file_dir.clone(),
+                first_time,
+            },
+        );
+    }
 
-    return match secluso_app_native::initialize(&mut *client_guard, file_dir, first_time) {
-        Ok(_v) => return true,
-        //TODO: Add back the error logging here
-        Err(_e) => return false,
-    };
+    let channels = [
+        CHANNEL_MOTION,
+        CHANNEL_THUMBNAIL,
+        CHANNEL_FCM,
+        CHANNEL_CONFIG,
+        CHANNEL_LIVESTREAM,
+        CHANNEL_SETUP,
+    ];
 
-    false
+    let mut ok = true;
+    for channel in channels {
+        let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
+        let op = format!("initialize_camera({})", channel);
+        let mut client_guard = match lock_client(&client_mutex, &camera_name, &op) {
+            Some(guard) => guard,
+            None => {
+                ok = false;
+                continue;
+            }
+        };
+        if client_guard.is_some() {
+            continue;
+        }
+        if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
+            ok = false;
+        }
+    }
+
+    ok
 }
 
 #[flutter_rust_bridge::frb]
 pub fn deregister_camera(camera_name: String) {
-    let client_arc_opt: Option<Arc<Mutex<Option<Box<Clients>>>>> = {
+    let entries: Vec<(ClientKey, Arc<Mutex<Option<Box<Clients>>>>)> = {
         let guard = CLIENTS.lock();
         guard
-            .as_ref()
-            .and_then(|map| map.get(&camera_name).cloned())
+            .iter()
+            .filter(|(key, _)| key.camera == camera_name)
+            .map(|(key, arc)| (key.clone(), arc.clone()))
+            .collect()
     };
 
-    let Some(client_arc) = client_arc_opt else {
+    if entries.is_empty() {
         info!("No client found for camera {}", camera_name);
         return;
-    };
-
-    let res = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-        let mut client_guard = client_arc.lock();
-        secluso_app_native::deregister(&mut *client_guard);
-
-        *client_guard = None;
-    }));
-    if res.is_err() {
-        error!("Panic while deregistering camera {}", camera_name);
     }
 
-    let mut guard = CLIENTS.lock();
-    if let Some(map) = guard.as_mut() {
-        let should_remove = match map.get(&camera_name) {
-            Some(current_arc) if Arc::ptr_eq(current_arc, &client_arc) => true,
-            _ => false,
-        };
-        if should_remove {
-            if map.remove(&camera_name).is_none() {
-                info!("Failed to remove {} from clients map", camera_name);
+    let mut did_deregister = false;
+    for (key, client_arc) in &entries {
+        let op = format!("deregister_camera({})", key.channel);
+        let mut client_guard = match lock_client(client_arc, &camera_name, &op) {
+            Some(guard) => guard,
+            None => {
+                warn!(
+                    "Deregister skipped for camera {} channel {} due to lock timeout",
+                    camera_name, key.channel
+                );
+                continue;
             }
-        } else {
-            info!(
-                "Skipped removing {}: map entry changed while deregistering",
-                camera_name
+        };
+
+        let res = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+            secluso_app_native::deregister(&mut *client_guard);
+            *client_guard = None;
+        }));
+
+        if res.is_err() {
+            error!(
+                "Panic while deregistering camera {} channel {}",
+                camera_name, key.channel
             );
+        } else {
+            did_deregister = true;
         }
-    } else {
-        info!("CLIENTS map not initialized!");
+    }
+
+    if !did_deregister {
+        warn!("Deregister skipped for camera {}", camera_name);
+    }
+
+    {
+        let mut guard = CLIENTS.lock();
+        guard.retain(|key, _| key.camera != camera_name);
+    }
+    {
+        let mut guard = INIT_PARAMS.lock();
+        guard.remove(&camera_name);
     }
 }
 
 #[flutter_rust_bridge::frb]
-pub fn decrypt_video(camera_name: String, enc_filename: String) -> String {
-    let client_mutex = get_or_create_client_mutex(&camera_name);
-    let mut client_guard = client_mutex.lock();
+pub fn decrypt_video(
+    camera_name: String,
+    enc_filename: String,
+    assumed_epoch: u64,
+) -> String {
+    let channel = CHANNEL_MOTION;
+    let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
+    let mut client_guard = lock_client_or_return!(
+        client_mutex,
+        &camera_name,
+        "decrypt_video(motion)",
+        "Error".to_string()
+    );
+    if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
+        return "Error".to_string();
+    }
 
-    match secluso_app_native::decrypt_video(&mut *client_guard, enc_filename) {
+    match secluso_app_native::decrypt_video(
+        &mut *client_guard,
+        enc_filename,
+        assumed_epoch,
+    ) {
         Ok(decrypted_filename) => {
             return decrypted_filename;
         }
         Err(_e) => {
-            return "Error".to_string();
+            return format!("Error(decrypt_video): {}", _e);
         }
     }
 }
 
 
 #[flutter_rust_bridge::frb]
-pub fn decrypt_thumbnail(camera_name: String, enc_filename: String, pending_meta_directory: String) -> String {
-    let client_mutex = get_or_create_client_mutex(&camera_name);
-    let mut client_guard = client_mutex.lock();
+pub fn decrypt_thumbnail(
+    camera_name: String,
+    enc_filename: String,
+    pending_meta_directory: String,
+    assumed_epoch: u64,
+) -> String {
+    let channel = CHANNEL_THUMBNAIL;
+    let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
+    let mut client_guard = lock_client_or_return!(
+        client_mutex,
+        &camera_name,
+        "decrypt_thumbnail(thumbnail)",
+        "Error".to_string()
+    );
+    if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
+        return "Error".to_string();
+    }
 
-    match secluso_app_native::decrypt_thumbnail(&mut *client_guard, enc_filename, pending_meta_directory) {
+    match secluso_app_native::decrypt_thumbnail(
+        &mut *client_guard,
+        enc_filename,
+        pending_meta_directory,
+        assumed_epoch,
+    ) {
         Ok(decrypted_filename) => {
             return decrypted_filename;
         }
         Err(_e) => {
-            return "Error".to_string();
+            return format!("Error(decrypt_thumbnail): {}", _e);
         }
     }
 }
@@ -129,37 +331,74 @@ pub fn flutter_add_camera(
     pairing_token: String,
     credentials_full: String,
 ) -> String {
-    let client_mutex = get_or_create_client_mutex(&camera_name);
-    let mut client_guard = client_mutex.lock();
+    let result = {
+        let channel = CHANNEL_SETUP;
+        let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
+        let mut client_guard = lock_client_or_return!(
+            client_mutex,
+            &camera_name,
+            "flutter_add_camera(setup)",
+            "Error".to_string()
+        );
+        if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
+            return "Error".to_string();
+        }
 
-    //TODO: Have this return a result, and then print the error (and return false)
-    return secluso_app_native::add_camera(
-        &mut *client_guard,
-        camera_name,
-        ip,
-        secret,
-        standalone,
-        ssid,
-        password,
-        pairing_token,
-        credentials_full,
-    );
+        //TODO: Have this return a result, and then print the error (and return false)
+        secluso_app_native::add_camera(
+            &mut *client_guard,
+            camera_name.clone(),
+            ip,
+            secret,
+            standalone,
+            ssid,
+            password,
+            pairing_token,
+            credentials_full,
+        )
+    };
 
-    "Error".to_string()
+    if !result.starts_with("Error") {
+        {
+            let mut guard = INIT_PARAMS.lock();
+            if let Some(params) = guard.get_mut(&camera_name) {
+                params.first_time = false;
+            }
+        }
+
+        let entries: Vec<Arc<Mutex<Option<Box<Clients>>>>> = {
+            let guard = CLIENTS.lock();
+            guard
+                .iter()
+                .filter(|(key, _)| {
+                    key.camera == camera_name && key.channel != CHANNEL_SETUP
+                })
+                .map(|(_, arc)| arc.clone())
+                .collect()
+        };
+
+        for entry in entries {
+            match entry.try_lock_for(CLIENT_LOCK_TIMEOUT) {
+                Some(mut guard) => {
+                    *guard = None;
+                }
+                None => {
+                    warn!(
+                        "Lock timeout after {:?} for reset_clients on camera {}",
+                        CLIENT_LOCK_TIMEOUT, camera_name
+                    );
+                }
+            }
+        }
+    }
+
+    result
 }
 
 #[flutter_rust_bridge::frb(init)]
 pub fn init_app() {
     logger::rust_set_up();
     info!("Setup logging correctly!");
-
-    {
-        let mut clients_map = CLIENTS.lock();
-        if clients_map.is_none() {
-            *clients_map = Some(HashMap::new());
-            info!("Initialized CLIENTS map");
-        }
-    }
 }
 
 #[flutter_rust_bridge::frb]
@@ -202,8 +441,17 @@ pub fn ping_proprietary_device(camera_ip: String) -> bool {
 
 #[flutter_rust_bridge::frb]
 pub fn encrypt_settings_message(camera_name: String, data: Vec<u8>) -> Vec<u8> {
-    let client_mutex = get_or_create_client_mutex(&camera_name);
-    let mut client_guard = client_mutex.lock();
+    let channel = CHANNEL_CONFIG;
+    let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
+    let mut client_guard = lock_client_or_return!(
+        client_mutex,
+        &camera_name,
+        "encrypt_settings_message(config)",
+        Vec::new()
+    );
+    if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
+        return Vec::new();
+    }
 
     match secluso_app_native::encrypt_settings_message(&mut *client_guard, data) {
         Ok(encrypted_message) => {
@@ -218,40 +466,57 @@ pub fn encrypt_settings_message(camera_name: String, data: Vec<u8>) -> Vec<u8> {
 
 #[flutter_rust_bridge::frb]
 pub fn decrypt_message(client_tag: String, camera_name: String, data: Vec<u8>) -> String {
-    let client_mutex = get_or_create_client_mutex(&camera_name);
-    let mut client_guard = client_mutex.lock();
+    let channel = client_tag.as_str();
+    let op = format!("decrypt_message({})", channel);
+    let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
+    let mut client_guard =
+        lock_client_or_return!(client_mutex, &camera_name, &op, "Error".to_string());
+    if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
+        return "Error".to_string();
+    }
 
     match secluso_app_native::decrypt_message(&mut *client_guard, &client_tag, data) {
         Ok(timestamp) => {
             return timestamp;
         }
         Err(e) => {
-            info!("Error: {}", e);
-            return "Error".to_string();
+            info!("decrypt_message error: {}", e);
+            return format!("Error(decrypt_message): {}", e);
         }
     }
 }
 
 #[flutter_rust_bridge::frb]
 pub fn get_group_name(client_tag: String, camera_name: String) -> String {
-    let client_mutex = get_or_create_client_mutex(&camera_name);
-    let mut client_guard = client_mutex.lock();
+    let channel = client_tag.as_str();
+    let op = format!("get_group_name({})", channel);
+    let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
+    let mut client_guard =
+        lock_client_or_return!(client_mutex, &camera_name, &op, "Error".to_string());
+    if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
+        return "Error".to_string();
+    }
 
     match secluso_app_native::get_group_name(&mut *client_guard, &client_tag) {
         Ok(motion_group_name) => {
             return motion_group_name;
         }
         Err(e) => {
-            info!("Error: {}", e);
-            return "Error".to_string();
+            info!("get_group_name error: {}", e);
+            return format!("Error(get_group_name): {}", e);
         }
     }
 }
 
 #[flutter_rust_bridge::frb]
 pub fn livestream_update(camera_name: String, msg: Vec<u8>) -> bool {
-    let client_mutex = get_or_create_client_mutex(&camera_name);
-    let mut client_guard = client_mutex.lock();
+    let channel = CHANNEL_LIVESTREAM;
+    let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
+    let mut client_guard =
+        lock_client_or_return!(client_mutex, &camera_name, "livestream_update(livestream)", false);
+    if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
+        return false;
+    }
 
     match secluso_app_native::livestream_update(&mut *client_guard, msg) {
         Ok(_) => {
@@ -266,8 +531,13 @@ pub fn livestream_update(camera_name: String, msg: Vec<u8>) -> bool {
 
 #[flutter_rust_bridge::frb]
 pub fn livestream_decrypt(camera_name: String, data: Vec<u8>, expected_chunk_number: u64) -> Vec<u8> {
-    let client_mutex = get_or_create_client_mutex(&camera_name);
-    let mut client_guard = client_mutex.lock();
+    let channel = CHANNEL_LIVESTREAM;
+    let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
+    let mut client_guard =
+        lock_client_or_return!(client_mutex, &camera_name, "livestream_decrypt(livestream)", vec![]);
+    if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
+        return vec![];
+    }
 
     let ret = match secluso_app_native::livestream_decrypt(&mut *client_guard, data, expected_chunk_number) {
         Ok(dec_data) => dec_data,
@@ -287,8 +557,17 @@ pub fn rust_lib_version() -> String {
 
 #[flutter_rust_bridge::frb]
 pub fn generate_heartbeat_request_config_command(camera_name: String, timestamp: u64) -> Vec<u8> {
-    let client_mutex = get_or_create_client_mutex(&camera_name);
-    let mut client_guard = client_mutex.lock();
+    let channel = CHANNEL_CONFIG;
+    let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
+    let mut client_guard = lock_client_or_return!(
+        client_mutex,
+        &camera_name,
+        "generate_heartbeat_request_config_command(config)",
+        vec![]
+    );
+    if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
+        return vec![];
+    }
 
     let ret = match secluso_app_native::generate_heartbeat_request_config_command(&mut *client_guard, timestamp) {
         Ok(config_msg_enc) => config_msg_enc,
@@ -303,16 +582,25 @@ pub fn generate_heartbeat_request_config_command(camera_name: String, timestamp:
 
 #[flutter_rust_bridge::frb]
 pub fn process_heartbeat_config_response(camera_name: String, config_response: Vec<u8>, expected_timestamp: u64) -> String {
-    let client_mutex = get_or_create_client_mutex(&camera_name);
-    let mut client_guard = client_mutex.lock();
+    let channel = CHANNEL_CONFIG;
+    let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
+    let mut client_guard = lock_client_or_return!(
+        client_mutex,
+        &camera_name,
+        "process_heartbeat_config_response(config)",
+        "Error".to_string()
+    );
+    if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
+        return "Error".to_string();
+    }
 
     match secluso_app_native::process_heartbeat_config_response(&mut *client_guard, config_response, expected_timestamp) {
         Ok(heartbeat_response) => {
             return heartbeat_response;
         }
         Err(e) => {
-            info!("Error: {}", e);
-            return "Error".to_string();
+            info!("process_heartbeat_config_response error: {}", e);
+            return format!("Error(process_heartbeat_config_response): {}", e);
         }
     }
 }

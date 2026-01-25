@@ -59,7 +59,7 @@ class _CameraSetupStatusDialogState extends State<CameraSetupStatusDialog> {
     ) async {
       if (!mounted) return;
 
-      final success = (firmwareVersion != "Error");
+      final success = !firmwareVersion.startsWith("Error");
 
       if (success) {
         await _persistCamera(cameraName, firmwareVersion);

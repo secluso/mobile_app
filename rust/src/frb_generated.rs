@@ -257,6 +257,7 @@ fn wire__crate__api__decrypt_thumbnail_impl(
             let api_camera_name = <String>::sse_decode(&mut deserializer);
             let api_enc_filename = <String>::sse_decode(&mut deserializer);
             let api_pending_meta_directory = <String>::sse_decode(&mut deserializer);
+            let api_assumed_epoch = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
@@ -264,6 +265,7 @@ fn wire__crate__api__decrypt_thumbnail_impl(
                         api_camera_name,
                         api_enc_filename,
                         api_pending_meta_directory,
+                        api_assumed_epoch,
                     ))?;
                     Ok(output_ok)
                 })())
@@ -295,12 +297,14 @@ fn wire__crate__api__decrypt_video_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_camera_name = <String>::sse_decode(&mut deserializer);
             let api_enc_filename = <String>::sse_decode(&mut deserializer);
+            let api_assumed_epoch = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, ()>((move || {
                     let output_ok = Result::<_, ()>::Ok(crate::api::decrypt_video(
                         api_camera_name,
                         api_enc_filename,
+                        api_assumed_epoch,
                     ))?;
                     Ok(output_ok)
                 })())

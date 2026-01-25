@@ -81,7 +81,10 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
     Log.d("received message");
 
-    await PushNotificationService.instance._process(message.data);
+    await PushNotificationService.instance.processMessageData(
+      message.data,
+      source: 'background',
+    );
   } catch (e, st) {
     Log.e("Background handler error: $e\n$st");
     await Log.saveBackgroundSnapshot(reason: 'FCM background handler error');
@@ -101,98 +104,179 @@ class PushNotificationService {
   PushNotificationService._();
   static final instance = PushNotificationService._();
   bool _initialized = false;
+  Future<void>? _initFuture;
+  static const Duration _initTimeout = Duration(seconds: 8);
+  static const Duration _decryptTimeout = Duration(seconds: 8);
+  static const Duration _decryptRetryDelay = Duration(milliseconds: 200);
+  static const Duration _forceInitCooldown = Duration(seconds: 30);
+  static const Duration _dedupeTtl = Duration(seconds: 60);
+  Future<void> _processTail = Future.value();
+  int _processSeq = 0;
+  int _processPending = 0;
+  final Map<String, DateTime> _forceInitLast = {};
+  final Map<String, DateTime> _recentBodies = {};
 
   Future<void> init() async {
     if (_initialized) {
       return;
     }
-    Log.d("Initializing PushNotificationService");
-
-    if (!FirebaseInit.isInitialized) {
-      Log.d("Skipping push setup; Firebase not initialized");
-      return;
+    if (_initFuture != null) {
+      return _initFuture!;
     }
-    final messaging = FirebaseMessaging.instance;
-
-    try {
-      await messaging.setAutoInitEnabled(true);
-      final autoInit = await messaging.isAutoInitEnabled;
-      Log.d("[FCM] auto-init enabled: $autoInit");
-    } catch (e, st) {
-      Log.e("[FCM] auto-init toggle failed: $e\n$st");
-    }
-
-    await messaging.setForegroundNotificationPresentationOptions(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
-
-    //FCM streams
-    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-    FirebaseMessaging.onMessage.listen((RemoteMessage msg) {
-      Log.d('onMessage');
-      _handleMessage(msg);
-    });
-
-    messaging.onTokenRefresh.listen(_updateToken);
-
-    await initLocalNotifications();
-
-    if (Platform.isAndroid ||
-        (Platform.isIOS && await messaging.getAPNSToken() != null)) {
-      final tok = await messaging.getToken();
-      Log.d("Set FCM token to $tok");
-      if (tok != null) await _updateToken(tok);
-    }
-    _initialized = true;
+    _initFuture = _doInit();
+    return _initFuture!;
   }
 
-  static Future<void> tryUploadIfNeeded(bool force) async {
-    if (!FirebaseInit.isInitialized) {
-      Log.d("Skipping FCM token upload; Firebase not initialized");
-      return;
-    }
-    final messaging = FirebaseMessaging.instance;
-    final prefs = await SharedPreferences.getInstance();
-    var needUpdate = prefs.getBool(PrefKeys.needUpdateFcmToken) ?? false;
-    var token = prefs.getString(PrefKeys.fcmToken) ?? '';
-    final credentials = prefs.getString(PrefKeys.serverUsername) ?? '';
+  Future<void> _doInit() async {
+    try {
+      Log.d("Initializing PushNotificationService");
 
-    if (token.isEmpty) {
-      var android = Platform.isAndroid;
-      Log.d("Attempting to capture token $android");
+      if (!FirebaseInit.isInitialized) {
+        Log.d("Skipping push setup; Firebase not initialized");
+        return;
+      }
+      final messaging = FirebaseMessaging.instance;
+
+      try {
+        await messaging.setAutoInitEnabled(true);
+        final autoInit = await messaging.isAutoInitEnabled;
+        Log.d("[FCM] auto-init enabled: $autoInit");
+      } catch (e, st) {
+        Log.e("[FCM] auto-init toggle failed: $e\n$st");
+      }
+
+      await messaging.setForegroundNotificationPresentationOptions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      // FCM streams
+      FirebaseMessaging.onMessage.listen((RemoteMessage msg) {
+        Log.d('onMessage');
+        _handleMessage(msg);
+      });
+
+      messaging.onTokenRefresh.listen(_updateToken);
+
+      await initLocalNotifications();
+
       if (Platform.isAndroid ||
           (Platform.isIOS && await messaging.getAPNSToken() != null)) {
-        Log.d("Entered capturing area");
-
         final tok = await messaging.getToken();
         Log.d("Set FCM token to $tok");
-        if (tok != null) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString(PrefKeys.fcmToken, tok);
-          token = tok;
-          needUpdate = true;
-        }
+        if (tok != null) await _updateToken(tok);
       }
-    }
-
-    if (credentials.isEmpty || token.isEmpty || (!force && !needUpdate)) {
-      Log.d("Skipping update");
-      return;
-    }
-
-    final result = await HttpClientService.instance.uploadFcmToken(token);
-    if (result.isSuccess) {
-      prefs.setBool(PrefKeys.needUpdateFcmToken, false);
-      Log.d('[FCM] token re‑uploaded');
-    } else {
-      prefs.setBool(PrefKeys.needUpdateFcmToken, true);
-      Log.d('[FCM] token upload failed');
+      _initialized = true;
+    } finally {
+      _initFuture = null;
     }
   }
 
-  Future<void> _handleMessage(RemoteMessage msg) => _process(msg.data);
+  static Future<void>? _uploadFuture;
+
+  static Future<void> tryUploadIfNeeded(bool force) async {
+    if (_uploadFuture != null) {
+      return _uploadFuture!;
+    }
+    _uploadFuture = _doUploadIfNeeded(force);
+    return _uploadFuture!;
+  }
+
+  static Future<void> _doUploadIfNeeded(bool force) async {
+    try {
+      if (!FirebaseInit.isInitialized) {
+        Log.d("Skipping FCM token upload; Firebase not initialized");
+        return;
+      }
+      final messaging = FirebaseMessaging.instance;
+      final prefs = await SharedPreferences.getInstance();
+      var needUpdate = prefs.getBool(PrefKeys.needUpdateFcmToken) ?? false;
+      var token = prefs.getString(PrefKeys.fcmToken) ?? '';
+      final credentials = prefs.getString(PrefKeys.serverUsername) ?? '';
+
+      if (token.isEmpty) {
+        var android = Platform.isAndroid;
+        Log.d("Attempting to capture token $android");
+        if (Platform.isAndroid ||
+            (Platform.isIOS && await messaging.getAPNSToken() != null)) {
+          Log.d("Entered capturing area");
+
+          final tok = await messaging.getToken();
+          Log.d("Set FCM token to $tok");
+          if (tok != null) {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString(PrefKeys.fcmToken, tok);
+            token = tok;
+            needUpdate = true;
+          }
+        }
+      }
+
+      if (credentials.isEmpty || token.isEmpty || (!force && !needUpdate)) {
+        Log.d("Skipping update");
+        return;
+      }
+
+      final result = await HttpClientService.instance.uploadFcmToken(token);
+      if (result.isSuccess) {
+        prefs.setBool(PrefKeys.needUpdateFcmToken, false);
+        Log.d('[FCM] token re‑uploaded');
+      } else {
+        prefs.setBool(PrefKeys.needUpdateFcmToken, true);
+        Log.d('[FCM] token upload failed');
+      }
+    } finally {
+      _uploadFuture = null;
+    }
+  }
+
+  Future<void> _handleMessage(RemoteMessage msg) =>
+      processMessageData(msg.data, source: 'foreground');
+
+  Future<void> processMessageData(
+    Map<String, dynamic> data, {
+    required String source,
+  }) {
+    return _enqueueProcess(data, source: source);
+  }
+
+  Future<void> _enqueueProcess(
+    Map<String, dynamic> data, {
+    required String source,
+  }) {
+    final seq = ++_processSeq;
+    _processPending++;
+    Log.d(
+      "[FCM] Enqueued message #$seq from $source (pending=$_processPending)",
+    );
+
+    _processTail = _processTail
+        .catchError((e, st) {
+          Log.e("[FCM] Previous processing error: $e\n$st");
+        })
+        .then((_) async {
+          final sw = Stopwatch()..start();
+          Log.d("[FCM] Processing message #$seq from $source");
+          try {
+            await _processInternal(data, source: source, seq: seq);
+          } catch (e, st) {
+            Log.e("[FCM] Unhandled error in message #$seq: $e\n$st");
+          } finally {
+            sw.stop();
+            _processPending--;
+            Log.d(
+              "[FCM] Finished message #$seq in ${sw.elapsedMilliseconds}ms (pending=$_processPending)",
+            );
+          }
+        });
+
+    if (_processPending > 3) {
+      Log.w("[FCM] Message backlog detected: pending=$_processPending");
+    }
+
+    return _processTail;
+  }
 
   int _motionNotifId(String cameraName, String timestamp) {
     // deterministic id
@@ -201,12 +285,27 @@ class PushNotificationService {
   }
 
   // Core notification processing method
-  Future<void> _process(Map<String, dynamic> data) async {
-    Log.d("Core notification processing method entered");
+  Future<void> _processInternal(
+    Map<String, dynamic> data, {
+    required String source,
+    required int seq,
+  }) async {
+    Log.d("[FCM] Core processing entered (#$seq, source=$source)");
     final encoded = data['body'];
-    if (encoded == null) return;
+    if (encoded is! String || encoded.isEmpty) {
+      Log.w(
+        "[FCM] Missing or invalid body for message #$seq (keys=${data.keys.toList()})",
+      );
+      return;
+    }
+
+    if (_isDuplicateBody(encoded)) {
+      Log.d("[FCM] Skipping duplicate body for message #$seq");
+      return;
+    }
 
     Log.d("Got a message");
+    Log.d("[FCM] Body length: ${encoded.length}");
 
     final prefs = await SharedPreferences.getInstance();
     //  await WakelockPlus.enable(); // TODO: Make this optional depending on if it's called from background processing
@@ -217,16 +316,87 @@ class PushNotificationService {
           prefs.getStringList(PrefKeys.cameraSet) ?? [];
 
       Log.d('Pre-existing camera set: $cameraSet');
+      if (cameraSet.isEmpty) {
+        Log.w("[FCM] No cameras found for message #$seq");
+        return;
+      }
       // TODO: what happens if we have an invalid name?
       for (final cameraName in cameraSet) {
         // This code might be called after the app is killed/terminated. We need to initialize the cameras again.
-        await initialize(cameraName);
+        final initOk = await initialize(cameraName, timeout: _initTimeout);
+        if (!initOk) {
+          Log.e(
+            "[FCM] Init failed or timed out for $cameraName; skipping message #$seq",
+          );
+          continue;
+        }
         Log.d("Starting to iterate $cameraName");
-        final String response = await decryptMessage(
-          clientTag: "fcm",
-          cameraName: cameraName,
-          data: bytes,
-        );
+        String response;
+        try {
+          response = await decryptMessage(
+            clientTag: "fcm",
+            cameraName: cameraName,
+            data: bytes,
+          ).timeout(_decryptTimeout);
+        } on TimeoutException {
+          Log.e(
+            "[FCM] decryptMessage timeout for $cameraName after ${_decryptTimeout.inSeconds}s",
+          );
+          await Future.delayed(_decryptRetryDelay);
+          try {
+            response = await decryptMessage(
+              clientTag: "fcm",
+              cameraName: cameraName,
+              data: bytes,
+            ).timeout(_decryptTimeout);
+          } on TimeoutException {
+            Log.e(
+              "[FCM] decryptMessage retry timeout for $cameraName after ${_decryptTimeout.inSeconds}s",
+            );
+            continue;
+          }
+        }
+
+        if (response.startsWith('Error')) {
+          if (response.contains('SecretReuseError')) {
+            Log.w(
+              "[FCM] SecretReuseError for $cameraName; treating as duplicate message",
+            );
+            continue;
+          }
+          final now = DateTime.now();
+          final lastAttempt = _forceInitLast[cameraName];
+          final allowForce =
+              lastAttempt == null ||
+              now.difference(lastAttempt) >= _forceInitCooldown;
+          if (allowForce) {
+            _forceInitLast[cameraName] = now;
+            Log.w("[FCM] Decrypt error; forcing init for $cameraName");
+            final forceOk = await initialize(
+              cameraName,
+              timeout: _initTimeout,
+              force: true,
+            );
+            if (forceOk) {
+              try {
+                response = await decryptMessage(
+                  clientTag: "fcm",
+                  cameraName: cameraName,
+                  data: bytes,
+                ).timeout(_decryptTimeout);
+              } on TimeoutException {
+                Log.e(
+                  "[FCM] decryptMessage timeout after forced init for $cameraName",
+                );
+                continue;
+              }
+            }
+          } else {
+            Log.w(
+              "[FCM] Skipping forced init for $cameraName (cooldown active)",
+            );
+          }
+        }
 
         Log.d("Decoded response is: $response");
         try {
@@ -260,7 +430,7 @@ class PushNotificationService {
               PrefKeys.lastRecordingTimestampPrefix + cameraName,
               0,
             );
-          } else if (response != 'Error' && response != 'None') {
+          } else if (!response.startsWith('Error') && response != 'None') {
             var sendNotificationGlobal =
                 prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
             if (sendNotificationGlobal) {
@@ -296,20 +466,34 @@ class PushNotificationService {
             // Prevent back-to-back notifications
             await Future.delayed(const Duration(seconds: 10));
             updateCameraStatusFcmNotification(response, cameraName);
+          } else {
+            Log.d("[FCM] No-op response for $cameraName: $response");
           }
         }
       }
+    } on FormatException catch (e, st) {
+      Log.e("[FCM] Base64 decode failed: $e\n$st");
     } finally {
       Log.d("After processing");
       // await WakelockPlus.disable(); TODO: Fix above wakelock depending on foreground or not
     }
   }
 
+  bool _isDuplicateBody(String body) {
+    final now = DateTime.now();
+    _recentBodies.removeWhere((_, ts) => now.difference(ts) > _dedupeTtl);
+    if (_recentBodies.containsKey(body)) {
+      return true;
+    }
+    _recentBodies[body] = now;
+    return false;
+  }
+
   Future<void> _tryAttachThumbLater(
     String cameraName,
     String timestamp,
     int notifId, {
-    Duration timeout = const Duration(seconds: 6),
+    Duration timeout = const Duration(seconds: 10),
     Duration pollEvery = const Duration(milliseconds: 300),
   }) async {
     final deadline = DateTime.now().add(timeout);
@@ -333,7 +517,8 @@ class PushNotificationService {
           await decodeImageFromList(bytes);
         } catch (e) {
           Log.e("Invalid notification thumbnail $thumbPath: $e");
-          return;
+          await Future.delayed(pollEvery);
+          continue;
         }
 
         // Update same notification id with a BigPicture/attachment version.

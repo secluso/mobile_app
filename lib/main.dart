@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:ui';
+//import 'package:flutter/foundation.dart'; //remove if not using logger
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:secluso_flutter/notifications/heartbeat_task.dart';
 import 'package:secluso_flutter/notifications/scheduler.dart';
 import 'package:secluso_flutter/src/rust/guard.dart';
+//import 'package:secluso_flutter/src/rust/api/logger.dart'; //remove if not using logger
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/notifications/thumbnails.dart';
 import 'package:secluso_flutter/notifications/notifications.dart';
@@ -27,6 +29,7 @@ import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/lock.dart';
 import 'package:secluso_flutter/utilities/version_gate.dart';
+import 'package:secluso_flutter/utilities/ui_state.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'routes/server_page.dart';
@@ -48,6 +51,7 @@ void main() {
       Log.init();
       Log.i('main() started');
       WidgetsFlutterBinding.ensureInitialized();
+      UiState.markBindingReady();
       FlutterError.onError = (details) {
         Log.e('FlutterError: ${details.exceptionAsString()}');
         final stack = details.stack;
@@ -82,9 +86,7 @@ void main() {
         Log.e('PlatformDispatcher: $error');
         Log.e(stack.toString());
         if (_isAppInBackground()) {
-          unawaited(
-            _handleBackgroundError('PlatformDispatcher: $error'),
-          );
+          unawaited(_handleBackgroundError('PlatformDispatcher: $error'));
         }
         return true;
       };
@@ -217,7 +219,8 @@ Future<void> _initializeApp(ThemeProvider themeProvider) async {
 
   // The native logger causes some reentrancy deadlocks.
   // Only enable if needed.
-  /*
+
+  /** 
   createLogStream().listen((event) {
     var level = event.level;
     var tag = event.tag; // Represents the calling file
@@ -240,7 +243,7 @@ Future<void> _initializeApp(ThemeProvider themeProvider) async {
       Log.e(event.msg, customLocation: event.tag);
     }
   });
-  */
+  **/
 
   Log.d("After createLogStream().listen()");
   await AppStores.init();
@@ -651,6 +654,28 @@ Future<void> _checkForUpdates() async {
   }
 
   var cameraNames = cameraNamesResult.value!;
+  final prefs = await SharedPreferences.getInstance();
+  final cameraSet = prefs.getStringList(PrefKeys.cameraSet) ?? [];
+  if (cameraSet.isNotEmpty) {
+    final cameraSetLookup = cameraSet.toSet();
+    final filtered =
+        cameraNames
+            .where((cameraName) => cameraSetLookup.contains(cameraName))
+            .toList();
+    final dropped =
+        cameraNames
+            .where((cameraName) => !cameraSetLookup.contains(cameraName))
+            .toList();
+    if (dropped.isNotEmpty) {
+      Log.w("Dropping unknown cameras from update queue: $dropped");
+    }
+    cameraNames = filtered;
+  }
+  cameraNames =
+      cameraNames.where((cameraName) => cameraName.trim().isNotEmpty).toList();
+  if (cameraNames.isEmpty) {
+    return;
+  }
 
   // TODO: This is essentially a clone of my previous implementation in scheduler.dart
   // Adds the camera to the waiting list if not already in there.

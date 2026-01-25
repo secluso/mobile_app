@@ -11,6 +11,10 @@ import 'package:secluso_flutter/routes/app_drawer.dart';
 import 'package:secluso_flutter/src/rust/frb_generated.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/lock.dart';
+import 'package:secluso_flutter/utilities/rust_util.dart';
+import 'package:secluso_flutter/utilities/ui_state.dart';
+import 'package:secluso_flutter/notifications/download_status.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'dart:io';
 import 'dart:ui';
@@ -39,6 +43,25 @@ class RustBridgeHelper {
   }
 }
 
+const Duration _forceInitCooldown = Duration(seconds: 30);
+const Duration _forceInitTimeout = Duration(seconds: 8);
+final Map<String, DateTime> _forceInitLast = {};
+
+Future<bool> _maybeForceInit(String cameraName, String reason) async {
+  final now = DateTime.now();
+  final lastAttempt = _forceInitLast[cameraName];
+  if (lastAttempt != null && now.difference(lastAttempt) < _forceInitCooldown) {
+    Log.w(
+      "[download] Skipping force init for $cameraName (cooldown active, reason=$reason)",
+    );
+    return false;
+  }
+
+  _forceInitLast[cameraName] = now;
+  Log.w("[download] Forcing init for $cameraName (reason=$reason)");
+  return await initialize(cameraName, timeout: _forceInitTimeout, force: true);
+}
+
 Future<bool> doWorkNonBackground(String cameraName) async {
   // TODO: Should we wait for downloadingMotionVideos to be false before continuing? Is this meant to be a spinlock?
 
@@ -56,7 +79,7 @@ Future<bool> doWorkNonBackground(String cameraName) async {
       ); // Always ensure this unlocks, even on exceptions
     }
   } else {
-    Log.e("Failed to acquire generic download task lock");
+    Log.w("Download task already running; will queue work");
     return false;
   }
 }
@@ -72,7 +95,7 @@ Future<bool> doWorkBackground() async {
   var prefs = SharedPreferencesAsync();
   if (!await prefs.containsKey(PrefKeys.downloadCameraQueue) &&
       !await prefs.containsKey(PrefKeys.backupDownloadCameraQueue)) {
-    Log.e("There are no pref keys to base off of.");
+    Log.w("There are no pref keys to base off of.");
     return true;
   }
 
@@ -108,10 +131,20 @@ Future<bool> doWorkBackground() async {
                     .toList();
           }
 
+          downloadCameraQueue = await _sanitizeDownloadQueue(
+            downloadCameraQueue ?? <String>[],
+          );
+          if (downloadCameraQueue.isEmpty) {
+            Log.w("No valid cameras in download queue after sanitization");
+            await prefs.remove(PrefKeys.downloadCameraQueue);
+            await prefs.remove(PrefKeys.backupDownloadCameraQueue);
+            return true;
+          }
+
           // Await these, so that they don't run outside the lock.
           await prefs.setStringList(
             PrefKeys.backupDownloadCameraQueue,
-            downloadCameraQueue!, // This cannot be null.
+            downloadCameraQueue,
           ); // Create a backup of the current list.
           await prefs.remove(
             PrefKeys.downloadCameraQueue,
@@ -225,7 +258,8 @@ Future<bool> doWorkBackground() async {
       ); // Always ensure this unlocks, even on exceptions
     }
   } else {
-    Log.e("Failed to acquire generic download task lock");
+    Log.w("Download task already running; skipping background work");
+    return true;
   }
 
   return false;
@@ -245,11 +279,48 @@ List<List<T>> batch<T>(List<T> items, int batchSize) {
   return result;
 }
 
+List<String> _dedupePreserveOrder(List<String> items) {
+  final seen = <String>{};
+  final result = <String>[];
+  for (final item in items) {
+    if (seen.add(item)) {
+      result.add(item);
+    }
+  }
+  return result;
+}
+
+Future<List<String>> _sanitizeDownloadQueue(List<String> queue) async {
+  final nonEmpty =
+      queue.where((cameraName) => cameraName.trim().isNotEmpty).toList();
+  final prefs = SharedPreferencesAsync();
+  final cameraSet = await prefs.getStringList(PrefKeys.cameraSet) ?? [];
+  if (cameraSet.isEmpty) {
+    if (nonEmpty.length != queue.length) {
+      Log.w("Dropping empty camera names from download queue");
+    }
+    return _dedupePreserveOrder(nonEmpty);
+  }
+
+  final cameraSetLookup = cameraSet.toSet();
+  final filtered =
+      nonEmpty
+          .where((cameraName) => cameraSetLookup.contains(cameraName))
+          .toList();
+  final dropped = nonEmpty.where((c) => !cameraSetLookup.contains(c)).toList();
+  if (dropped.isNotEmpty) {
+    Log.w("Dropping unknown cameras from download queue: $dropped");
+  }
+  return _dedupePreserveOrder(filtered);
+}
+
 //TODO: What if we miss a notification and don't get one for a long time? Should we occasionally query? What about if the user is in the app without any notifications?
 
 Future<bool> retrieveVideos(String cameraName) async {
   Log.d("Entered for $cameraName");
+  await DownloadStatus.markActive(cameraName, true);
   var epoch = await readEpoch(cameraName, "video");
+  const downloadTimeout = Duration(seconds: 60);
 
   // We could crash/be terminated at any point during execution.
   // We need to perform the following steps carefully so that we
@@ -268,31 +339,74 @@ Future<bool> retrieveVideos(String cameraName) async {
   // 3. Increase epoch number in shared preferences
   // 4. Delete file from server
 
-  while (true) {
-    Log.d(
-      "Trying to download video for epoch $epoch with $cameraName and encVideo$epoch",
-    );
-
-    final fileName = "encVideo$epoch";
-    var result = await HttpClientService.instance.download(
-      destinationFile: fileName,
-      cameraName: cameraName,
-      serverFile: epoch.toString(),
-      type: Group.motion,
-    );
-
-    if (result.isSuccess) {
-      Log.d("Success!");
-      var file = result.value!.file!;
-      var decFileName = await decryptVideo(
-        cameraName: cameraName,
-        encFilename: fileName,
+  try {
+    while (true) {
+      Log.d(
+        "Trying to download video for epoch $epoch with $cameraName and encVideo$epoch",
       );
-      Log.d("Dec file name = $decFileName");
 
-      if (decFileName != "Error") {
-        await file
-            .delete(); // TODO: Should we delete it if there's an error..? If we do, we need to skip an epoch (which would require returning true or something custom perhaps)
+      final assumedEpoch = epoch > 0 ? epoch - 1 : 0;
+      final fileName = "encVideo$epoch";
+      final downloadSw = Stopwatch()..start();
+      var result = await HttpClientService.instance.download(
+        destinationFile: fileName,
+        cameraName: cameraName,
+        serverFile: epoch.toString(),
+        type: Group.motion,
+        timeout: downloadTimeout,
+      );
+      downloadSw.stop();
+      if (!kReleaseMode) {
+        Log.d(
+          "[perf] Download motion $cameraName epoch $epoch in ${downloadSw.elapsedMilliseconds}ms (ok=${result.isSuccess})",
+        );
+      }
+
+      if (result.isSuccess) {
+        Log.d("Success!");
+        var file = result.value!.file!;
+        final decryptSw = Stopwatch()..start();
+        var decFileName = await decryptVideo(
+          cameraName: cameraName,
+          encFilename: fileName,
+          assumedEpoch: BigInt.from(assumedEpoch),
+        );
+        decryptSw.stop();
+        if (!kReleaseMode) {
+          Log.d(
+            "[perf] Decrypt motion $cameraName $fileName in ${decryptSw.elapsedMilliseconds}ms (result=$decFileName)",
+          );
+        }
+        if (decFileName.startsWith("Error")) {
+          Log.w("Decrypt failed for $cameraName epoch $epoch: $decFileName");
+          final forceOk = await _maybeForceInit(cameraName, "decrypt_video");
+          if (forceOk) {
+            final retrySw = Stopwatch()..start();
+            decFileName = await decryptVideo(
+              cameraName: cameraName,
+              encFilename: fileName,
+              assumedEpoch: BigInt.from(assumedEpoch),
+            );
+            retrySw.stop();
+            if (!kReleaseMode) {
+              Log.d(
+                "[perf] Decrypt motion retry $cameraName $fileName in ${retrySw.elapsedMilliseconds}ms (result=$decFileName)",
+              );
+            }
+          }
+        }
+
+        if (decFileName.startsWith("Error")) {
+          Log.e(
+            "Decrypt failed for $cameraName epoch $epoch; leaving epoch unchanged",
+          );
+          return false;
+        }
+
+        Log.d("Dec file name = $decFileName");
+
+        // Delete only after successful decrypt to avoid losing MLS commits.
+        await file.delete();
 
         Log.d("Received 100%");
 
@@ -324,27 +438,33 @@ Future<bool> retrieveVideos(String cameraName) async {
           );
           port?.send('signal_new_file');
 
-          camerasPageKey.currentState?.invalidateThumbnail(cameraName);
+          if (UiState.isBindingReady) {
+            camerasPageKey.currentState?.invalidateThumbnail(cameraName);
+          } else {
+            Log.d("Skipping thumbnail invalidate; UI not initialized");
+          }
         }
+
+        await writeEpoch(cameraName, "video", epoch + 1);
+
+        await HttpClientService.instance.delete(
+          destinationFile: fileName,
+          cameraName: cameraName,
+          serverFile: epoch.toString(),
+          type: Group.motion,
+        );
+
+        epoch += 1;
+      } else {
+        Log.d("Failed here");
+        // We keep trying until hitting an error. Allows us to catch up on epochs.
+        break;
       }
-
-      await writeEpoch(cameraName, "video", epoch + 1);
-
-      await HttpClientService.instance.delete(
-        destinationFile: fileName,
-        cameraName: cameraName,
-        serverFile: epoch.toString(),
-        type: Group.motion,
-      );
-
-      epoch += 1;
-    } else {
-      Log.d("Failed here");
-      // We keep trying until hitting an error. Allows us to catch up on epochs.
-      break;
     }
-  }
 
-  Log.d("Finished downloading for $cameraName");
-  return true; // TODO: We may wish to utilize a check in the future on if something truly failed that could be retried, so this is left here as an architecture to make that happen
+    Log.d("Finished downloading for $cameraName");
+    return true; // TODO: We may wish to utilize a check in the future on if something truly failed that could be retried, so this is left here as an architecture to make that happen
+  } finally {
+    await DownloadStatus.markActive(cameraName, false);
+  }
 }

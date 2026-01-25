@@ -19,6 +19,7 @@ import 'package:secluso_flutter/database/app_stores.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/notifications/firebase.dart';
 import 'package:secluso_flutter/utilities/firebase_init.dart';
+import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/main.dart';
 import 'view_camera.dart';
@@ -578,6 +579,7 @@ class CamerasPageState extends State<CamerasPage>
     await prefs.remove(PrefKeys.firmwareVersionPrefix + cameraName);
 
     await deregisterCamera(cameraName: cameraName);
+    invalidateCameraInit(cameraName);
 
     final cameraBox = AppStores.instance.cameraStore.box<Camera>();
     final videoBox = AppStores.instance.videoStore.box<Video>();
@@ -656,6 +658,14 @@ class CamerasPageState extends State<CamerasPage>
   final _deepEq = const DeepCollectionEquality.unordered();
 
   Future<void> _loadCamerasFromDatabase([bool forceRun = false]) async {
+    if (!AppStores.isInitialized) {
+      try {
+        await AppStores.init();
+      } catch (e, st) {
+        Log.e("Failed to init AppStores: $e\n$st");
+        return;
+      }
+    }
     final box = AppStores.instance.cameraStore.box<Camera>();
     final all =
         (await box.getAllAsync())
@@ -682,6 +692,14 @@ class CamerasPageState extends State<CamerasPage>
   }
 
   Future<String?> _latestVideoPath(String cameraName) async {
+    if (!AppStores.isInitialized) {
+      try {
+        await AppStores.init();
+      } catch (e, st) {
+        Log.e("Failed to init AppStores: $e\n$st");
+        return null;
+      }
+    }
     final videoBox = AppStores.instance.videoStore.box<Video>();
 
     final query =

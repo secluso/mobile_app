@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:confetti/confetti.dart';
 import 'package:objectbox/objectbox.dart';
 import 'package:secluso_flutter/notifications/download_task.dart';
+import 'package:secluso_flutter/notifications/download_status.dart';
 import 'package:secluso_flutter/notifications/thumbnails.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -21,6 +22,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/main.dart';
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' show decodeImageFromList;
 import 'package:path/path.dart' as p;
@@ -70,9 +72,20 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
   final ConfettiController _confetti = ConfettiController(
     duration: const Duration(seconds: 2),
   );
+  Timer? _downloadStatusTimer;
+  late final VoidCallback _downloadStatusListener;
+  bool _downloadActive = false;
 
   /// We store an unreadMessages flag instead of iterating through all videos to be more efficient
   Future<void> _markCameraRead() async {
+    if (!AppStores.isInitialized) {
+      try {
+        await AppStores.init();
+      } catch (e, st) {
+        Log.e("Failed to init AppStores: $e\n$st");
+        return;
+      }
+    }
     final cameraBox = AppStores.instance.cameraStore.box<Camera>();
     final cameraQuery =
         cameraBox.query(Camera_.name.equals(widget.cameraName)).build();
@@ -92,6 +105,19 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     super.initState();
     globalCameraViewPageState = this;
     _scrollController.addListener(_maybeLoadNextPage);
+    _downloadActive = DownloadStatus.isActiveInMemory(widget.cameraName);
+    _downloadStatusListener = () {
+      final active = DownloadStatus.isActiveInMemory(widget.cameraName);
+      if (active != _downloadActive && mounted) {
+        setState(() => _downloadActive = active);
+      }
+    };
+    DownloadStatus.active.addListener(_downloadStatusListener);
+    _downloadStatusTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => DownloadStatus.syncFromPrefs(),
+    );
+    unawaited(DownloadStatus.syncFromPrefs());
   }
 
   @override
@@ -138,6 +164,14 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
   }
 
   Future<void> _initDbAndFirstPage() async {
+    if (!AppStores.isInitialized) {
+      try {
+        await AppStores.init();
+      } catch (e, st) {
+        Log.e("Failed to init AppStores: $e\n$st");
+        return;
+      }
+    }
     _videoBox = AppStores.instance.videoStore.box<Video>();
     _detectionBox = AppStores.instance.detectionStore.box<Detection>();
     await _loadNextPage(); // first 20
@@ -181,6 +215,8 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     routeObserver.unsubscribe(this);
     _confetti.dispose();
     _scrollController.dispose();
+    _downloadStatusTimer?.cancel();
+    DownloadStatus.active.removeListener(_downloadStatusListener);
     globalCameraViewPageState = null;
 
     super.dispose();
@@ -542,6 +578,56 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
                   ),
                 ),
               ),
+              if (_downloadActive)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color:
+                          dark
+                              ? Colors.blueGrey.shade800
+                              : Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color:
+                            dark
+                                ? Colors.blueGrey.shade600
+                                : Colors.blue.shade200,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              dark ? Colors.white70 : Colors.blueAccent,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Processing downloads...',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: dark ? Colors.white70 : Colors.black87,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: _onPullToRefresh,

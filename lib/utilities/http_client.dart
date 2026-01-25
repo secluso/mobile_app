@@ -1,5 +1,6 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -11,6 +12,7 @@ import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/notifications/epoch.dart';
 import 'package:secluso_flutter/src/rust/api.dart';
 import 'package:secluso_flutter/utilities/http_entities.dart';
+import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/utilities/version_gate.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'result.dart';
@@ -118,6 +120,9 @@ class HttpClientService {
   static final HttpClientService instance = HttpClientService._();
   Future<void>? _versionCheckInFlight;
   bool _versionMatchConfirmed = false;
+  static const Duration _groupNameInitCooldown = Duration(seconds: 30);
+  static const Duration _groupNameInitTimeout = Duration(seconds: 8);
+  final Map<String, DateTime> _groupNameInitLast = {};
 
   void resetVersionGateState() {
     _versionCheckInFlight = null;
@@ -146,7 +151,7 @@ class HttpClientService {
     List<MotionPair> convertedCameraList = [];
     for (final cameraName in cameraNames) {
       final motionGroup = await _groupName(cameraName, Group.motion);
-      if (motionGroup == "Error") {
+      if (motionGroup.startsWith("Error")) {
         continue;
       }
 
@@ -293,6 +298,7 @@ class HttpClientService {
     required String cameraName,
     required String type, // As dictated in constants.dart
     required String serverFile, // This is epoch in motion
+    Duration? timeout,
   }) => _wrap(() async {
     final creds = await _getValidatedCredentials();
     final group = await _groupName(cameraName, type);
@@ -303,7 +309,18 @@ class HttpClientService {
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
     // Video download action
-    final response = await http.get(url, headers: headers);
+    final responseFuture = http.get(url, headers: headers);
+    final http.Response response;
+    try {
+      response =
+          timeout == null
+              ? await responseFuture
+              : await responseFuture.timeout(timeout);
+    } on TimeoutException {
+      throw Exception(
+        'Download timeout after ${timeout?.inSeconds ?? 0}s ($cameraName, $type, $serverFile)',
+      );
+    }
     await _handleServerVersionHeader(response);
     if (response.statusCode != 200) {
       if (response.statusCode == 404) {
@@ -518,11 +535,23 @@ class HttpClientService {
     } catch (e, st) {
       if (e is _SilentException) {
         Log.d("HttpClientService error: $e");
+      } else if (_isNetworkException(e)) {
+        Log.w("HttpClientService warning: $e");
       } else {
         Log.e("HttpClientService error: $e\n$st");
       }
       return Result.failure(Exception(e.toString()));
     }
+  }
+
+  bool _isNetworkException(Object e) {
+    if (e is SocketException) {
+      return true;
+    }
+    if (e is http.ClientException && e.message.contains('SocketException')) {
+      return true;
+    }
+    return false;
   }
 
   Future<void> _ensureVersionCompatible() async {
@@ -661,15 +690,55 @@ class HttpClientService {
   }
 
   Future<String> _groupName(String cameraName, String clientTag) async {
-    final String groupName = await getGroupName(
+    String groupName = await getGroupName(
       clientTag: clientTag,
       cameraName: cameraName,
     );
 
-    if (groupName == "Error") {
-      throw Exception('Incorrect clientTag or invalid camera');
+    if (!groupName.startsWith("Error")) {
+      return groupName;
     }
 
-    return groupName;
+    Log.w(
+      "[http] getGroupName failed for $cameraName ($clientTag): $groupName",
+    );
+
+    final retryKey = "$cameraName|$clientTag";
+    final now = DateTime.now();
+    final lastAttempt = _groupNameInitLast[retryKey];
+    if (lastAttempt != null &&
+        now.difference(lastAttempt) < _groupNameInitCooldown) {
+      throw _SilentException(
+        'Group name unavailable for $cameraName ($clientTag)',
+      );
+    }
+
+    _groupNameInitLast[retryKey] = now;
+    invalidateCameraInit(cameraName);
+    final initOk = await initialize(
+      cameraName,
+      timeout: _groupNameInitTimeout,
+      force: true,
+    );
+    if (initOk) {
+      groupName = await getGroupName(
+        clientTag: clientTag,
+        cameraName: cameraName,
+      );
+      if (!groupName.startsWith("Error")) {
+        return groupName;
+      }
+      Log.w(
+        "[http] getGroupName retry failed for $cameraName ($clientTag): $groupName",
+      );
+    } else {
+      Log.w(
+        "[http] Init failed before getGroupName retry for $cameraName ($clientTag)",
+      );
+    }
+
+    throw _SilentException(
+      'Group name unavailable for $cameraName ($clientTag)',
+    );
   }
 }

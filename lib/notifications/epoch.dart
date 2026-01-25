@@ -49,5 +49,10 @@ Future<void> writeEpoch(String cameraName, String type, int value) async {
     await raf.close();
   }
 
-  await tmpFile.rename(finalPath);
+  try {
+    await tmpFile.rename(finalPath);
+  } catch (e) {
+    // If rename fails (e.g., tmp was removed), avoid crashing the app.
+    return;
+  }
 }

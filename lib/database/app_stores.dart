@@ -13,13 +13,18 @@ class AppStores {
   static bool _initialized = false;
   static Future<AppStores>? _opening;
   static bool _closing = false;
+  static bool _storesOpen = false;
 
   /// Initialization ran once in runApp
   static Future<AppStores> init() async {
     if (_initialized) return _singleton; // already ready
     if (_opening != null) return _opening!;
+    if (_storesOpen) {
+      _initialized = true;
+      return _singleton;
+    }
     _opening = _initInternal().whenComplete(() => _opening = null);
-   return _opening!;
+    return _opening!;
   }
 
   static bool get isInitialized => _initialized;
@@ -36,6 +41,7 @@ class AppStores {
       directory: p.join(docsDir.path, 'detection-db'),
     );
 
+    _storesOpen = true;
     _initialized = true;
     return _singleton;
   }
@@ -48,9 +54,9 @@ class AppStores {
   }
 
   // Actual stores
-  late final Store _cameraStore;
-  late final Store _videoStore;
-  late final Store _detectionStore;
+  late Store _cameraStore;
+  late Store _videoStore;
+  late Store _detectionStore;
 
   Store get cameraStore => _cameraStore;
   Store get videoStore => _videoStore;
@@ -65,6 +71,7 @@ class AppStores {
       _videoStore.close();
       _detectionStore.close();
       _initialized = false;
+      _storesOpen = false;
     } finally {
       _closing = false;
     }

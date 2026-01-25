@@ -13,12 +13,19 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 
 class ThumbnailManager {
   static const Duration _stableWaitTimeout = Duration(seconds: 2);
   static const Duration _stableWaitPoll = Duration(milliseconds: 120);
   static const int _minPngSizeBytes = 32;
+  static const Duration _decryptTimeout = Duration(seconds: 8);
+  static const Duration _downloadTimeout = Duration(seconds: 12);
+  static const Duration _forceInitCooldown = Duration(seconds: 30);
+  static const Duration _forceInitTimeout = Duration(seconds: 8);
+  static final Map<String, DateTime> _forceInitLast = {};
+  static final Map<String, Future<void>> _activeSessions = {};
 
   static const List<int> _pngSignature = [
     0x89,
@@ -30,6 +37,21 @@ class ThumbnailManager {
     0x1A,
     0x0A,
   ];
+
+  static Future<bool> _maybeForceInit(String camera, String reason) async {
+    final now = DateTime.now();
+    final lastAttempt = _forceInitLast[camera];
+    if (lastAttempt != null &&
+        now.difference(lastAttempt) < _forceInitCooldown) {
+      Log.w(
+        "[thumbnail] Skipping force init for $camera (cooldown active, reason=$reason)",
+      );
+      return false;
+    }
+    _forceInitLast[camera] = now;
+    Log.w("[thumbnail] Forcing init for $camera (reason=$reason)");
+    return await initialize(camera, timeout: _forceInitTimeout, force: true);
+  }
 
   static bool _looksLikePngHeader(Uint8List bytes) {
     if (bytes.length < _pngSignature.length) return false;
@@ -68,13 +90,32 @@ class ThumbnailManager {
     return false;
   }
 
-  // Return early if the specified timestamp is found (but still continue as long as possible)
+  static Future<void> _ensureSession({
+    required String camera,
+    required Duration timeBudget,
+    required String targetTimestamp,
+  }) async {
+    final active = _activeSessions[camera];
+    if (active != null) {
+      return;
+    }
+    final future = _session(
+      camera: camera,
+      timeBudget: timeBudget,
+      targetTimestamp: targetTimestamp,
+      onTargetReady: (_) {},
+    );
+    _activeSessions[camera] = future;
+    await future.whenComplete(() {
+      _activeSessions.remove(camera);
+    });
+  }
+
+  // Return quickly; thumbnails are fetched in the background if needed.
   static Future<bool> checkThumbnailsForCamera(
     String camera,
     String timestamp,
   ) async {
-    final completer = Completer<bool>();
-
     // Check if the file already exists in the thumbnails folder
     final baseDir = await getApplicationDocumentsDirectory();
 
@@ -86,29 +127,21 @@ class ThumbnailManager {
     );
 
     if (await File(filePath).exists()) {
-      return true;
+      return await _waitForStablePng(filePath);
     }
 
     // If we can't get the corresponding thumbnail in 15 seconds, we send the notification without it.
     final timeBudget = Duration(seconds: 15);
 
     unawaited(
-      _session(
+      _ensureSession(
         camera: camera,
         timeBudget: timeBudget,
         targetTimestamp: timestamp,
-        onTargetReady: (success) {
-          if (!completer.isCompleted) completer.complete(success);
-        },
       ),
     );
 
-    // If it isn't done in time, we return false.
-    Future.delayed(timeBudget).then((_) {
-      if (!completer.isCompleted) completer.complete(false);
-    });
-
-    return completer.future;
+    return false;
   }
 
   static Future<void> checkThumbnailsForAll() async {
@@ -126,12 +159,11 @@ class ThumbnailManager {
     var cameraNames = cameraNamesResult.value!;
     for (String camera in cameraNames) {
       // Should this be awaited?
-      _session(
+      _ensureSession(
         camera: camera,
         timeBudget: Duration(seconds: 120),
         targetTimestamp:
             "1", // This is never possible, so it'll go until it runs out
-        onTargetReady: (success) {},
       );
     }
   }
@@ -157,14 +189,23 @@ class ThumbnailManager {
         while (sw.elapsed <= timeBudget) {
           // Epoch for this starts at 2 when not set from before.
           final epoch = await readEpoch(camera, "thumbnail");
+          final assumedEpoch = epoch > 0 ? epoch - 1 : 0;
           Log.d("Thumbnail Epoch = $epoch");
           final fileName = "encThumbnail$epoch";
+          final downloadSw = Stopwatch()..start();
           var result = await HttpClientService.instance.download(
             destinationFile: fileName,
             cameraName: camera,
             serverFile: epoch.toString(),
             type: Group.thumbnail,
+            timeout: _downloadTimeout,
           );
+          downloadSw.stop();
+          if (!kReleaseMode) {
+            Log.d(
+              "[perf] Download thumbnail $camera epoch $epoch in ${downloadSw.elapsedMilliseconds}ms (ok=${result.isSuccess})",
+            );
+          }
 
           if (result.isFailure) break;
 
@@ -175,15 +216,60 @@ class ThumbnailManager {
 
           // Decode the thumbnail
           var file = result.value!.file!;
-          var decFileName = await decryptThumbnail(
-            cameraName: camera,
-            encFilename: fileName,
-            pendingMetaDirectory: metaDir.path,
-          );
+          String decFileName;
+          final decryptSw = Stopwatch()..start();
+          try {
+            decFileName =
+                await decryptThumbnail(
+                  cameraName: camera,
+                  encFilename: fileName,
+                  pendingMetaDirectory: metaDir.path,
+                  assumedEpoch: BigInt.from(assumedEpoch),
+                ).timeout(_decryptTimeout);
+          } on TimeoutException {
+            Log.e(
+              "Thumbnail decrypt timeout for $camera after ${_decryptTimeout.inSeconds}s",
+            );
+            return;
+          }
+          decryptSw.stop();
+          if (!kReleaseMode) {
+            Log.d(
+              "[perf] Decrypt thumbnail $camera $fileName in ${decryptSw.elapsedMilliseconds}ms (result=$decFileName)",
+            );
+          }
+
+          if (decFileName.startsWith("Error")) {
+            Log.w("Thumbnail decrypt failed for $camera epoch $epoch: $decFileName");
+            final forceOk = await _maybeForceInit(camera, "decrypt_thumbnail");
+            if (forceOk) {
+              final retrySw = Stopwatch()..start();
+              try {
+                decFileName =
+                    await decryptThumbnail(
+                      cameraName: camera,
+                      encFilename: fileName,
+                      pendingMetaDirectory: metaDir.path,
+                      assumedEpoch: BigInt.from(assumedEpoch),
+                    ).timeout(_decryptTimeout);
+              } on TimeoutException {
+                Log.e(
+                  "Thumbnail decrypt timeout after forced init for $camera",
+                );
+                return;
+              }
+              retrySw.stop();
+              if (!kReleaseMode) {
+                Log.d(
+                  "[perf] Decrypt thumbnail retry $camera $fileName in ${retrySw.elapsedMilliseconds}ms (result=$decFileName)",
+                );
+              }
+            }
+          }
 
           Log.d("Thumbnail dec file name = $decFileName");
 
-          if (decFileName != "Error") {
+          if (!decFileName.startsWith("Error")) {
             final decPath = p.join(
               baseDir.path,
               'camera_dir_$camera',
@@ -208,7 +294,9 @@ class ThumbnailManager {
               onTargetReady(true);
             }
           } else {
-            // TODO: What do we do here? We probably shouldn't increment the epoch if we hit an error..
+            Log.e(
+              "Thumbnail decrypt failed for $camera epoch $epoch; leaving epoch unchanged",
+            );
             return;
           }
 
@@ -243,14 +331,23 @@ class ThumbnailManager {
 
         // Epoch for this starts at 2 when not set from before.
         final epoch = await readEpoch(camera, "thumbnail");
+        final assumedEpoch = epoch > 0 ? epoch - 1 : 0;
         Log.d("Thumbnail Epoch = $epoch");
         final fileName = "encThumbnail$epoch";
+        final downloadSw = Stopwatch()..start();
         var result = await HttpClientService.instance.download(
           destinationFile: fileName,
           cameraName: camera,
           serverFile: epoch.toString(),
           type: Group.thumbnail,
+          timeout: _downloadTimeout,
         );
+        downloadSw.stop();
+        if (!kReleaseMode) {
+          Log.d(
+            "[perf] Download thumbnail $camera epoch $epoch in ${downloadSw.elapsedMilliseconds}ms (ok=${result.isSuccess})",
+          );
+        }
 
         if (result.isFailure) return;
 
@@ -261,15 +358,60 @@ class ThumbnailManager {
 
         // Decode the thumbnail
         var file = result.value!.file!;
-        var decFileName = await decryptThumbnail(
-          cameraName: camera,
-          encFilename: fileName,
-          pendingMetaDirectory: metaDir.path,
-        );
+        String decFileName;
+        final decryptSw = Stopwatch()..start();
+        try {
+          decFileName =
+              await decryptThumbnail(
+                cameraName: camera,
+                encFilename: fileName,
+                pendingMetaDirectory: metaDir.path,
+                assumedEpoch: BigInt.from(assumedEpoch),
+              ).timeout(_decryptTimeout);
+        } on TimeoutException {
+          Log.e(
+            "Thumbnail decrypt timeout for $camera after ${_decryptTimeout.inSeconds}s",
+          );
+          return;
+        }
+        decryptSw.stop();
+        if (!kReleaseMode) {
+          Log.d(
+            "[perf] Decrypt thumbnail $camera $fileName in ${decryptSw.elapsedMilliseconds}ms (result=$decFileName)",
+          );
+        }
+
+        if (decFileName.startsWith("Error")) {
+          Log.w("Thumbnail decrypt failed for $camera epoch $epoch: $decFileName");
+          final forceOk = await _maybeForceInit(camera, "decrypt_thumbnail");
+          if (forceOk) {
+            final retrySw = Stopwatch()..start();
+            try {
+              decFileName =
+                  await decryptThumbnail(
+                    cameraName: camera,
+                    encFilename: fileName,
+                    pendingMetaDirectory: metaDir.path,
+                    assumedEpoch: BigInt.from(assumedEpoch),
+                  ).timeout(_decryptTimeout);
+            } on TimeoutException {
+              Log.e(
+                "Thumbnail decrypt timeout after forced init for $camera",
+              );
+              return;
+            }
+            retrySw.stop();
+            if (!kReleaseMode) {
+              Log.d(
+                "[perf] Decrypt thumbnail retry $camera $fileName in ${retrySw.elapsedMilliseconds}ms (result=$decFileName)",
+              );
+            }
+          }
+        }
 
         Log.d("Thumbnail dec file name = $decFileName");
 
-        if (decFileName != "Error") {
+        if (!decFileName.startsWith("Error")) {
           final decPath = p.join(
             baseDir.path,
             'camera_dir_$camera',
@@ -285,7 +427,9 @@ class ThumbnailManager {
           await file.delete();
           ThumbnailNotifier.instance.notify(camera);
         } else {
-          // TODO: What do we do here? We probably shouldn't increment the epoch if we hit an error..
+          Log.e(
+            "Thumbnail decrypt failed for $camera epoch $epoch; leaving epoch unchanged",
+          );
           return;
         }
 
