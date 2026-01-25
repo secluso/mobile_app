@@ -53,6 +53,7 @@ class RustBridgeHelper {
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Initialize the background isolate
   WidgetsFlutterBinding.ensureInitialized();
+  Log.init();
   DartPluginRegistrant.ensureInitialized();
   await initLocalNotifications();
 

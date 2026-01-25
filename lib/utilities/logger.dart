@@ -13,33 +13,37 @@ class LogMessage {
 
 class Log {
   static void init() {
-    _logger = Logger(
-      level: kReleaseMode ? Level.warning : Level.debug,
-      printer: _OneLinePrinter(debugMode: !kReleaseMode),
-    );
+    _logger = _buildLogger();
   }
 
-  static void d(dynamic msg, {String customLocation = ""}) => _logger.d(
+  static Logger _buildLogger() => Logger(
+    level: kReleaseMode ? Level.warning : Level.debug,
+    printer: _OneLinePrinter(debugMode: !kReleaseMode),
+  );
+
+  static Logger _ensureLogger() => _logger ??= _buildLogger();
+
+  static void d(dynamic msg, {String customLocation = ""}) => _ensureLogger().d(
     LogMessage(msg, customLocation: customLocation),
     stackTrace: StackTrace.current,
   );
 
-  static void i(dynamic msg, {String customLocation = ""}) => _logger.i(
+  static void i(dynamic msg, {String customLocation = ""}) => _ensureLogger().i(
     LogMessage(msg, customLocation: customLocation),
     stackTrace: StackTrace.current,
   );
 
-  static void w(dynamic msg, {String customLocation = ""}) => _logger.w(
+  static void w(dynamic msg, {String customLocation = ""}) => _ensureLogger().w(
     LogMessage(msg, customLocation: customLocation),
     stackTrace: StackTrace.current,
   );
 
-  static void e(dynamic msg, {String customLocation = ""}) => _logger.e(
+  static void e(dynamic msg, {String customLocation = ""}) => _ensureLogger().e(
     LogMessage(msg, customLocation: customLocation),
     stackTrace: StackTrace.current,
   );
 
-  static late final Logger _logger;
+  static Logger? _logger;
 }
 
 class _OneLinePrinter extends LogPrinter {

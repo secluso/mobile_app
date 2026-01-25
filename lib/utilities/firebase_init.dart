@@ -17,6 +17,7 @@ class FirebaseInit {
     _c = Completer<FirebaseApp>();
     () async {
       try {
+        Log.init();
         // If already initialized earlier in Dart, this succeeds.
         FirebaseApp app;
         try {

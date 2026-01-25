@@ -295,15 +295,11 @@ class SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              theme.colorScheme.surface,
-              theme.colorScheme.surfaceVariant,
-            ],
+            colors: [Color(0xFF8BB3EE), Color(0xFF71A0E7)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -315,18 +311,28 @@ class SplashScreen extends StatelessWidget {
               children: [
                 Image.asset('assets/icon_centered.png', width: 96, height: 96),
                 const SizedBox(height: 16),
-                Text('Secluso', style: theme.textTheme.headlineSmall),
+                Text(
+                  'Secluso',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 if (errorMessage == null) ...[
                   const SizedBox(height: 8),
-                  const CircularProgressIndicator(),
+                  const CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
                 ] else
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Text(
                       errorMessage!,
                       textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyMedium,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(color: Colors.white),
                     ),
                   ),
               ],
