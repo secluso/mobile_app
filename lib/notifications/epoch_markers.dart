@@ -19,15 +19,16 @@ Future<bool> hasEpochMarker(String cameraName, String kind, int epoch) async {
   return file.exists();
 }
 
-Future<void> writeEpochMarker(
-  String cameraName,
-  String kind,
-  int epoch,
-) async {
+Future<String?> readEpochMarker(String cameraName, String kind, int epoch) async {
   final file = await _markerFile(cameraName, kind, epoch);
-  if (await file.exists()) {
-    return;
+  if (!await file.exists()) {
+    return null;
   }
-  await file.create(recursive: true);
-  await file.writeAsString(DateTime.now().toIso8601String());
+  try {
+    final content = await file.readAsString();
+    final trimmed = content.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  } catch (_) {
+    return null;
+  }
 }

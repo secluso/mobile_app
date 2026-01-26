@@ -53,6 +53,37 @@ bool _isEpochMismatch(String message) {
       message.contains("group epoch");
 }
 
+Future<void> _enqueuePendingVideo(String cameraName, String decFileName) async {
+  final baseDir = await getApplicationDocumentsDirectory();
+  final filePath = p.join(
+    baseDir.path,
+    'waiting',
+    'camera_$cameraName',
+    decFileName,
+  );
+
+  final parentDir = Directory(p.dirname(filePath));
+  if (!await parentDir.exists()) {
+    await parentDir.create(recursive: true);
+  }
+
+  final creationIndicationFile = File(filePath);
+  if (!await creationIndicationFile.exists()) {
+    await creationIndicationFile.create();
+  }
+
+  SendPort? port = IsolateNameServer.lookupPortByName(
+    'queue_processor_signal_port',
+  );
+  port?.send('signal_new_file');
+
+  if (UiState.isBindingReady) {
+    camerasPageKey.currentState?.invalidateThumbnail(cameraName);
+  } else {
+    Log.d("Skipping thumbnail invalidate; UI not initialized");
+  }
+}
+
 Future<bool> _maybeForceInit(String cameraName, String reason) async {
   final now = DateTime.now();
   final lastAttempt = _forceInitLast[cameraName];
@@ -386,8 +417,24 @@ Future<bool> retrieveVideos(String cameraName) async {
         if (decFileName.startsWith("Error")) {
           Log.w("Decrypt failed for $cameraName epoch $epoch: $decFileName");
           if (_isEpochMismatch(decFileName)) {
-            final hasMarker = await hasEpochMarker(cameraName, "motion", epoch);
-            if (hasMarker) {
+            final markerPayload =
+                await readEpochMarker(cameraName, "motion", epoch);
+            if (markerPayload != null) {
+              final baseDir = await getApplicationDocumentsDirectory();
+              final decPath = p.join(
+                baseDir.path,
+                'camera_dir_$cameraName',
+                'videos',
+                markerPayload,
+              );
+              final decFile = File(decPath);
+              if (await decFile.exists()) {
+                await _enqueuePendingVideo(cameraName, markerPayload);
+              } else {
+                Log.w(
+                  "Epoch marker exists but decrypted file missing: $decPath",
+                );
+              }
               Log.w(
                 "Epoch mismatch for $cameraName epoch $epoch but marker exists; treating as duplicate",
               );
@@ -401,6 +448,10 @@ Future<bool> retrieveVideos(String cameraName) async {
               );
               epoch += 1;
               continue;
+            } else {
+              Log.w(
+                "Epoch marker exists for $cameraName epoch $epoch but no payload; not skipping",
+              );
             }
           }
           final forceOk = await _maybeForceInit(cameraName, "decrypt_video");
@@ -435,38 +486,7 @@ Future<bool> retrieveVideos(String cameraName) async {
         Log.d("Received 100%");
 
         if (decFileName != "Duplicate") {
-          final baseDir = await getApplicationDocumentsDirectory();
-
-          final filePath = p.join(
-            baseDir.path,
-            'waiting',
-            'camera_$cameraName',
-            decFileName,
-          );
-
-          final parentDir = Directory(p.dirname(filePath));
-          if (!await parentDir.exists()) {
-            await parentDir.create(recursive: true);
-          }
-
-          // Write an empty file to this pending directory to signal that it needs to be processed to our main processing thread (upon app startup, etc)
-          // TODO: We should check if this fails and make contingencies.
-
-          final creationIndicationFile = File(filePath);
-          if (!await creationIndicationFile.exists()) {
-            await creationIndicationFile.create();
-          }
-
-          SendPort? port = IsolateNameServer.lookupPortByName(
-            'queue_processor_signal_port',
-          );
-          port?.send('signal_new_file');
-
-          if (UiState.isBindingReady) {
-            camerasPageKey.currentState?.invalidateThumbnail(cameraName);
-          } else {
-            Log.d("Skipping thumbnail invalidate; UI not initialized");
-          }
+          await _enqueuePendingVideo(cameraName, decFileName);
         }
 
         await writeEpoch(cameraName, "video", epoch + 1);

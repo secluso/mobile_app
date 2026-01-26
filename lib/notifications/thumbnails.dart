@@ -43,6 +43,10 @@ class ThumbnailManager {
     return message.contains("message epoch") && message.contains("group epoch");
   }
 
+  static bool _isThumbnailFilename(String name) {
+    return name.startsWith("thumbnail_") && name.endsWith(".png");
+  }
+
   static Future<bool> _maybeForceInit(String camera, String reason) async {
     final now = DateTime.now();
     final lastAttempt = _forceInitLast[camera];
@@ -247,12 +251,23 @@ class ThumbnailManager {
           if (decFileName.startsWith("Error")) {
             Log.w("Thumbnail decrypt failed for $camera epoch $epoch: $decFileName");
             if (_isEpochMismatch(decFileName)) {
-              final hasMarker = await hasEpochMarker(
-                camera,
-                "thumbnail",
-                epoch,
-              );
-              if (hasMarker) {
+              final markerPayload =
+                  await readEpochMarker(camera, "thumbnail", epoch);
+              if (markerPayload != null && _isThumbnailFilename(markerPayload)) {
+                final baseDir = await getApplicationDocumentsDirectory();
+                final decPath = p.join(
+                  baseDir.path,
+                  'camera_dir_$camera',
+                  'videos',
+                  markerPayload,
+                );
+                if (await File(decPath).exists()) {
+                  ThumbnailNotifier.instance.notify(camera);
+                } else {
+                  Log.w(
+                    "Epoch marker exists but thumbnail file missing: $decPath",
+                  );
+                }
                 Log.w(
                   "Epoch mismatch for $camera thumbnail $epoch but marker exists; treating as duplicate",
                 );
@@ -265,6 +280,10 @@ class ThumbnailManager {
                   type: Group.thumbnail,
                 );
                 continue;
+              } else if (markerPayload != null) {
+                Log.w(
+                  "Epoch marker exists for $camera thumbnail $epoch but payload is invalid; not skipping",
+                );
               }
             }
             final forceOk = await _maybeForceInit(camera, "decrypt_thumbnail");
@@ -480,7 +499,6 @@ class ThumbnailManager {
           return;
         }
 
-        await writeEpochMarker(camera, "thumbnail", epoch);
         await writeEpoch(camera, "thumbnail", epoch + 1);
 
         await HttpClientService.instance.delete(
