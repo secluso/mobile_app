@@ -21,6 +21,7 @@ import 'package:secluso_flutter/routes/camera/list_cameras.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
+import 'package:secluso_flutter/notifications/notification_permissions.dart';
 import 'proprietary_camera_option.dart';
 import 'package:path/path.dart' as p;
 
@@ -179,6 +180,7 @@ class _ProprietaryCameraWaitingDialogState
     prefs.remove(PrefKeys.lastCameraAdd);
 
     final existingSet = prefs.getStringList(PrefKeys.cameraSet) ?? <String>[];
+    final wasFirstCamera = existingSet.isEmpty;
     if (!existingSet.contains(widget.cameraName)) {
       existingSet.add(widget.cameraName);
       await prefs.setStringList(PrefKeys.cameraSet, existingSet);
@@ -211,6 +213,10 @@ class _ProprietaryCameraWaitingDialogState
     CameraListNotifier.instance.refreshCallback?.call();
 
     if (!mounted) return;
+
+    if (wasFirstCamera) {
+      await requestNotificationsAfterFirstCameraAdd();
+    }
 
     Navigator.popUntil(context, (route) => route.isFirst);
   }

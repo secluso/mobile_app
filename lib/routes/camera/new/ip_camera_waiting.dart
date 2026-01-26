@@ -11,6 +11,7 @@ import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
 import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/notifications/notification_permissions.dart';
 
 class CameraSetupStatusDialog extends StatefulWidget {
   final Map<String, dynamic> result;
@@ -81,6 +82,7 @@ class _CameraSetupStatusDialogState extends State<CameraSetupStatusDialog> {
 
     final existingCameraSet =
         prefs.getStringList(PrefKeys.cameraSet) ?? <String>[];
+    final wasFirstCamera = existingCameraSet.isEmpty;
     if (!existingCameraSet.contains(cameraName)) {
       existingCameraSet.add(cameraName);
       await prefs.setStringList(PrefKeys.cameraSet, existingCameraSet);
@@ -104,6 +106,10 @@ class _CameraSetupStatusDialogState extends State<CameraSetupStatusDialog> {
     box.put(Camera(cameraName));
 
     CameraListNotifier.instance.refreshCallback?.call();
+
+    if (wasFirstCamera) {
+      await requestNotificationsAfterFirstCameraAdd();
+    }
   }
 
   @override
