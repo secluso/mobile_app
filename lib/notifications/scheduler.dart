@@ -194,15 +194,15 @@ class DownloadScheduler {
         await unlock(Constants.cameraWaitingLock);
       }
     } else {
-      if (!lockSucceeded) Log.e("Failed to acquire motion lock");
+      if (!lockSucceeded) Log.w("Failed to acquire motion lock");
     }
 
     // Enqueue ONE BG task (15-min rule on iOS)
     // It's not an issue if this doesn't run due to a currently running task. The currently running task will see a new camera added and queue another from itself.
     if ((isBroadcast || cameraName != null) &&
         (Platform.isIOS ||
-        (Platform.isAndroid &&
-            !await Workmanager().isScheduledByUniqueName(_bgTaskId)))) {
+            (Platform.isAndroid &&
+                !await Workmanager().isScheduledByUniqueName(_bgTaskId)))) {
       await Workmanager().cancelByUniqueName(_bgTaskId); // ensure none pending
       await Workmanager().registerOneOffTask(
         _bgTaskId,

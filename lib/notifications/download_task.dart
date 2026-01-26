@@ -250,7 +250,7 @@ Future<bool> doWorkBackground() async {
           return currentState;
         }
       } else {
-        Log.e("Failed to acquire motion lock");
+        Log.w("Failed to acquire motion lock");
       }
     } finally {
       await unlock(
