@@ -14,6 +14,7 @@ import 'package:secluso_flutter/utilities/lock.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/utilities/ui_state.dart';
 import 'package:secluso_flutter/notifications/download_status.dart';
+import 'package:secluso_flutter/notifications/epoch_markers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'dart:io';
@@ -46,6 +47,11 @@ class RustBridgeHelper {
 const Duration _forceInitCooldown = Duration(seconds: 30);
 const Duration _forceInitTimeout = Duration(seconds: 8);
 final Map<String, DateTime> _forceInitLast = {};
+
+bool _isEpochMismatch(String message) {
+  return message.contains("message epoch") &&
+      message.contains("group epoch");
+}
 
 Future<bool> _maybeForceInit(String cameraName, String reason) async {
   final now = DateTime.now();
@@ -379,6 +385,24 @@ Future<bool> retrieveVideos(String cameraName) async {
         }
         if (decFileName.startsWith("Error")) {
           Log.w("Decrypt failed for $cameraName epoch $epoch: $decFileName");
+          if (_isEpochMismatch(decFileName)) {
+            final hasMarker = await hasEpochMarker(cameraName, "motion", epoch);
+            if (hasMarker) {
+              Log.w(
+                "Epoch mismatch for $cameraName epoch $epoch but marker exists; treating as duplicate",
+              );
+              await file.delete();
+              await writeEpoch(cameraName, "video", epoch + 1);
+              await HttpClientService.instance.delete(
+                destinationFile: fileName,
+                cameraName: cameraName,
+                serverFile: epoch.toString(),
+                type: Group.motion,
+              );
+              epoch += 1;
+              continue;
+            }
+          }
           final forceOk = await _maybeForceInit(cameraName, "decrypt_video");
           if (forceOk) {
             final retrySw = Stopwatch()..start();

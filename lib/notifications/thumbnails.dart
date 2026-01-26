@@ -15,6 +15,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
+import 'package:secluso_flutter/notifications/epoch_markers.dart';
 
 class ThumbnailManager {
   static const Duration _stableWaitTimeout = Duration(seconds: 2);
@@ -37,6 +38,10 @@ class ThumbnailManager {
     0x1A,
     0x0A,
   ];
+
+  static bool _isEpochMismatch(String message) {
+    return message.contains("message epoch") && message.contains("group epoch");
+  }
 
   static Future<bool> _maybeForceInit(String camera, String reason) async {
     final now = DateTime.now();
@@ -241,6 +246,27 @@ class ThumbnailManager {
 
           if (decFileName.startsWith("Error")) {
             Log.w("Thumbnail decrypt failed for $camera epoch $epoch: $decFileName");
+            if (_isEpochMismatch(decFileName)) {
+              final hasMarker = await hasEpochMarker(
+                camera,
+                "thumbnail",
+                epoch,
+              );
+              if (hasMarker) {
+                Log.w(
+                  "Epoch mismatch for $camera thumbnail $epoch but marker exists; treating as duplicate",
+                );
+                await file.delete();
+                await writeEpoch(camera, "thumbnail", epoch + 1);
+                await HttpClientService.instance.delete(
+                  destinationFile: fileName,
+                  cameraName: camera,
+                  serverFile: epoch.toString(),
+                  type: Group.thumbnail,
+                );
+                continue;
+              }
+            }
             final forceOk = await _maybeForceInit(camera, "decrypt_thumbnail");
             if (forceOk) {
               final retrySw = Stopwatch()..start();
@@ -383,6 +409,27 @@ class ThumbnailManager {
 
         if (decFileName.startsWith("Error")) {
           Log.w("Thumbnail decrypt failed for $camera epoch $epoch: $decFileName");
+          if (_isEpochMismatch(decFileName)) {
+            final hasMarker = await hasEpochMarker(
+              camera,
+              "thumbnail",
+              epoch,
+            );
+            if (hasMarker) {
+              Log.w(
+                "Epoch mismatch for $camera thumbnail $epoch but marker exists; treating as duplicate",
+              );
+              await file.delete();
+              await writeEpoch(camera, "thumbnail", epoch + 1);
+              await HttpClientService.instance.delete(
+                destinationFile: fileName,
+                cameraName: camera,
+                serverFile: epoch.toString(),
+                type: Group.thumbnail,
+              );
+              return;
+            }
+          }
           final forceOk = await _maybeForceInit(camera, "decrypt_thumbnail");
           if (forceOk) {
             final retrySw = Stopwatch()..start();
@@ -433,6 +480,7 @@ class ThumbnailManager {
           return;
         }
 
+        await writeEpochMarker(camera, "thumbnail", epoch);
         await writeEpoch(camera, "thumbnail", epoch + 1);
 
         await HttpClientService.instance.delete(
