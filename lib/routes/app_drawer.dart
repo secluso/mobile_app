@@ -7,6 +7,7 @@ import 'theme_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/src/rust/api.dart';
 
 final GlobalKey<CamerasPageState> camerasPageKey =
     GlobalKey<CamerasPageState>();
@@ -120,31 +121,47 @@ class _AppDrawerState extends State<AppDrawer> {
                   'Settings',
                   () => _showSettingsSheet(context, themeProvider),
                 ),
-
-                _buildDrawerItem(
-                  themeProvider,
-                  Icons.description,
-                  'Licenses',
-                  () {
-                    showLicensePage(
-                      context: context,
-                      applicationName: 'Secluso Camera',
-                      applicationVersion:
-                          'v0.1', //TODO: Update this dynamically
-                      applicationIcon: Image.asset(
-                        'assets/icon_centered.png',
-                        width: 200,
-                        height: 200,
+                Spacer(),
+                Divider(height: 1),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    child: Tooltip(
+                      message: 'Licenses',
+                      child: IconButton(
+                        icon: Icon(Icons.description_outlined),
+                        color:
+                            themeProvider.isDarkMode ? Colors.white : Colors.black,
+                        onPressed: () async => _openLicenses(context),
                       ),
-                      applicationLegalese: '© 2025 Secluso',
-                    );
-                  },
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _openLicenses(BuildContext context) async {
+    final clientVersion = await rustLibVersion();
+    final currentYear = DateTime.now().year;
+    showLicensePage(
+      context: context,
+      applicationName: 'Secluso Camera',
+      applicationVersion: clientVersion,
+      applicationIcon: Image.asset(
+        'assets/icon_centered.png',
+        width: 200,
+        height: 200,
+      ),
+      applicationLegalese: '© $currentYear Secluso',
     );
   }
 
