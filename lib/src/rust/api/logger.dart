@@ -7,9 +7,9 @@ import '../frb_generated.dart';
 import '../lib.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `record_to_entry`
-// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `SEND_TO_DART_LOGGER_STREAM_SINK`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `as_log`, `config`, `deref`, `enabled`, `flush`, `initialize`, `level`, `log`
+// These functions are ignored because they are not marked as `pub`: `current_log_trace`, `record_to_entry`, `set_log_trace`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `LogTraceGuard`, `SEND_TO_DART_LOGGER_STREAM_SINK`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `as_log`, `config`, `deref`, `drop`, `enabled`, `flush`, `initialize`, `level`, `log`
 
 Stream<LogEntry> createLogStream() =>
     RustLib.instance.api.crateApiLoggerCreateLogStream();
@@ -36,17 +36,23 @@ class LogEntry {
   final int level;
   final String tag;
   final String msg;
+  final String? traceId;
 
   const LogEntry({
     required this.timeMillis,
     required this.level,
     required this.tag,
     required this.msg,
+    this.traceId,
   });
 
   @override
   int get hashCode =>
-      timeMillis.hashCode ^ level.hashCode ^ tag.hashCode ^ msg.hashCode;
+      timeMillis.hashCode ^
+      level.hashCode ^
+      tag.hashCode ^
+      msg.hashCode ^
+      traceId.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -56,5 +62,6 @@ class LogEntry {
           timeMillis == other.timeMillis &&
           level == other.level &&
           tag == other.tag &&
-          msg == other.msg;
+          msg == other.msg &&
+          traceId == other.traceId;
 }

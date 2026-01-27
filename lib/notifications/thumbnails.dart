@@ -6,7 +6,7 @@ import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/routes/camera/list_cameras.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:secluso_flutter/src/rust/api.dart';
+import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/lock.dart';
 import 'package:path_provider/path_provider.dart';
@@ -43,6 +43,10 @@ class ThumbnailManager {
     return message.contains("message epoch") && message.contains("group epoch");
   }
 
+  static bool _isBusyError(String message) {
+    return message.contains("Error: Busy");
+  }
+
   static bool _isThumbnailFilename(String name) {
     return name.startsWith("thumbnail_") && name.endsWith(".png");
   }
@@ -59,7 +63,12 @@ class ThumbnailManager {
     }
     _forceInitLast[camera] = now;
     Log.w("[thumbnail] Forcing init for $camera (reason=$reason)");
-    return await initialize(camera, timeout: _forceInitTimeout, force: true);
+    final outcome = await initialize(
+      camera,
+      timeout: _forceInitTimeout,
+      force: true,
+    );
+    return outcome.isOk;
   }
 
   static bool _looksLikePngHeader(Uint8List bytes) {
@@ -184,18 +193,26 @@ class ThumbnailManager {
     required void Function(bool)
     onTargetReady, //true = found, false = not found
   }) async {
-    Log.d("Entered thumbnail session");
-    // There's a chance a thumbnail could be requested multiple times at once for a given camera. So we need to lock this function per-camera to ensure that doesn't occur.
-    if (await lock("thumbnail$camera.lock")) {
-      try {
-        if (!await initialize(camera)) {
-          Log.e("Thumbnail init failed for camera $camera");
-          return;
-        }
+    return Log.runWithDerivedContext('thumb', () async {
+      Log.d("Entered thumbnail session");
+      // There's a chance a thumbnail could be requested multiple times at once for a given camera. So we need to lock this function per-camera to ensure that doesn't occur.
+      if (await lock("thumbnail$camera.lock")) {
+        try {
+          final initOutcome = await initialize(camera);
+          if (!initOutcome.isOk) {
+            if (initOutcome == InitOutcome.timeout) {
+              Log.w(
+                "Thumbnail init timeout for camera $camera (${Log.ownerTag()})",
+              );
+            } else {
+              Log.e("Thumbnail init failed for camera $camera");
+            }
+            return;
+          }
 
-        final sw = Stopwatch()..start();
+          final sw = Stopwatch()..start();
 
-        while (sw.elapsed <= timeBudget) {
+          while (sw.elapsed <= timeBudget) {
           // Epoch for this starts at 2 when not set from before.
           final epoch = await readEpoch(camera, "thumbnail");
           final assumedEpoch = epoch > 0 ? epoch - 1 : 0;
@@ -236,9 +253,9 @@ class ThumbnailManager {
                   assumedEpoch: BigInt.from(assumedEpoch),
                 ).timeout(_decryptTimeout);
           } on TimeoutException {
-            Log.e(
-              "Thumbnail decrypt timeout for $camera after ${_decryptTimeout.inSeconds}s",
-            );
+              Log.e(
+                "Thumbnail decrypt timeout for $camera after ${_decryptTimeout.inSeconds}s (${Log.ownerTag()})",
+              );
             return;
           }
           decryptSw.stop();
@@ -250,6 +267,12 @@ class ThumbnailManager {
 
           if (decFileName.startsWith("Error")) {
             Log.w("Thumbnail decrypt failed for $camera epoch $epoch: $decFileName");
+            if (_isBusyError(decFileName)) {
+              Log.w(
+                "Thumbnail decrypt busy for $camera epoch $epoch; skipping for now",
+              );
+              return;
+            }
             if (_isEpochMismatch(decFileName)) {
               final markerPayload =
                   await readEpochMarker(camera, "thumbnail", epoch);
@@ -299,7 +322,7 @@ class ThumbnailManager {
                     ).timeout(_decryptTimeout);
               } on TimeoutException {
                 Log.e(
-                  "Thumbnail decrypt timeout after forced init for $camera",
+                  "Thumbnail decrypt timeout after forced init for $camera (${Log.ownerTag()})",
                 );
                 return;
               }
@@ -313,6 +336,40 @@ class ThumbnailManager {
           }
 
           Log.d("Thumbnail dec file name = $decFileName");
+
+          if (decFileName == "Duplicate") {
+            final markerPayload =
+                await readEpochMarker(camera, "thumbnail", epoch);
+            if (markerPayload != null && _isThumbnailFilename(markerPayload)) {
+              final baseDir = await getApplicationDocumentsDirectory();
+              final decPath = p.join(
+                baseDir.path,
+                'camera_dir_$camera',
+                'videos',
+                markerPayload,
+              );
+              if (await File(decPath).exists()) {
+                ThumbnailNotifier.instance.notify(camera);
+                if (markerPayload == "thumbnail_$targetTimestamp.png") {
+                  Log.d("Received target thumbnail");
+                  onTargetReady(true);
+                  return;
+                }
+              } else {
+                Log.w("Duplicate thumbnail marker missing file: $decPath");
+              }
+            }
+
+            await file.delete();
+            await writeEpoch(camera, "thumbnail", epoch + 1);
+            await HttpClientService.instance.delete(
+              destinationFile: fileName,
+              cameraName: camera,
+              serverFile: epoch.toString(),
+              type: Group.thumbnail,
+            );
+            continue;
+          }
 
           if (!decFileName.startsWith("Error")) {
             final decPath = p.join(
@@ -354,25 +411,34 @@ class ThumbnailManager {
             type: Group.thumbnail,
           );
         }
-      } finally {
-        await unlock(
-          "thumbnail$camera.lock",
-        ); // Always ensure this unlocks, even on exceptions
+        } finally {
+          await unlock(
+            "thumbnail$camera.lock",
+          ); // Always ensure this unlocks, even on exceptions
+        }
+      } else {
+        Log.w("Thumbnail session lock busy; skipping this cycle");
       }
-    } else {
-      Log.e("Failed to acquire thumbnail session lock");
-    }
+    });
   }
 
   // RetriveAllThumbnails of a camera
   static Future<void> retrieveThumbnails({required String camera}) async {
-    Log.d("Entered retrieveThumbnails");
-    if (await lock("thumbnail$camera.lock")) {
-      try {
-        if (!await initialize(camera)) {
-          Log.e("Thumbnail init failed for camera $camera");
-          return;
-        }
+    return Log.runWithDerivedContext('thumb', () async {
+      Log.d("Entered retrieveThumbnails");
+      if (await lock("thumbnail$camera.lock")) {
+        try {
+          final initOutcome = await initialize(camera);
+          if (!initOutcome.isOk) {
+            if (initOutcome == InitOutcome.timeout) {
+              Log.w(
+                "Thumbnail init timeout for camera $camera (${Log.ownerTag()})",
+              );
+            } else {
+              Log.e("Thumbnail init failed for camera $camera");
+            }
+            return;
+          }
 
         // Epoch for this starts at 2 when not set from before.
         final epoch = await readEpoch(camera, "thumbnail");
@@ -414,9 +480,9 @@ class ThumbnailManager {
                 assumedEpoch: BigInt.from(assumedEpoch),
               ).timeout(_decryptTimeout);
         } on TimeoutException {
-          Log.e(
-            "Thumbnail decrypt timeout for $camera after ${_decryptTimeout.inSeconds}s",
-          );
+            Log.e(
+              "Thumbnail decrypt timeout for $camera after ${_decryptTimeout.inSeconds}s (${Log.ownerTag()})",
+            );
           return;
         }
         decryptSw.stop();
@@ -428,13 +494,30 @@ class ThumbnailManager {
 
         if (decFileName.startsWith("Error")) {
           Log.w("Thumbnail decrypt failed for $camera epoch $epoch: $decFileName");
-          if (_isEpochMismatch(decFileName)) {
-            final hasMarker = await hasEpochMarker(
-              camera,
-              "thumbnail",
-              epoch,
+          if (_isBusyError(decFileName)) {
+            Log.w(
+              "Thumbnail decrypt busy for $camera epoch $epoch; skipping for now",
             );
-            if (hasMarker) {
+            return;
+          }
+          if (_isEpochMismatch(decFileName)) {
+            final markerPayload =
+                await readEpochMarker(camera, "thumbnail", epoch);
+            if (markerPayload != null && _isThumbnailFilename(markerPayload)) {
+              final baseDir = await getApplicationDocumentsDirectory();
+              final decPath = p.join(
+                baseDir.path,
+                'camera_dir_$camera',
+                'videos',
+                markerPayload,
+              );
+              if (await File(decPath).exists()) {
+                ThumbnailNotifier.instance.notify(camera);
+              } else {
+                Log.w(
+                  "Epoch marker exists but thumbnail file missing: $decPath",
+                );
+              }
               Log.w(
                 "Epoch mismatch for $camera thumbnail $epoch but marker exists; treating as duplicate",
               );
@@ -447,6 +530,10 @@ class ThumbnailManager {
                 type: Group.thumbnail,
               );
               return;
+            } else if (markerPayload != null) {
+              Log.w(
+                "Epoch marker exists for $camera thumbnail $epoch but payload is invalid; not skipping",
+              );
             }
           }
           final forceOk = await _maybeForceInit(camera, "decrypt_thumbnail");
@@ -462,7 +549,7 @@ class ThumbnailManager {
                   ).timeout(_decryptTimeout);
             } on TimeoutException {
               Log.e(
-                "Thumbnail decrypt timeout after forced init for $camera",
+                "Thumbnail decrypt timeout after forced init for $camera (${Log.ownerTag()})",
               );
               return;
             }
@@ -476,6 +563,35 @@ class ThumbnailManager {
         }
 
         Log.d("Thumbnail dec file name = $decFileName");
+
+        if (decFileName == "Duplicate") {
+          final markerPayload =
+              await readEpochMarker(camera, "thumbnail", epoch);
+          if (markerPayload != null && _isThumbnailFilename(markerPayload)) {
+            final baseDir = await getApplicationDocumentsDirectory();
+            final decPath = p.join(
+              baseDir.path,
+              'camera_dir_$camera',
+              'videos',
+              markerPayload,
+            );
+            if (await File(decPath).exists()) {
+              ThumbnailNotifier.instance.notify(camera);
+            } else {
+              Log.w("Duplicate thumbnail marker missing file: $decPath");
+            }
+          }
+
+          await file.delete();
+          await writeEpoch(camera, "thumbnail", epoch + 1);
+          await HttpClientService.instance.delete(
+            destinationFile: fileName,
+            cameraName: camera,
+            serverFile: epoch.toString(),
+            type: Group.thumbnail,
+          );
+          return;
+        }
 
         if (!decFileName.startsWith("Error")) {
           final decPath = p.join(
@@ -507,13 +623,14 @@ class ThumbnailManager {
           serverFile: epoch.toString(),
           type: Group.thumbnail,
         );
-      } finally {
-        await unlock(
-          "thumbnail$camera.lock",
-        ); // Always ensure this unlocks, even on exceptions
+        } finally {
+          await unlock(
+            "thumbnail$camera.lock",
+          ); // Always ensure this unlocks, even on exceptions
+        }
+      } else {
+        Log.w("Thumbnail session lock busy; skipping this cycle");
       }
-    } else {
-      Log.e("Failed to acquire thumbnail session lock");
-    }
+    });
   }
 }

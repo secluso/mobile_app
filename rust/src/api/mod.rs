@@ -7,7 +7,7 @@ use secluso_app_native::{self, Clients};
 
 use std::collections::HashMap;
 use parking_lot::{Mutex, MutexGuard};
-use log::{info, error, warn};
+use log::{debug, info, error, warn};
 use once_cell::sync::Lazy;
 
 use std::net::SocketAddr;
@@ -15,6 +15,7 @@ use std::net::TcpStream;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::ops::{Deref, DerefMut};
 use std::panic;
 use std::time::{Duration, Instant};
 
@@ -32,6 +33,8 @@ struct InitParams {
 
 static CLIENTS: Lazy<Mutex<HashMap<ClientKey, Arc<Mutex<Option<Box<Clients>>>>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
+static CLIENT_LOCK_OWNERS: Lazy<Mutex<HashMap<ClientKey, String>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
 static INIT_PARAMS: Lazy<Mutex<HashMap<String, InitParams>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 static IS_SHUTTING_DOWN: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false));
@@ -44,28 +47,25 @@ const CHANNEL_FCM: &str = "fcm";
 const CHANNEL_CONFIG: &str = "config";
 const CHANNEL_LIVESTREAM: &str = "livestream";
 const CHANNEL_SETUP: &str = "setup";
+const TRACE_TAG: &str = "|trace=";
+
+fn split_trace_camera(camera_name: &str) -> (String, Option<&str>) {
+    match camera_name.find(TRACE_TAG) {
+        Some(idx) => {
+            let (base, rest) = camera_name.split_at(idx);
+            let trace = rest.strip_prefix(TRACE_TAG).unwrap_or("");
+            let trace = if trace.is_empty() { None } else { Some(trace) };
+            (base.to_string(), trace)
+        }
+        None => (camera_name.to_string(), None),
+    }
+}
 
 macro_rules! lock_client_or_return {
-    ($client_mutex:expr, $camera_name:expr, $op:expr, $ret:expr) => {{
-        let start = Instant::now();
-        match $client_mutex.try_lock_for(CLIENT_LOCK_TIMEOUT) {
-            Some(guard) => {
-                let elapsed = start.elapsed();
-                if elapsed >= CLIENT_LOCK_WARN {
-                    warn!(
-                        "Lock wait {:?} for {} on camera {}",
-                        elapsed, $op, $camera_name
-                    );
-                }
-                guard
-            }
-            None => {
-                error!(
-                    "Lock timeout after {:?} for {} on camera {}",
-                    CLIENT_LOCK_TIMEOUT, $op, $camera_name
-                );
-                return $ret;
-            }
+    ($client_mutex:expr, $camera_name:expr, $channel:expr, $op:expr, $owner:expr, $ret:expr) => {{
+        match lock_client_with_owner(&$client_mutex, $camera_name, $channel, $op, $owner) {
+            Some(guard) => guard,
+            None => return $ret,
         }
     }};
 }
@@ -85,27 +85,90 @@ fn get_or_create_channel_mutex(
         .clone()
 }
 
-fn lock_client<'a>(
+// Wrap the MLS client lock so we can log who holds it and for how long.
+// This keeps lock tracking out of the call sites while making contention visible in logs.
+struct TracedClientGuard<'a> {
+    guard: MutexGuard<'a, Option<Box<Clients>>>,
+    key: ClientKey,
+    owner: String,
+    op: String,
+    acquired_at: Instant,
+}
+
+impl<'a> Deref for TracedClientGuard<'a> {
+    type Target = Option<Box<Clients>>;
+    fn deref(&self) -> &Self::Target {
+        &self.guard
+    }
+}
+
+impl<'a> DerefMut for TracedClientGuard<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.guard
+    }
+}
+
+impl<'a> Drop for TracedClientGuard<'a> {
+    fn drop(&mut self) {
+        let mut owners = CLIENT_LOCK_OWNERS.lock();
+        owners.remove(&self.key);
+        debug!(
+            "MLS lock released for {} on camera {} channel {} (owner={}, held={:?})",
+            self.op, self.key.camera, self.key.channel, self.owner, self.acquired_at.elapsed()
+        );
+    }
+}
+
+fn lock_client_with_owner<'a>(
     client_mutex: &'a Arc<Mutex<Option<Box<Clients>>>>,
     camera_name: &str,
+    channel: &str,
     op: &str,
-) -> Option<MutexGuard<'a, Option<Box<Clients>>>> {
+    owner: Option<&str>,
+) -> Option<TracedClientGuard<'a>> {
     let start = Instant::now();
+    let owner_label = owner.unwrap_or("unknown").to_string();
+    let key = ClientKey {
+        camera: camera_name.to_owned(),
+        channel: channel.to_owned(),
+    };
+    debug!(
+        "MLS lock attempt for {} on camera {} channel {} (owner={})",
+        op, camera_name, channel, owner_label
+    );
     match client_mutex.try_lock_for(CLIENT_LOCK_TIMEOUT) {
         Some(guard) => {
+            {
+                let mut owners = CLIENT_LOCK_OWNERS.lock();
+                owners.insert(key.clone(), owner_label.clone());
+            }
             let elapsed = start.elapsed();
             if elapsed >= CLIENT_LOCK_WARN {
                 warn!(
-                    "Lock wait {:?} for {} on camera {}",
-                    elapsed, op, camera_name
+                    "MLS lock wait {:?} for {} on camera {} channel {} (owner={})",
+                    elapsed, op, camera_name, channel, owner_label
                 );
             }
-            Some(guard)
+            debug!(
+                "MLS lock acquired for {} on camera {} channel {} (owner={}, wait={:?})",
+                op, camera_name, channel, owner_label, elapsed
+            );
+            Some(TracedClientGuard {
+                guard,
+                key,
+                owner: owner_label,
+                op: op.to_string(),
+                acquired_at: Instant::now(),
+            })
         }
         None => {
-            error!(
-                "Lock timeout after {:?} for {} on camera {}",
-                CLIENT_LOCK_TIMEOUT, op, camera_name
+            let owner_label = {
+                let owners = CLIENT_LOCK_OWNERS.lock();
+                owners.get(&key).cloned().unwrap_or_else(|| "unknown".to_string())
+            };
+            warn!(
+                "MLS lock busy after {:?} for {} on camera {} channel {} (owner={})",
+                CLIENT_LOCK_TIMEOUT, op, camera_name, channel, owner_label
             );
             None
         }
@@ -152,6 +215,8 @@ fn ensure_client_initialized(
 
 #[flutter_rust_bridge::frb]
 pub fn initialize_camera(camera_name: String, file_dir: String, first_time: bool) -> bool {
+    let (camera_name, trace_id) = split_trace_camera(&camera_name);
+    let _trace_guard = logger::set_log_trace(trace_id);
     {
         let mut guard = INIT_PARAMS.lock();
         guard.insert(
@@ -163,39 +228,15 @@ pub fn initialize_camera(camera_name: String, file_dir: String, first_time: bool
         );
     }
 
-    let channels = [
-        CHANNEL_MOTION,
-        CHANNEL_THUMBNAIL,
-        CHANNEL_FCM,
-        CHANNEL_CONFIG,
-        CHANNEL_LIVESTREAM,
-        CHANNEL_SETUP,
-    ];
-
-    let mut ok = true;
-    for channel in channels {
-        let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
-        let op = format!("initialize_camera({})", channel);
-        let mut client_guard = match lock_client(&client_mutex, &camera_name, &op) {
-            Some(guard) => guard,
-            None => {
-                ok = false;
-                continue;
-            }
-        };
-        if client_guard.is_some() {
-            continue;
-        }
-        if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
-            ok = false;
-        }
-    }
-
-    ok
+    // Lazy per-channel init: only set init params here.
+    // Clients get created on first use inside ensure_client_initialized.
+    true
 }
 
 #[flutter_rust_bridge::frb]
 pub fn deregister_camera(camera_name: String) {
+    let (camera_name, trace_id) = split_trace_camera(&camera_name);
+    let _trace_guard = logger::set_log_trace(trace_id);
     let entries: Vec<(ClientKey, Arc<Mutex<Option<Box<Clients>>>>)> = {
         let guard = CLIENTS.lock();
         guard
@@ -213,7 +254,13 @@ pub fn deregister_camera(camera_name: String) {
     let mut did_deregister = false;
     for (key, client_arc) in &entries {
         let op = format!("deregister_camera({})", key.channel);
-        let mut client_guard = match lock_client(client_arc, &camera_name, &op) {
+        let mut client_guard = match lock_client_with_owner(
+            client_arc,
+            &camera_name,
+            &key.channel,
+            &op,
+            trace_id,
+        ) {
             Some(guard) => guard,
             None => {
                 warn!(
@@ -259,13 +306,18 @@ pub fn decrypt_video(
     enc_filename: String,
     assumed_epoch: u64,
 ) -> String {
+    let (camera_name, trace_id) = split_trace_camera(&camera_name);
+    let _trace_guard = logger::set_log_trace(trace_id);
     let channel = CHANNEL_MOTION;
     let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
+    let op = "decrypt_video(motion)".to_string();
     let mut client_guard = lock_client_or_return!(
         client_mutex,
         &camera_name,
-        "decrypt_video(motion)",
-        "Error".to_string()
+        channel,
+        &op,
+        trace_id,
+        "Error: Busy".to_string()
     );
     if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
         return "Error".to_string();
@@ -293,13 +345,18 @@ pub fn decrypt_thumbnail(
     pending_meta_directory: String,
     assumed_epoch: u64,
 ) -> String {
+    let (camera_name, trace_id) = split_trace_camera(&camera_name);
+    let _trace_guard = logger::set_log_trace(trace_id);
     let channel = CHANNEL_THUMBNAIL;
     let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
+    let op = "decrypt_thumbnail(thumbnail)".to_string();
     let mut client_guard = lock_client_or_return!(
         client_mutex,
         &camera_name,
-        "decrypt_thumbnail(thumbnail)",
-        "Error".to_string()
+        channel,
+        &op,
+        trace_id,
+        "Error: Busy".to_string()
     );
     if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
         return "Error".to_string();
@@ -331,14 +388,19 @@ pub fn flutter_add_camera(
     pairing_token: String,
     credentials_full: String,
 ) -> String {
+    let (camera_name, trace_id) = split_trace_camera(&camera_name);
+    let _trace_guard = logger::set_log_trace(trace_id);
     let result = {
         let channel = CHANNEL_SETUP;
         let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
+        let op = "flutter_add_camera(setup)".to_string();
         let mut client_guard = lock_client_or_return!(
             client_mutex,
             &camera_name,
-            "flutter_add_camera(setup)",
-            "Error".to_string()
+            channel,
+            &op,
+            trace_id,
+            "Error: Busy".to_string()
         );
         if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
             return "Error".to_string();
@@ -441,12 +503,17 @@ pub fn ping_proprietary_device(camera_ip: String) -> bool {
 
 #[flutter_rust_bridge::frb]
 pub fn encrypt_settings_message(camera_name: String, data: Vec<u8>) -> Vec<u8> {
+    let (camera_name, trace_id) = split_trace_camera(&camera_name);
+    let _trace_guard = logger::set_log_trace(trace_id);
     let channel = CHANNEL_CONFIG;
     let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
+    let op = "encrypt_settings_message(config)".to_string();
     let mut client_guard = lock_client_or_return!(
         client_mutex,
         &camera_name,
-        "encrypt_settings_message(config)",
+        channel,
+        &op,
+        trace_id,
         Vec::new()
     );
     if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
@@ -466,11 +533,19 @@ pub fn encrypt_settings_message(camera_name: String, data: Vec<u8>) -> Vec<u8> {
 
 #[flutter_rust_bridge::frb]
 pub fn decrypt_message(client_tag: String, camera_name: String, data: Vec<u8>) -> String {
+    let (camera_name, trace_id) = split_trace_camera(&camera_name);
+    let _trace_guard = logger::set_log_trace(trace_id);
     let channel = client_tag.as_str();
     let op = format!("decrypt_message({})", channel);
     let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
-    let mut client_guard =
-        lock_client_or_return!(client_mutex, &camera_name, &op, "Error".to_string());
+    let mut client_guard = lock_client_or_return!(
+        client_mutex,
+        &camera_name,
+        channel,
+        &op,
+        trace_id,
+        "Error: Busy".to_string()
+    );
     if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
         return "Error".to_string();
     }
@@ -488,11 +563,19 @@ pub fn decrypt_message(client_tag: String, camera_name: String, data: Vec<u8>) -
 
 #[flutter_rust_bridge::frb]
 pub fn get_group_name(client_tag: String, camera_name: String) -> String {
+    let (camera_name, trace_id) = split_trace_camera(&camera_name);
+    let _trace_guard = logger::set_log_trace(trace_id);
     let channel = client_tag.as_str();
     let op = format!("get_group_name({})", channel);
     let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
-    let mut client_guard =
-        lock_client_or_return!(client_mutex, &camera_name, &op, "Error".to_string());
+    let mut client_guard = lock_client_or_return!(
+        client_mutex,
+        &camera_name,
+        channel,
+        &op,
+        trace_id,
+        "Error: Busy".to_string()
+    );
     if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
         return "Error".to_string();
     }
@@ -510,10 +593,19 @@ pub fn get_group_name(client_tag: String, camera_name: String) -> String {
 
 #[flutter_rust_bridge::frb]
 pub fn livestream_update(camera_name: String, msg: Vec<u8>) -> bool {
+    let (camera_name, trace_id) = split_trace_camera(&camera_name);
+    let _trace_guard = logger::set_log_trace(trace_id);
     let channel = CHANNEL_LIVESTREAM;
     let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
-    let mut client_guard =
-        lock_client_or_return!(client_mutex, &camera_name, "livestream_update(livestream)", false);
+    let op = "livestream_update(livestream)".to_string();
+    let mut client_guard = lock_client_or_return!(
+        client_mutex,
+        &camera_name,
+        channel,
+        &op,
+        trace_id,
+        false
+    );
     if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
         return false;
     }
@@ -531,10 +623,19 @@ pub fn livestream_update(camera_name: String, msg: Vec<u8>) -> bool {
 
 #[flutter_rust_bridge::frb]
 pub fn livestream_decrypt(camera_name: String, data: Vec<u8>, expected_chunk_number: u64) -> Vec<u8> {
+    let (camera_name, trace_id) = split_trace_camera(&camera_name);
+    let _trace_guard = logger::set_log_trace(trace_id);
     let channel = CHANNEL_LIVESTREAM;
     let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
-    let mut client_guard =
-        lock_client_or_return!(client_mutex, &camera_name, "livestream_decrypt(livestream)", vec![]);
+    let op = "livestream_decrypt(livestream)".to_string();
+    let mut client_guard = lock_client_or_return!(
+        client_mutex,
+        &camera_name,
+        channel,
+        &op,
+        trace_id,
+        vec![]
+    );
     if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
         return vec![];
     }
@@ -557,12 +658,17 @@ pub fn rust_lib_version() -> String {
 
 #[flutter_rust_bridge::frb]
 pub fn generate_heartbeat_request_config_command(camera_name: String, timestamp: u64) -> Vec<u8> {
+    let (camera_name, trace_id) = split_trace_camera(&camera_name);
+    let _trace_guard = logger::set_log_trace(trace_id);
     let channel = CHANNEL_CONFIG;
     let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
+    let op = "generate_heartbeat_request_config_command(config)".to_string();
     let mut client_guard = lock_client_or_return!(
         client_mutex,
         &camera_name,
-        "generate_heartbeat_request_config_command(config)",
+        channel,
+        &op,
+        trace_id,
         vec![]
     );
     if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
@@ -582,12 +688,17 @@ pub fn generate_heartbeat_request_config_command(camera_name: String, timestamp:
 
 #[flutter_rust_bridge::frb]
 pub fn process_heartbeat_config_response(camera_name: String, config_response: Vec<u8>, expected_timestamp: u64) -> String {
+    let (camera_name, trace_id) = split_trace_camera(&camera_name);
+    let _trace_guard = logger::set_log_trace(trace_id);
     let channel = CHANNEL_CONFIG;
     let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
+    let op = "process_heartbeat_config_response(config)".to_string();
     let mut client_guard = lock_client_or_return!(
         client_mutex,
         &camera_name,
-        "process_heartbeat_config_response(config)",
+        channel,
+        &op,
+        trace_id,
         "Error".to_string()
     );
     if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {

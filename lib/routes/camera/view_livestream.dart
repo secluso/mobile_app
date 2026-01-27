@@ -8,7 +8,7 @@ import 'package:secluso_flutter/notifications/heartbeat_task.dart';
 import 'package:secluso_flutter/utilities/byte_stream_player.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:secluso_flutter/src/rust/api.dart';
+import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/byte_player_view.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:path_provider/path_provider.dart';

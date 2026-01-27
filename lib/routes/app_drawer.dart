@@ -7,7 +7,7 @@ import 'theme_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/keys.dart';
-import 'package:secluso_flutter/src/rust/api.dart';
+import 'package:secluso_flutter/utilities/rust_api.dart';
 
 final GlobalKey<CamerasPageState> camerasPageKey =
     GlobalKey<CamerasPageState>();

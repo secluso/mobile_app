@@ -1,5 +1,6 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::cell::RefCell;
 use std::sync::Once;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -25,6 +26,7 @@ pub struct LogEntry {
     pub level: i32,
     pub tag: String,
     pub msg: String,
+    pub trace_id: Option<String>,
 }
 
 #[flutter_rust_bridge::frb]
@@ -103,6 +105,34 @@ pub struct SendToDartLogger {
     level: LevelFilter,
 }
 
+thread_local! {
+    static LOG_TRACE: RefCell<Option<String>> = RefCell::new(None);
+}
+
+pub(crate) struct LogTraceGuard {
+    prev: Option<String>,
+}
+
+impl Drop for LogTraceGuard {
+    fn drop(&mut self) {
+        LOG_TRACE.with(|slot| {
+            *slot.borrow_mut() = self.prev.clone();
+        });
+    }
+}
+
+pub(crate) fn set_log_trace(trace_id: Option<&str>) -> LogTraceGuard {
+    let prev = LOG_TRACE.with(|slot| slot.borrow().clone());
+    LOG_TRACE.with(|slot| {
+        *slot.borrow_mut() = trace_id.map(|id| id.to_string());
+    });
+    LogTraceGuard { prev }
+}
+
+fn current_log_trace() -> Option<String> {
+    LOG_TRACE.with(|slot| slot.borrow().clone())
+}
+
 impl SendToDartLogger {
     pub fn set_stream_sink(stream_sink: StreamSink<LogEntry>) {
         let mut guard = SEND_TO_DART_LOGGER_STREAM_SINK.write();
@@ -139,12 +169,14 @@ impl SendToDartLogger {
         let tag = record.file().unwrap_or_else(|| record.target()).to_owned();
 
         let msg = format!("{}", record.args());
+        let trace_id = current_log_trace();
 
         LogEntry {
             time_millis,
             level,
             tag,
             msg,
+            trace_id,
         }
     }
 

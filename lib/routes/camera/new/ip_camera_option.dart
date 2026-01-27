@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:secluso_flutter/src/rust/api.dart';
+import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';

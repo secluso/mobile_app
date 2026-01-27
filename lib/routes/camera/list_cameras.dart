@@ -13,7 +13,7 @@ import 'dart:ui';
 import 'dart:io';
 import 'dart:async';
 
-import 'package:secluso_flutter/src/rust/api.dart';
+import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
 import 'package:secluso_flutter/utilities/logger.dart';

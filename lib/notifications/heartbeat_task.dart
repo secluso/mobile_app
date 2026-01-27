@@ -6,7 +6,7 @@ import 'package:secluso_flutter/notifications/download_task.dart';
 import 'package:secluso_flutter/notifications/notifications.dart';
 import 'package:secluso_flutter/notifications/thumbnails.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
-import 'package:secluso_flutter/src/rust/api.dart';
+import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/src/rust/frb_generated.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'dart:io';

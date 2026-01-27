@@ -2,17 +2,17 @@
 
 import 'dart:async';
 import 'dart:ui';
-//import 'package:flutter/foundation.dart'; //remove if not using logger
+import 'package:flutter/foundation.dart'; //remove if not using logger
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
-import 'package:secluso_flutter/src/rust/api.dart';
+import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/firebase_init.dart';
 import 'package:flutter/services.dart';
 import 'package:secluso_flutter/notifications/heartbeat_task.dart';
 import 'package:secluso_flutter/notifications/scheduler.dart';
 import 'package:secluso_flutter/src/rust/guard.dart';
-//import 'package:secluso_flutter/src/rust/api/logger.dart'; //remove if not using logger
+import 'package:secluso_flutter/src/rust/api/logger.dart'; //remove if not using logger
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/notifications/thumbnails.dart';
 import 'package:secluso_flutter/notifications/notifications.dart';
@@ -26,6 +26,7 @@ import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/notifications/pending_processor.dart';
 import 'package:secluso_flutter/database/migration_runner.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/trace_id.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/lock.dart';
 import 'package:secluso_flutter/utilities/version_gate.dart';
@@ -47,52 +48,59 @@ bool _versionCheckInFlight = false;
 void main() {
   // Wrap main() with a zone so if something throws during init, we still attempt to close the DB.
   runZonedGuarded(
-    () {
+    () async {
       Log.init();
-      Log.i('main() started');
-      WidgetsFlutterBinding.ensureInitialized();
-      UiState.markBindingReady();
-      FlutterError.onError = (details) {
-        Log.e('FlutterError: ${details.exceptionAsString()}');
-        final stack = details.stack;
-        if (stack != null) {
+      final traceId = newTraceId('ui');
+      Log.setDefaultContext(traceId);
+      await Log.runWithContext(traceId, () async {
+        Log.i('UI context started (id=$traceId)');
+        Log.i('main() started');
+        WidgetsFlutterBinding.ensureInitialized();
+        UiState.markBindingReady();
+        FlutterError.onError = (details) {
+          Log.e('FlutterError: ${details.exceptionAsString()}');
+          final stack = details.stack;
+          if (stack != null) {
+            Log.e(stack.toString());
+          }
+          if (_isAppInBackground()) {
+            unawaited(
+              _handleBackgroundError(
+                'FlutterError: ${details.exceptionAsString()}',
+              ),
+            );
+          }
+          FlutterError.presentError(details);
+        };
+        ErrorWidget.builder = (details) {
+          Log.e('ErrorWidget: ${details.exceptionAsString()}');
+          final stack = details.stack;
+          if (stack != null) {
+            Log.e(stack.toString());
+          }
+          if (_isAppInBackground()) {
+            unawaited(
+              _handleBackgroundError(
+                'ErrorWidget: ${details.exceptionAsString()}',
+              ),
+            );
+          }
+          return ErrorWidget(details.exception);
+        };
+        PlatformDispatcher.instance.onError = (error, stack) {
+          Log.e('PlatformDispatcher: $error');
           Log.e(stack.toString());
-        }
-        if (_isAppInBackground()) {
-          unawaited(
-            _handleBackgroundError(
-              'FlutterError: ${details.exceptionAsString()}',
-            ),
-          );
-        }
-        FlutterError.presentError(details);
-      };
-      ErrorWidget.builder = (details) {
-        Log.e('ErrorWidget: ${details.exceptionAsString()}');
-        final stack = details.stack;
-        if (stack != null) {
-          Log.e(stack.toString());
-        }
-        if (_isAppInBackground()) {
-          unawaited(
-            _handleBackgroundError(
-              'ErrorWidget: ${details.exceptionAsString()}',
-            ),
-          );
-        }
-        return ErrorWidget(details.exception);
-      };
-      PlatformDispatcher.instance.onError = (error, stack) {
-        Log.e('PlatformDispatcher: $error');
-        Log.e(stack.toString());
-        if (_isAppInBackground()) {
-          unawaited(_handleBackgroundError('PlatformDispatcher: $error'));
-        }
-        return true;
-      };
-      unawaited(Log.ensureStorageReady());
-      FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-      runApp(const AppBootstrap());
+          if (_isAppInBackground()) {
+            unawaited(_handleBackgroundError('PlatformDispatcher: $error'));
+          }
+          return true;
+        };
+        unawaited(Log.ensureStorageReady());
+        FirebaseMessaging.onBackgroundMessage(
+          firebaseMessagingBackgroundHandler,
+        );
+        runApp(const AppBootstrap());
+      });
     },
     (error, stack) async {
       Log.e('Zone error: $error');
@@ -200,6 +208,8 @@ void _startupPhaseEntry(Map<String, dynamic> message) async {
     BackgroundIsolateBinaryMessenger.ensureInitialized(rootToken);
     DartPluginRegistrant.ensureInitialized();
     Log.init();
+    final traceId = newTraceId('startup');
+    Log.setDefaultContext(traceId);
 
     final phase = message['phase'] as String;
     final cameraNames = (message['cameraNames'] as List).cast<String>();
@@ -220,30 +230,34 @@ Future<void> _initializeApp(ThemeProvider themeProvider) async {
   // The native logger causes some reentrancy deadlocks.
   // Only enable if needed.
 
-  /** 
-  createLogStream().listen((event) {
-    var level = event.level;
-    var tag = event.tag; // Represents the calling file
+  if (kDebugMode) {
+    createLogStream().listen((event) {
+      var level = event.level;
+      var tag = event.tag; // Represents the calling file
+      final context = event.traceId ?? '';
 
-    // For now, we filter out all Rust code that isn't from us in release mode.
-    if (kReleaseMode && (!tag.contains("secluso") && !tag.startsWith("src"))) {
-      return;
-    }
+      // For now, we filter out all Rust code that isn't from us in release mode.
+      if (kReleaseMode &&
+          (!tag.contains("secluso") && !tag.startsWith("src"))) {
+        return;
+      }
 
-    // We filter out OpenMLS as we don't need OpenMLS logging leaking data (although this shouldn't be a risk regardless due to release only allowing info and above in logging)
-    if (tag.contains("openmls")) {
-      return;
-    }
+      // We filter out OpenMLS as we don't need OpenMLS logging leaking data (although this shouldn't be a risk regardless due to release only allowing info and above in logging)
+      if (tag.contains("openmls")) {
+        return;
+      }
 
-    if (level == 0 || level == 1) {
-      Log.d(event.msg, customLocation: event.tag);
-    } else if (level == 2) {
-      Log.i(event.msg, customLocation: event.tag);
-    } else {
-      Log.e(event.msg, customLocation: event.tag);
-    }
-  });
-  **/
+      Log.runWithContextSync(context, () {
+        if (level == 0 || level == 1) {
+          Log.d(event.msg, customLocation: event.tag);
+        } else if (level == 2) {
+          Log.i(event.msg, customLocation: event.tag);
+        } else {
+          Log.w(event.msg, customLocation: event.tag);
+        }
+      });
+    });
+  }
 
   Log.d("After createLogStream().listen()");
   await AppStores.init();

@@ -2,7 +2,7 @@
 
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:secluso_flutter/src/rust/api.dart';
+import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
@@ -22,6 +22,12 @@ final Map<String, _InitState> _initStateByCamera = {};
 const Duration _initTimeoutCooldown = Duration(seconds: 10);
 const Duration _initFailureCooldown = Duration(seconds: 12);
 
+enum InitOutcome { ok, timeout, failed }
+
+extension InitOutcomeX on InitOutcome {
+  bool get isOk => this == InitOutcome.ok;
+}
+
 void invalidateCameraInit(String cameraName) {
   final state = _initStateByCamera.remove(cameraName);
   if (state != null) {
@@ -39,7 +45,8 @@ Future<String> addCamera(
   String pairingToken,
 ) async {
   Log.d("In addCamera");
-  if (!(await initialize(cameraName))) {
+  final initOutcome = await initialize(cameraName);
+  if (!initOutcome.isOk) {
     Log.e("Connect = false");
     return "Error";
   }
@@ -66,7 +73,7 @@ Future<String> addCamera(
   );
 }
 
-Future<bool> initialize(
+Future<InitOutcome> initialize(
   String cameraName, {
   Duration timeout = const Duration(seconds: 15),
   bool force = false,
@@ -79,7 +86,7 @@ Future<bool> initialize(
 
   if (!force && state.ready) {
     Log.d("[init] $cameraName already initialized; using cached state");
-    return true;
+    return InitOutcome.ok;
   }
 
   if (state.inFlight != null) {
@@ -93,7 +100,7 @@ Future<bool> initialize(
       Log.w(
         "[init] Init still running for $cameraName; skipping to avoid stall (age=${ageMs ?? -1}ms)",
       );
-      return false;
+      return InitOutcome.timeout;
     }
     Log.d(
       "[init] Reusing in-flight init for $cameraName (age=${ageMs ?? -1}ms)",
@@ -109,7 +116,7 @@ Future<bool> initialize(
       Log.w(
         "[init] Recent init failure for $cameraName; skipping retry",
       );
-      return false;
+      return InitOutcome.failed;
     }
     final lastTimeout = state.lastTimeout;
     if (lastTimeout != null &&
@@ -117,7 +124,7 @@ Future<bool> initialize(
       Log.w(
         "[init] Recent init timeout for $cameraName; skipping retry",
       );
-      return false;
+      return InitOutcome.timeout;
     }
   }
 
@@ -129,21 +136,25 @@ Future<bool> initialize(
   return _awaitInit(cameraName, future, timeout, state);
 }
 
-Future<bool> _awaitInit(
+Future<InitOutcome> _awaitInit(
   String cameraName,
   Future<bool> future,
   Duration timeout,
   _InitState state,
 ) async {
   try {
-    return await future.timeout(timeout);
+    final success = await future.timeout(timeout);
+    return success ? InitOutcome.ok : InitOutcome.failed;
   } on TimeoutException {
     state.lastTimeout = DateTime.now();
-    Log.e("[init] Init timeout for $cameraName after ${timeout.inSeconds}s");
-    return false;
+    Log.w(
+      "[init] Init timeout for $cameraName after ${timeout.inSeconds}s (${Log.ownerTag()})",
+    );
+    return InitOutcome.timeout;
   } catch (e, st) {
+    state.lastFailure = DateTime.now();
     Log.e("[init] Init error for $cameraName: $e\n$st");
-    return false;
+    return InitOutcome.failed;
   }
 }
 
@@ -174,7 +185,7 @@ Future<bool> _doInitialize(
       );
     } else {
       state.lastFailure = DateTime.now();
-      Log.e(
+      Log.w(
         "[init] Init failed for $cameraName in ${sw.elapsedMilliseconds}ms",
       );
     }

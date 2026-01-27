@@ -13,7 +13,7 @@ Future<bool> lock(
   Duration timeout = const Duration(seconds: 10),
   Duration retryDelay = const Duration(milliseconds: 60),
 }) async {
-  Log.d("Acquiring lock");
+  Log.d("Attempting to acquire lock $name");
   var lockParentDirectory = p.join(
     (await getApplicationDocumentsDirectory()).path,
     "locks",
@@ -24,25 +24,49 @@ Future<bool> lock(
   }
 
   var lock = p.join(lockParentDirectory, name);
+  final ownerPath = "$lock.owner";
   final sw = Stopwatch()..start();
   while (sw.elapsed < timeout) {
     final ok = await tryAcquireLock(path: lock);
     if (ok) {
+      final ownerId = Log.currentContextId();
+      final ownerLabel = ownerId.isNotEmpty ? ownerId : "unknown";
+      try {
+        await File(ownerPath).writeAsString(
+          ownerLabel,
+          flush: true,
+        );
+      } catch (_) {}
       if (sw.elapsedMilliseconds > 200) {
         Log.d("Lock $name acquired after ${sw.elapsedMilliseconds}ms");
+      } else {
+        Log.d("Lock $name acquired");
       }
       return true;
     }
     await Future.delayed(retryDelay);
   }
 
-  Log.w("Lock $name timeout after ${timeout.inSeconds}s");
+  String ownerLabel = "unknown";
+  try {
+    final ownerFile = File(ownerPath);
+    if (await ownerFile.exists()) {
+      final text = (await ownerFile.readAsString()).trim();
+      if (text.isNotEmpty) {
+        ownerLabel = text;
+      }
+    }
+  } catch (_) {}
+
+  Log.w(
+    "Lock $name timeout after ${timeout.inSeconds}s (owner=$ownerLabel)",
+  );
   return false;
 }
 
 /// Release a previously acquried lock via Rust-code
 Future<void> unlock(String name) async {
-  Log.d("Releasing lock");
+  Log.d("Releasing lock $name");
   var lockLocation = p.join(
     (await getApplicationDocumentsDirectory()).path,
     "locks",
@@ -50,4 +74,10 @@ Future<void> unlock(String name) async {
   );
 
   await releaseLock(path: lockLocation);
+  try {
+    final ownerFile = File("$lockLocation.owner");
+    if (await ownerFile.exists()) {
+      await ownerFile.delete();
+    }
+  } catch (_) {}
 }

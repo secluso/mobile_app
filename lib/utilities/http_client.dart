@@ -10,7 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/notifications/epoch.dart';
-import 'package:secluso_flutter/src/rust/api.dart';
+import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/http_entities.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/utilities/version_gate.dart';
@@ -318,7 +318,7 @@ class HttpClientService {
               : await responseFuture.timeout(timeout);
     } on TimeoutException {
       throw Exception(
-        'Download timeout after ${timeout?.inSeconds ?? 0}s ($cameraName, $type, $serverFile)',
+        'Download timeout after ${timeout?.inSeconds ?? 0}s ($cameraName, $type, $serverFile, ${Log.ownerTag()})',
       );
     }
     await _handleServerVersionHeader(response);
@@ -699,6 +699,12 @@ class HttpClientService {
       return groupName;
     }
 
+    if (groupName.startsWith("Error: Busy")) {
+      throw _SilentException(
+        'Group name busy for $cameraName ($clientTag)',
+      );
+    }
+
     Log.w(
       "[http] getGroupName failed for $cameraName ($clientTag): $groupName",
     );
@@ -715,12 +721,12 @@ class HttpClientService {
 
     _groupNameInitLast[retryKey] = now;
     invalidateCameraInit(cameraName);
-    final initOk = await initialize(
+    final initOutcome = await initialize(
       cameraName,
       timeout: _groupNameInitTimeout,
       force: true,
     );
-    if (initOk) {
+    if (initOutcome.isOk) {
       groupName = await getGroupName(
         clientTag: clientTag,
         cameraName: cameraName,
@@ -730,6 +736,10 @@ class HttpClientService {
       }
       Log.w(
         "[http] getGroupName retry failed for $cameraName ($clientTag): $groupName",
+      );
+    } else if (initOutcome == InitOutcome.timeout) {
+      Log.w(
+        "[http] Init timeout before getGroupName retry for $cameraName ($clientTag, ${Log.ownerTag()})",
       );
     } else {
       Log.w(

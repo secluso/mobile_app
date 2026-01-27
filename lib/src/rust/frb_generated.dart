@@ -1178,14 +1178,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   LogEntry dco_decode_log_entry(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return LogEntry(
       timeMillis: dco_decode_i_64(arr[0]),
       level: dco_decode_i_32(arr[1]),
       tag: dco_decode_String(arr[2]),
       msg: dco_decode_String(arr[3]),
+      traceId: dco_decode_opt_String(arr[4]),
     );
+  }
+
+  @protected
+  String? dco_decode_opt_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_String(raw);
   }
 
   @protected
@@ -1321,12 +1328,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_level = sse_decode_i_32(deserializer);
     var var_tag = sse_decode_String(deserializer);
     var var_msg = sse_decode_String(deserializer);
+    var var_traceId = sse_decode_opt_String(deserializer);
     return LogEntry(
       timeMillis: var_timeMillis,
       level: var_level,
       tag: var_tag,
       msg: var_msg,
+      traceId: var_traceId,
     );
+  }
+
+  @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_String(deserializer));
+    } else {
+      return null;
+    }
   }
 
   @protected
@@ -1483,6 +1503,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.level, serializer);
     sse_encode_String(self.tag, serializer);
     sse_encode_String(self.msg, serializer);
+    sse_encode_opt_String(self.traceId, serializer);
+  }
+
+  @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_String(self, serializer);
+    }
   }
 
   @protected

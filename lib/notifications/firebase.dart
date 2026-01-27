@@ -19,7 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../keys.dart';
 //TODO: import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:secluso_flutter/src/rust/api.dart';
+import 'package:secluso_flutter/utilities/rust_api.dart';
 import '../utilities/result.dart';
 import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
@@ -79,8 +79,6 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       await RustBridgeHelper.ensureInitialized();
     }
 
-    Log.d("received message");
-
     await PushNotificationService.instance.processMessageData(
       message.data,
       source: 'background',
@@ -115,6 +113,7 @@ class PushNotificationService {
   int _processPending = 0;
   final Map<String, DateTime> _forceInitLast = {};
   final Map<String, DateTime> _recentBodies = {};
+
 
   Future<void> init() async {
     if (_initialized) {
@@ -238,7 +237,14 @@ class PushNotificationService {
     Map<String, dynamic> data, {
     required String source,
   }) {
-    return _enqueueProcess(data, source: source);
+    final traceId = Log.deriveContext('fcm');
+    return Log.runWithContext(
+      traceId,
+      () async {
+        Log.d("FCM context started (source=$source, id=$traceId)");
+        await _enqueueProcess(data, source: source);
+      },
+    );
   }
 
   Future<void> _enqueueProcess(
@@ -247,32 +253,30 @@ class PushNotificationService {
   }) {
     final seq = ++_processSeq;
     _processPending++;
-    Log.d(
-      "[FCM] Enqueued message #$seq from $source (pending=$_processPending)",
-    );
+    Log.d("Enqueued message #$seq from $source (pending=$_processPending)");
 
     _processTail = _processTail
         .catchError((e, st) {
-          Log.e("[FCM] Previous processing error: $e\n$st");
+          Log.e("Previous processing error: $e\n$st");
         })
         .then((_) async {
           final sw = Stopwatch()..start();
-          Log.d("[FCM] Processing message #$seq from $source");
+          Log.d("Processing message #$seq from $source");
           try {
             await _processInternal(data, source: source, seq: seq);
           } catch (e, st) {
-            Log.e("[FCM] Unhandled error in message #$seq: $e\n$st");
+            Log.e("Unhandled error in message #$seq: $e\n$st");
           } finally {
             sw.stop();
             _processPending--;
             Log.d(
-              "[FCM] Finished message #$seq in ${sw.elapsedMilliseconds}ms (pending=$_processPending)",
+              "Finished message #$seq in ${sw.elapsedMilliseconds}ms (pending=$_processPending)",
             );
           }
         });
 
     if (_processPending > 3) {
-      Log.w("[FCM] Message backlog detected: pending=$_processPending");
+      Log.w("Message backlog detected: pending=$_processPending");
     }
 
     return _processTail;
@@ -290,22 +294,22 @@ class PushNotificationService {
     required String source,
     required int seq,
   }) async {
-    Log.d("[FCM] Core processing entered (#$seq, source=$source)");
+    Log.d("Core processing entered (#$seq, source=$source)");
     final encoded = data['body'];
     if (encoded is! String || encoded.isEmpty) {
       Log.w(
-        "[FCM] Missing or invalid body for message #$seq (keys=${data.keys.toList()})",
+        "Missing or invalid body for message #$seq (keys=${data.keys.toList()})",
       );
       return;
     }
 
     if (_isDuplicateBody(encoded)) {
-      Log.d("[FCM] Skipping duplicate body for message #$seq");
+      Log.d("Skipping duplicate body for message #$seq");
       return;
     }
 
     Log.d("Got a message");
-    Log.d("[FCM] Body length: ${encoded.length}");
+    Log.d("Body length: ${encoded.length}");
 
     final prefs = await SharedPreferences.getInstance();
     //  await WakelockPlus.enable(); // TODO: Make this optional depending on if it's called from background processing
@@ -315,19 +319,29 @@ class PushNotificationService {
       final List<String> cameraSet =
           prefs.getStringList(PrefKeys.cameraSet) ?? [];
 
-      Log.d('Pre-existing camera set: $cameraSet');
+      Log.d("Pre-existing camera set: $cameraSet");
       if (cameraSet.isEmpty) {
-        Log.w("[FCM] No cameras found for message #$seq");
+        Log.w("No cameras found for message #$seq");
         return;
       }
       // TODO: what happens if we have an invalid name?
       for (final cameraName in cameraSet) {
         // This code might be called after the app is killed/terminated. We need to initialize the cameras again.
-        final initOk = await initialize(cameraName, timeout: _initTimeout);
-        if (!initOk) {
-          Log.e(
-            "[FCM] Init failed or timed out for $cameraName; skipping message #$seq",
-          );
+        final initOutcome =
+            await initialize(cameraName, timeout: _initTimeout);
+        if (!initOutcome.isOk) {
+          // Avoid error-level logs for expected init timeouts when background
+          // work is already holding the MLS locks; only true failures should
+          // surface as errors.
+          if (initOutcome == InitOutcome.timeout) {
+            Log.w(
+              "Init timeout for $cameraName; skipping message #$seq (${Log.ownerTag()})",
+            );
+          } else {
+            Log.e(
+              "Init failed for $cameraName; skipping message #$seq",
+            );
+          }
           continue;
         }
         Log.d("Starting to iterate $cameraName");
@@ -340,7 +354,7 @@ class PushNotificationService {
           ).timeout(_decryptTimeout);
         } on TimeoutException {
           Log.e(
-            "[FCM] decryptMessage timeout for $cameraName after ${_decryptTimeout.inSeconds}s",
+            "[FCM] decryptMessage timeout for $cameraName after ${_decryptTimeout.inSeconds}s (${Log.ownerTag()})",
           );
           await Future.delayed(_decryptRetryDelay);
           try {
@@ -351,13 +365,19 @@ class PushNotificationService {
             ).timeout(_decryptTimeout);
           } on TimeoutException {
             Log.e(
-              "[FCM] decryptMessage retry timeout for $cameraName after ${_decryptTimeout.inSeconds}s",
+              "[FCM] decryptMessage retry timeout for $cameraName after ${_decryptTimeout.inSeconds}s (${Log.ownerTag()})",
             );
             continue;
           }
         }
 
         if (response.startsWith('Error')) {
+          if (response.startsWith('Error: Busy')) {
+            Log.w(
+              "[FCM] decryptMessage busy for $cameraName; skipping message #$seq",
+            );
+            continue;
+          }
           if (response.contains('SecretReuseError')) {
             Log.w(
               "[FCM] SecretReuseError for $cameraName; treating as duplicate message",
@@ -372,12 +392,12 @@ class PushNotificationService {
           if (allowForce) {
             _forceInitLast[cameraName] = now;
             Log.w("[FCM] Decrypt error; forcing init for $cameraName");
-            final forceOk = await initialize(
+            final forceOutcome = await initialize(
               cameraName,
               timeout: _initTimeout,
               force: true,
             );
-            if (forceOk) {
+            if (forceOutcome.isOk) {
               try {
                 response = await decryptMessage(
                   clientTag: "fcm",
@@ -386,7 +406,7 @@ class PushNotificationService {
                 ).timeout(_decryptTimeout);
               } on TimeoutException {
                 Log.e(
-                  "[FCM] decryptMessage timeout after forced init for $cameraName",
+                  "[FCM] decryptMessage timeout after forced init for $cameraName (${Log.ownerTag()})",
                 );
                 continue;
               }
@@ -535,7 +555,9 @@ class PushNotificationService {
       await Future.delayed(pollEvery);
     }
 
-    Log.d("Thumbnail not ready within timeout; leaving text-only notification");
+    Log.d(
+      "Thumbnail not ready within timeout; leaving text-only notification (${Log.ownerTag()})",
+    );
   }
 
   Future<void> addPendingToRepository(

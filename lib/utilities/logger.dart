@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:logger/logger.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:secluso_flutter/utilities/trace_id.dart';
 
 class LogMessage {
   final dynamic value;
@@ -32,8 +33,21 @@ class Log {
 
   static final ValueNotifier<int> errorNotifier = ValueNotifier(0);
 
+  static final Object _contextKey = Object();
+  static String _defaultContext = '';
+
   static void init() {
     _logger = _buildLogger();
+  }
+
+  static void setDefaultContext(String context) {
+    _defaultContext = context;
+  }
+
+  static String deriveContext(String prefix) {
+    final base = currentContextId();
+    final child = newTraceId(prefix);
+    return base.isEmpty ? child : '$base/$child';
   }
 
   static Logger _buildLogger() => Logger(
@@ -42,6 +56,67 @@ class Log {
   );
 
   static Logger _ensureLogger() => _logger ??= _buildLogger();
+
+  // Attach a trace tag to the current async chain so all Log.* calls inside
+  // that flow carry the same origin label, without threading IDs through every
+  // function signature.
+  static Future<T> runWithContext<T>(
+    String context,
+    Future<T> Function() action,
+  ) {
+    return runZoned(
+      action,
+      zoneValues: {_contextKey: context},
+    );
+  }
+
+  static Future<T> runWithDerivedContext<T>(
+    String prefix,
+    Future<T> Function() action,
+  ) {
+    final context = deriveContext(prefix);
+    return runWithContext(context, action);
+  }
+
+  static T runWithContextSync<T>(String context, T Function() action) {
+    return runZoned(
+      action,
+      zoneValues: {_contextKey: context},
+    );
+  }
+
+  static T runWithDerivedContextSync<T>(
+    String prefix,
+    T Function() action,
+  ) {
+    final context = deriveContext(prefix);
+    return runWithContextSync(context, action);
+  }
+
+  static String _contextTag() {
+    final context = Zone.current[_contextKey] as String?;
+    final effective = context == null || context.isEmpty ? _defaultContext : context;
+    return effective.isEmpty ? '' : '[$effective] ';
+  }
+
+  static String currentContextId() {
+    final context = Zone.current[_contextKey] as String?;
+    if (context != null && context.isNotEmpty) return context;
+    return _defaultContext;
+  }
+
+  static String ownerTag() {
+    final context = currentContextId();
+    return 'owner=${context.isNotEmpty ? context : 'unknown'}';
+  }
+
+  static String _stripPathPrefix(String loc) {
+    const prefix = 'secluso_flutter/';
+    if (loc.startsWith(prefix)) {
+      return loc.substring(prefix.length);
+    }
+    return loc;
+  }
 
   static void d(dynamic msg, {String customLocation = ""}) {
     _record(Level.debug, msg, customLocation: customLocation);
@@ -220,9 +295,12 @@ class Log {
   }) {
     final ts = DateFormat('HH:mm:ss.SSS').format(DateTime.now());
     final tag = _levelMap[level] ?? '?';
-    final loc = customLocation.isNotEmpty ? customLocation : _callerLocation();
+    final rawLoc =
+        customLocation.isNotEmpty ? customLocation : _callerLocation();
+    final loc = rawLoc.isNotEmpty ? _stripPathPrefix(rawLoc) : rawLoc;
     final pad = loc.isNotEmpty ? ' ' : '';
-    return '$ts [$tag] $loc$pad→ $msg';
+    final ctx = _contextTag();
+    return '$ts [$tag] $loc$pad→ $ctx$msg';
   }
 
   static String _callerLocation() {
@@ -236,7 +314,8 @@ class Log {
           r'([A-Za-z0-9_/.]+\.dart):(\d+):(\d+)',
         ).firstMatch(line);
         if (match != null) {
-          return '${match.group(1)}:${match.group(2)}:${match.group(3)}';
+          final raw = '${match.group(1)}:${match.group(2)}:${match.group(3)}';
+          return _stripPathPrefix(raw);
         }
       }
     }
@@ -299,10 +378,12 @@ class _OneLinePrinter extends LogPrinter {
     final loc =
         !debugMode
             ? ""
-            : (customLocation == "" ? _callerLocation() : customLocation);
+            : (customLocation == ""
+                ? _callerLocation()
+                : Log._stripPathPrefix(customLocation));
     final pad = loc.isNotEmpty ? ' ' : '';
-
-    return ['$ts [$tag] $loc$pad→ $actualMessage'];
+    final ctx = Log._contextTag();
+    return ['$ts [$tag] $loc$pad→ $ctx$actualMessage'];
   }
 
   // Grab first stack-frame outside logger / flutter internals.
@@ -317,7 +398,8 @@ class _OneLinePrinter extends LogPrinter {
           r'([A-Za-z0-9_/.]+\.dart):(\d+):(\d+)',
         ).firstMatch(line);
         if (match != null) {
-          return '${match.group(1)}:${match.group(2)}:${match.group(3)}';
+          final raw = '${match.group(1)}:${match.group(2)}:${match.group(3)}';
+          return Log._stripPathPrefix(raw);
         }
       }
     }

@@ -1115,12 +1115,25 @@ impl SseDecode for crate::api::logger::LogEntry {
         let mut var_level = <i32>::sse_decode(deserializer);
         let mut var_tag = <String>::sse_decode(deserializer);
         let mut var_msg = <String>::sse_decode(deserializer);
+        let mut var_traceId = <Option<String>>::sse_decode(deserializer);
         return crate::api::logger::LogEntry {
             time_millis: var_timeMillis,
             level: var_level,
             tag: var_tag,
             msg: var_msg,
+            trace_id: var_traceId,
         };
+    }
+}
+
+impl SseDecode for Option<String> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<String>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
     }
 }
 
@@ -1258,6 +1271,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::logger::LogEntry {
             self.level.into_into_dart().into_dart(),
             self.tag.into_into_dart().into_dart(),
             self.msg.into_into_dart().into_dart(),
+            self.trace_id.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -1368,6 +1382,17 @@ impl SseEncode for crate::api::logger::LogEntry {
         <i32>::sse_encode(self.level, serializer);
         <String>::sse_encode(self.tag, serializer);
         <String>::sse_encode(self.msg, serializer);
+        <Option<String>>::sse_encode(self.trace_id, serializer);
+    }
+}
+
+impl SseEncode for Option<String> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <String>::sse_encode(value, serializer);
+        }
     }
 }
 

@@ -6,7 +6,7 @@ import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/notifications/epoch.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
-import 'package:secluso_flutter/src/rust/api.dart';
+import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/routes/app_drawer.dart';
 import 'package:secluso_flutter/src/rust/frb_generated.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
@@ -53,6 +53,10 @@ bool _isEpochMismatch(String message) {
       message.contains("group epoch");
 }
 
+bool _isBusyError(String message) {
+  return message.contains("Error: Busy");
+}
+
 Future<void> _enqueuePendingVideo(String cameraName, String decFileName) async {
   final baseDir = await getApplicationDocumentsDirectory();
   final filePath = p.join(
@@ -96,7 +100,25 @@ Future<bool> _maybeForceInit(String cameraName, String reason) async {
 
   _forceInitLast[cameraName] = now;
   Log.w("[download] Forcing init for $cameraName (reason=$reason)");
-  return await initialize(cameraName, timeout: _forceInitTimeout, force: true);
+  final outcome = await initialize(
+    cameraName,
+    timeout: _forceInitTimeout,
+    force: true,
+  );
+  return outcome.isOk;
+}
+
+Future<bool> _runDownloadWithContext(String cameraName, String source) async {
+  final traceId = Log.deriveContext('dl');
+  return Log.runWithContext(
+    traceId,
+    () async {
+      Log.d(
+        "Download context started (source=$source, camera=$cameraName, id=$traceId)",
+      );
+      return await retrieveVideos(cameraName);
+    },
+  );
 }
 
 Future<bool> doWorkNonBackground(String cameraName) async {
@@ -106,7 +128,7 @@ Future<bool> doWorkNonBackground(String cameraName) async {
     try {
       Log.d("Starting to work in non-background mode");
 
-      bool result = await retrieveVideos(cameraName);
+      bool result = await _runDownloadWithContext(cameraName, "foreground");
 
       QueueProcessor.instance.signalNewFile();
       return result;
@@ -122,101 +144,105 @@ Future<bool> doWorkNonBackground(String cameraName) async {
 }
 
 Future<bool> doWorkBackground() async {
-  // TODO: We should also create synchronization between any motion download (if we were to have some sort of download from the main)
-  if (Platform.isAndroid) {
-    await RustBridgeHelper.ensureInitialized();
-  }
-  Log.d("Starting to work");
+  final traceId = Log.deriveContext('dlw');
+  return Log.runWithContext(
+    traceId,
+    () async {
+      Log.d("Download worker context started (id=$traceId)");
+      // TODO: We should also create synchronization between any motion download (if we were to have some sort of download from the main)
+      if (Platform.isAndroid) {
+        await RustBridgeHelper.ensureInitialized();
+      }
+      Log.d("Starting to work");
 
-  // Perform an initial check (before lock)
-  var prefs = SharedPreferencesAsync();
-  if (!await prefs.containsKey(PrefKeys.downloadCameraQueue) &&
-      !await prefs.containsKey(PrefKeys.backupDownloadCameraQueue)) {
-    Log.w("There are no pref keys to base off of.");
-    return true;
-  }
-
-  if (await lock(Constants.genericDownloadTaskLock)) {
-    try {
+      // Perform an initial check (before lock)
       var prefs = SharedPreferencesAsync();
-      if (await lock(Constants.cameraWaitingLock)) {
-        var downloadCameraQueue;
+      if (!await prefs.containsKey(PrefKeys.downloadCameraQueue) &&
+          !await prefs.containsKey(PrefKeys.backupDownloadCameraQueue)) {
+        Log.w("There are no pref keys to base off of.");
+        return true;
+      }
+
+      if (await lock(Constants.genericDownloadTaskLock)) {
         try {
-          // Secondary check after locking
-          if (!await prefs.containsKey(PrefKeys.downloadCameraQueue) &&
-              !await prefs.containsKey(PrefKeys.backupDownloadCameraQueue)) {
-            Log.e("There are no pref keys to base off of.");
-            return true;
-          }
+          var prefs = SharedPreferencesAsync();
+          if (await lock(Constants.cameraWaitingLock)) {
+            var downloadCameraQueue;
+            try {
+              // Secondary check after locking
+              if (!await prefs.containsKey(PrefKeys.downloadCameraQueue) &&
+                  !await prefs.containsKey(PrefKeys.backupDownloadCameraQueue)) {
+                Log.e("There are no pref keys to base off of.");
+                return true;
+              }
 
-          downloadCameraQueue = await prefs.getStringList(
-            PrefKeys.downloadCameraQueue,
-          );
+              downloadCameraQueue = await prefs.getStringList(
+                PrefKeys.downloadCameraQueue,
+              );
 
-          var backupDownloadCameraQueue = await prefs.getStringList(
-            PrefKeys.backupDownloadCameraQueue,
-          );
-          if (downloadCameraQueue == null) {
-            downloadCameraQueue =
-                backupDownloadCameraQueue; // Replace the existing queue with the pre-existing backup.
-          } else if (backupDownloadCameraQueue != null) {
-            // Merge the two queues (without duplicates by using sets)
-            downloadCameraQueue =
-                downloadCameraQueue
-                    .toSet()
-                    .union(backupDownloadCameraQueue.toSet())
-                    .toList();
-          }
+              var backupDownloadCameraQueue = await prefs.getStringList(
+                PrefKeys.backupDownloadCameraQueue,
+              );
+              if (downloadCameraQueue == null) {
+                downloadCameraQueue =
+                    backupDownloadCameraQueue; // Replace the existing queue with the pre-existing backup.
+              } else if (backupDownloadCameraQueue != null) {
+                // Merge the two queues (without duplicates by using sets)
+                downloadCameraQueue =
+                    downloadCameraQueue
+                        .toSet()
+                        .union(backupDownloadCameraQueue.toSet())
+                        .toList();
+              }
 
-          downloadCameraQueue = await _sanitizeDownloadQueue(
-            downloadCameraQueue ?? <String>[],
-          );
-          if (downloadCameraQueue.isEmpty) {
-            Log.w("No valid cameras in download queue after sanitization");
-            await prefs.remove(PrefKeys.downloadCameraQueue);
-            await prefs.remove(PrefKeys.backupDownloadCameraQueue);
-            return true;
-          }
+              downloadCameraQueue = await _sanitizeDownloadQueue(
+                downloadCameraQueue ?? <String>[],
+              );
+              if (downloadCameraQueue.isEmpty) {
+                Log.w("No valid cameras in download queue after sanitization");
+                await prefs.remove(PrefKeys.downloadCameraQueue);
+                await prefs.remove(PrefKeys.backupDownloadCameraQueue);
+                return true;
+              }
 
-          // Await these, so that they don't run outside the lock.
-          await prefs.setStringList(
-            PrefKeys.backupDownloadCameraQueue,
-            downloadCameraQueue,
-          ); // Create a backup of the current list.
-          await prefs.remove(
-            PrefKeys.downloadCameraQueue,
-          ); // Delete the existing list, so that we know any new entries from this point will require an additional download later
-        } finally {
-          // Ensure this always unlocks
-          await unlock(Constants.cameraWaitingLock);
-          Log.d("Released lock");
-        }
-        if (downloadCameraQueue != null) {
-          // What if we have uneven cameras within the batch? Say we have 6 cameras. Three have 10 videos to download. Three have 1. It seems best to associate them when batching, but we randomize currently.
-          var batchSize = Constants.downloadBatchSize;
-          var batchedQueue = batch(downloadCameraQueue, batchSize);
-          Log.d("Batched Queue List: $batchedQueue");
-
-          var retrieveResults = [];
-          for (int i = 1; i <= batchedQueue.length; i++) {
-            var currentSet = batchedQueue[i - 1];
-            Log.d("Batch #$i = $currentSet");
-
-            // Queue all of the current batch
-            var currentFutures = [];
-            for (int j = 0; j < currentSet.length; j++) {
-              currentFutures.add(
-                retrieveVideos(currentSet[j]),
-              ); // This is an async function, so it'll run all of these in parallel
+              // Await these, so that they don't run outside the lock.
+              await prefs.setStringList(
+                PrefKeys.backupDownloadCameraQueue,
+                downloadCameraQueue,
+              ); // Create a backup of the current list.
+              await prefs.remove(
+                PrefKeys.downloadCameraQueue,
+              ); // Delete the existing list, so that we know any new entries from this point will require an additional download later
+            } finally {
+              // Ensure this always unlocks
+              await unlock(Constants.cameraWaitingLock);
+              Log.d("Released lock");
             }
+            if (downloadCameraQueue != null) {
+              // What if we have uneven cameras within the batch? Say we have 6 cameras. Three have 10 videos to download. Three have 1. It seems best to associate them when batching, but we randomize currently.
+              var batchSize = Constants.downloadBatchSize;
+              var batchedQueue = batch(downloadCameraQueue, batchSize);
+              Log.d("Batched Queue List: $batchedQueue");
 
-            Log.d("Awaiting batch completion");
-            // Wait for all of the current batch to complete.
-            for (int j = 0; j < currentSet.length; j++) {
-              retrieveResults.add(await currentFutures[j]);
-            }
-            Log.d("Batch completed");
-          }
+              var retrieveResults = [];
+              for (int i = 1; i <= batchedQueue.length; i++) {
+                var currentSet = batchedQueue[i - 1];
+                Log.d("Batch #$i = $currentSet");
+
+                // Queue all of the current batch
+                var currentFutures = [];
+                for (int j = 0; j < currentSet.length; j++) {
+                  currentFutures.add(
+                    _runDownloadWithContext(currentSet[j], "background"),
+                  ); // This is an async function, so it'll run all of these in parallel
+                }
+                Log.d("Awaiting batch completion");
+                // Wait for all of the current batch to complete.
+                for (int j = 0; j < currentSet.length; j++) {
+                  retrieveResults.add(await currentFutures[j]);
+                }
+                Log.d("Batch completed");
+              }
 
           // Track if at least one was successful, and if we had a single failure or not.
           var oneSuccessful = false;
@@ -299,7 +325,9 @@ Future<bool> doWorkBackground() async {
     return true;
   }
 
-  return false;
+    return false;
+  },
+  );
 }
 
 /// Separate a long list into batches of size batchSize
@@ -355,6 +383,11 @@ Future<List<String>> _sanitizeDownloadQueue(List<String> queue) async {
 
 Future<bool> retrieveVideos(String cameraName) async {
   Log.d("Entered for $cameraName");
+  final cameraLock = "motion$cameraName.lock";
+  if (!await lock(cameraLock)) {
+    Log.w("Motion download lock busy for $cameraName; skipping");
+    return false;
+  }
   await DownloadStatus.markActive(cameraName, true);
   var epoch = await readEpoch(cameraName, "video");
   const downloadTimeout = Duration(seconds: 60);
@@ -416,6 +449,12 @@ Future<bool> retrieveVideos(String cameraName) async {
         }
         if (decFileName.startsWith("Error")) {
           Log.w("Decrypt failed for $cameraName epoch $epoch: $decFileName");
+          if (_isBusyError(decFileName)) {
+            Log.w(
+              "Motion decrypt busy for $cameraName epoch $epoch; skipping for now",
+            );
+            return false;
+          }
           if (_isEpochMismatch(decFileName)) {
             final markerPayload =
                 await readEpochMarker(cameraName, "motion", epoch);
@@ -510,5 +549,6 @@ Future<bool> retrieveVideos(String cameraName) async {
     return true; // TODO: We may wish to utilize a check in the future on if something truly failed that could be retried, so this is left here as an architecture to make that happen
   } finally {
     await DownloadStatus.markActive(cameraName, false);
+    await unlock(cameraLock);
   }
 }
