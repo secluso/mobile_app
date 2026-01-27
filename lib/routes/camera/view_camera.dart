@@ -55,6 +55,19 @@ String repackageVideoTitle(String videoFileName) {
 }
 
 class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
+  static const Duration _thumbStableWaitTimeout = Duration(seconds: 2);
+  static const Duration _thumbStableWaitPoll = Duration(milliseconds: 120);
+  static const int _minThumbPngSizeBytes = 32;
+  static const List<int> _pngSignature = <int>[
+    0x89,
+    0x50,
+    0x4E,
+    0x47,
+    0x0D,
+    0x0A,
+    0x1A,
+    0x0A,
+  ];
   late Box<Video> _videoBox;
   final List<Video> _videos = [];
   final Map<String, Uint8List?> _videoThumbCache = {};
@@ -428,6 +441,46 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     }
   }
 
+  bool _looksLikePngHeader(Uint8List bytes) {
+    if (bytes.length < _pngSignature.length) return false;
+    for (var i = 0; i < _pngSignature.length; i++) {
+      if (bytes[i] != _pngSignature[i]) return false;
+    }
+    return true;
+  }
+
+  Future<bool> _waitForStablePng(String path) async {
+    // Thumbnails can be created while the UI is already trying to render them.
+    // We wait for a stable file size and a valid PNG header to avoid decoding
+    // partially-written files that trigger image decode errors.
+    final file = File(path);
+    final deadline = DateTime.now().add(_thumbStableWaitTimeout);
+    int? lastSize;
+
+    while (DateTime.now().isBefore(deadline)) {
+      if (!await file.exists()) return false;
+      final stat = await file.stat();
+      final size = stat.size;
+      if (size >= _minThumbPngSizeBytes &&
+          lastSize != null &&
+          size == lastSize) {
+        RandomAccessFile? raf;
+        try {
+          raf = await file.open(mode: FileMode.read);
+          final header = await raf.read(_pngSignature.length);
+          return _looksLikePngHeader(header);
+        } catch (_) {
+          return false;
+        } finally {
+          await raf?.close();
+        }
+      }
+      lastSize = size;
+      await Future.delayed(_thumbStableWaitPoll);
+    }
+    return false;
+  }
+
   Future<Uint8List?> _loadVideoThumbBytes(String cameraName, String videoFile) {
     final ts = _timestampFromVideo(videoFile);
     if (ts == null) return Future.value(null);
@@ -447,10 +500,15 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
           _videoThumbCache[key] = null; // remember miss
           return null;
         }
+        final ready = await _waitForStablePng(path);
+        if (!ready) {
+          _videoThumbCache[key] = null;
+          return null;
+        }
         final bytes = await File(path).readAsBytes();
         final ok = await _isValidImageBytes(bytes);
         if (!ok) {
-          Log.e("Invalid thumbnail bytes for $key; deleting $path");
+          Log.w("Invalid thumbnail bytes for $key; deleting $path");
           try {
             await File(path).delete();
           } catch (_) {}
