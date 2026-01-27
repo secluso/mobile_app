@@ -4,6 +4,7 @@ import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
+import 'package:secluso_flutter/utilities/http_client.dart';
 import 'proprietary_camera_waiting.dart';
 import 'package:secluso_flutter/keys.dart';
 
@@ -403,6 +404,7 @@ class _ProprietaryCameraInfoDialogState
       var lastCameraAdd = sharedPreferences.getString(PrefKeys.lastCameraAdd)!;
       await deregisterCamera(cameraName: lastCameraAdd);
       invalidateCameraInit(lastCameraAdd);
+      HttpClientService.instance.clearGroupNameCache(lastCameraAdd);
       await sharedPreferences.remove(PrefKeys.lastCameraAdd);
 
       final docsDir = await getApplicationDocumentsDirectory();

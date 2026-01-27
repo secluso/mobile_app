@@ -123,6 +123,15 @@ class HttpClientService {
   static const Duration _groupNameInitCooldown = Duration(seconds: 30);
   static const Duration _groupNameInitTimeout = Duration(seconds: 8);
   final Map<String, DateTime> _groupNameInitLast = {};
+  final Map<String, String> _groupNameCache = {};
+
+  void clearGroupNameCache(String cameraName) {
+    _groupNameCache.removeWhere((key, _) => key.startsWith('$cameraName|'));
+  }
+
+  void clearAllGroupNameCache() {
+    _groupNameCache.clear();
+  }
 
   void resetVersionGateState() {
     _versionCheckInFlight = null;
@@ -690,12 +699,19 @@ class HttpClientService {
   }
 
   Future<String> _groupName(String cameraName, String clientTag) async {
+    final cacheKey = "$cameraName|$clientTag";
+    final cached = _groupNameCache[cacheKey];
+    if (cached != null) {
+      return cached;
+    }
+
     String groupName = await getGroupName(
       clientTag: clientTag,
       cameraName: cameraName,
     );
 
     if (!groupName.startsWith("Error")) {
+      _groupNameCache[cacheKey] = groupName;
       return groupName;
     }
 
@@ -709,7 +725,7 @@ class HttpClientService {
       "[http] getGroupName failed for $cameraName ($clientTag): $groupName",
     );
 
-    final retryKey = "$cameraName|$clientTag";
+    final retryKey = cacheKey;
     final now = DateTime.now();
     final lastAttempt = _groupNameInitLast[retryKey];
     if (lastAttempt != null &&
@@ -732,6 +748,7 @@ class HttpClientService {
         cameraName: cameraName,
       );
       if (!groupName.startsWith("Error")) {
+        _groupNameCache[cacheKey] = groupName;
         return groupName;
       }
       Log.w(

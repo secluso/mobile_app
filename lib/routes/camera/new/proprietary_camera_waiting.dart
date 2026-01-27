@@ -21,6 +21,7 @@ import 'package:secluso_flutter/routes/camera/list_cameras.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
+import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/notifications/notification_permissions.dart';
 import 'proprietary_camera_option.dart';
 import 'package:path/path.dart' as p;
@@ -230,6 +231,7 @@ class _ProprietaryCameraWaitingDialogState
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await deregisterCamera(cameraName: cameraName);
     invalidateCameraInit(cameraName);
+    HttpClientService.instance.clearGroupNameCache(cameraName);
     prefs.remove(PrefKeys.lastCameraAdd);
 
     final docsDir = await getApplicationDocumentsDirectory();

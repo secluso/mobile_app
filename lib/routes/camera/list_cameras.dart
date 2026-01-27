@@ -20,6 +20,7 @@ import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/notifications/firebase.dart';
 import 'package:secluso_flutter/utilities/firebase_init.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
+import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/main.dart';
 import 'view_camera.dart';
@@ -580,6 +581,7 @@ class CamerasPageState extends State<CamerasPage>
 
     await deregisterCamera(cameraName: cameraName);
     invalidateCameraInit(cameraName);
+    HttpClientService.instance.clearGroupNameCache(cameraName);
 
     final cameraBox = AppStores.instance.cameraStore.box<Camera>();
     final videoBox = AppStores.instance.videoStore.box<Video>();
