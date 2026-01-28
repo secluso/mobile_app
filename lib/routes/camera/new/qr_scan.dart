@@ -73,6 +73,10 @@ class _QrScanDialogState extends State<QrScanDialog> {
         }
 
         final rawBytes = Uint8List.fromList(jsonData["secret"].cast<int>());
+        if (rawBytes.length != Constants.numCameraSecretBytes) {
+          _showInvalidQrCode("Invalid QR code shown");
+          continue;
+        }
 
         _hasScannedCode = true; // mark as handled
         // Stop the camera
