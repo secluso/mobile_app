@@ -54,9 +54,15 @@ class FirebaseInit {
           }
 
           if (e.code == 'no-app') {
-            app = await Firebase.initializeApp(
-              options: options,
-            );
+            try {
+              app = await Firebase.initializeApp(options: options);
+            } on FirebaseException catch (initErr) {
+              if (initErr.code == 'duplicate-app') {
+                app = Firebase.app();
+              } else {
+                rethrow;
+              }
+            }
           } else {
             rethrow;
           }

@@ -31,7 +31,6 @@
 		E323D9EE2E895714003F6F7F /* BytePlayerPlatformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9DF2E895704003F6F7F /* BytePlayerPlatformView.swift */; };
 		E323D9EF2E895714003F6F7F /* BytePlayerViewFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9E02E895704003F6F7F /* BytePlayerViewFactory.swift */; };
 		E323D9F02E895714003F6F7F /* ByteSampleBufferView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9E12E895704003F6F7F /* ByteSampleBufferView.swift */; };
-		E3A63D2C2DB53EA300C0A3D7 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = E3A63D2B2DB53EA300C0A3D7 /* GoogleService-Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -121,7 +120,6 @@
 		E36A3AB42E8720BB00BEA7BA /* MP4MoovParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MP4MoovParser.swift; path = Runner/MP4MoovParser.swift; sourceTree = "<group>"; };
 		E36A3AB52E8720BB00BEA7BA /* MP4DemuxController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MP4DemuxController.swift; path = Runner/MP4DemuxController.swift; sourceTree = "<group>"; };
 		E38C91122D9C583B009438ED /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
-		E3A63D2B2DB53EA300C0A3D7 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		E3B7A8232E8875A0001805D9 /* MdatStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MdatStreamer.swift; path = Runner/MdatStreamer.swift; sourceTree = "<group>"; };
 		E3B7A8242E8875A0001805D9 /* FormatDescriptionBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FormatDescriptionBuilder.swift; path = Runner/FormatDescriptionBuilder.swift; sourceTree = "<group>"; };
 		E3B7A8252E8875A0001805D9 /* BoxScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BoxScanner.swift; path = Runner/BoxScanner.swift; sourceTree = "<group>"; };
@@ -264,7 +262,6 @@
 				E33ADD602E082FCE007B74FB /* BytePlayerViewFactory.swift */,
 				E33ADD622E082FD2007B74FB /* ByteQueueManager.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
-				E3A63D2B2DB53EA300C0A3D7 /* GoogleService-Info.plist */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -430,7 +427,6 @@
 			files = (
 				97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */,
 				3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */,
-				E3A63D2C2DB53EA300C0A3D7 /* GoogleService-Info.plist in Resources */,
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,
 				97C146FC1CF9000F007C117D /* Main.storyboard in Resources */,
 			);

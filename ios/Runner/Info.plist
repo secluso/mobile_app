@@ -51,6 +51,11 @@
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoadsInMedia</key>
+		<true/>
+	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>Please allow access to the camera to scan QR codes</string>
 	<key>NSLocalNetworkUsageDescription</key>
@@ -63,6 +68,7 @@
 	<array>
 		<string>fetch</string>
 		<string>processing</string>
+		<string>remote-notification</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
@@ -81,10 +87,6 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoadsInMedia</key><true/>
-	</dict>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
 		<dict>
@@ -98,7 +100,6 @@
 			<string>seclusostream</string>
 			<key>UTTypeTagSpecification</key>
 			<dict/>
-			
 		</dict>
 	</array>
 </dict>
