@@ -225,14 +225,24 @@ Future<bool> initializeCore(String cameraName, bool firstTime) async {
       "${(await getApplicationDocumentsDirectory()).absolute.path}/camera_dir_$cameraName";
 
   var videosDir = "$filesDir/videos";
+  var encryptedDir = "$filesDir/encrypted";
 
   // Create directory if it doesn't exist
-  var dir = await Directory(videosDir);
-  if (!(await dir.exists())) {
+  var videoDirHandle = await Directory(videosDir);
+  if (!(await videoDirHandle.exists())) {
     try {
-      await dir.create(recursive: true);
+      await videoDirHandle.create(recursive: true);
     } catch (e) {
-      Log.e("Error: Failed to create directory for files");
+      Log.e("Error: Failed to create directory for videos");
+    }
+  }
+
+  var encDirHandle = await Directory(encryptedDir);
+  if (!(await encDirHandle.exists())) {
+    try {
+      await encDirHandle.create(recursive: true);
+    } catch (e) {
+      Log.e("Error: Failed to create directory for encrypted files");
     }
   }
 

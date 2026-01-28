@@ -520,7 +520,15 @@ Future<bool> retrieveVideos(String cameraName) async {
         Log.d("Dec file name = $decFileName");
 
         // Delete only after successful decrypt to avoid losing MLS commits.
-        await file.delete();
+        if (await file.exists()) {
+          try {
+            await file.delete();
+          } catch (e) {
+            Log.e("Failed to delete encrypted file $fileName: $e");
+          }
+        } else {
+          Log.w("Encrypted file already missing: $fileName");
+        }
 
         Log.d("Received 100%");
 

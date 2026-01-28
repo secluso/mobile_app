@@ -345,7 +345,7 @@ class HttpClientService {
 
     File? file;
     if (destinationFile != null) {
-      final dir = await _ensureCameraDir(cameraName);
+      final dir = await _ensureEncryptedDir(cameraName);
       file = File('${dir.path}/$destinationFile');
       if (await file.exists()) {
         Log.d("File name $destinationFile existed already");
@@ -676,9 +676,9 @@ class HttpClientService {
     }
   }
 
-  Future<Directory> _ensureCameraDir(String cameraName) async {
+  Future<Directory> _ensureEncryptedDir(String cameraName) async {
     final base = await getApplicationDocumentsDirectory();
-    final dir = Directory('${base.path}/camera_dir_$cameraName/videos');
+    final dir = Directory('${base.path}/camera_dir_$cameraName/encrypted');
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }

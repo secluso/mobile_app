@@ -2,8 +2,7 @@
 
 import 'dart:async';
 import 'dart:ui';
-import 'package:flutter/foundation.dart'; //remove if not using logger
-
+import 'package:flutter/foundation.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
@@ -12,12 +11,13 @@ import 'package:flutter/services.dart';
 import 'package:secluso_flutter/notifications/heartbeat_task.dart';
 import 'package:secluso_flutter/notifications/scheduler.dart';
 import 'package:secluso_flutter/src/rust/guard.dart';
-import 'package:secluso_flutter/src/rust/api/logger.dart'; //remove if not using logger
+import 'package:secluso_flutter/src/rust/api/logger.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/notifications/thumbnails.dart';
 import 'package:secluso_flutter/notifications/notifications.dart';
 import 'routes/home_page.dart';
 import "routes/theme_provider.dart";
+import "package:path_provider/path_provider.dart";
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/notifications/firebase.dart';

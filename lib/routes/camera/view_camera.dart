@@ -80,6 +80,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
   int _offset = 0;
   bool _hasMore = true;
   bool _isLoading = false;
+  int _dataGeneration = 0;
 
   final ScrollController _scrollController = ScrollController();
   final ConfettiController _confetti = ConfettiController(
@@ -236,6 +237,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
   }
 
   Future<void> reloadVideos() async {
+    final int generation = _dataGeneration;
     final query =
         _videoBox
             .query(Video_.camera.equals(widget.cameraName))
@@ -248,6 +250,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
 
     await _prefetchDetectionsFor(newVideos);
 
+    if (generation != _dataGeneration || !mounted) return;
     setState(() {
       _videos.clear();
       _videos.addAll(newVideos);
@@ -258,6 +261,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
   Future<void> _loadNextPage() async {
     if (!_hasMore || _isLoading) return;
     setState(() => _isLoading = true);
+    final int generation = _dataGeneration;
 
     final query =
         _videoBox
@@ -272,6 +276,10 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
 
     await _prefetchDetectionsFor(batch);
 
+    if (generation != _dataGeneration || !mounted) {
+      setState(() => _isLoading = false);
+      return;
+    }
     setState(() {
       _videos.addAll(batch);
       _offset += batch.length;
@@ -318,25 +326,73 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
   void _deleteAllVideos() async {
     HapticFeedback.heavyImpact();
     _confetti.play();
+    _dataGeneration++;
+    _isLoading = false;
 
     final dir = await getApplicationDocumentsDirectory();
     final videoDir = Directory(
       '${dir.path}/camera_dir_${widget.cameraName}/videos',
     );
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    const recentThresholdMs = 15000;
+    final recentCutoffSec = ((nowMs - recentThresholdMs) / 1000).floor();
 
-    // Delete the videos directory
+    int? newestVideoTs;
+    final deletedPaths = <String>[];
+    final deletedVideoNames = <String>{};
     if (await videoDir.exists()) {
       try {
-        await videoDir.delete(recursive: true);
-        Log.d('Deleted camera folder: ${videoDir.path}');
+        final entries = await videoDir.list(followLinks: false).toList();
+        for (final entry in entries) {
+          if (entry is! File) continue;
+          final name = p.basename(entry.path);
+          final ts = _timestampFromVideo(name);
+          if (ts != null) {
+            final parsed = int.tryParse(ts);
+            if (parsed != null) {
+              if (newestVideoTs == null || parsed > newestVideoTs!) {
+                newestVideoTs = parsed;
+              }
+            }
+          }
+        }
+
+        for (final entry in entries) {
+          if (entry is! File) continue;
+          final name = p.basename(entry.path);
+          if (name.startsWith("thumbnail_") && name.endsWith(".png")) {
+            final tsStr = name.substring("thumbnail_".length, name.length - 4);
+            final ts = int.tryParse(tsStr);
+            if (newestVideoTs != null && ts != null && ts > newestVideoTs!) {
+              continue; // retain newer thumbnails
+            }
+          }
+          bool shouldDelete = true;
+          try {
+            final stat = await entry.stat();
+            if (nowMs - stat.modified.millisecondsSinceEpoch <
+                recentThresholdMs) {
+              shouldDelete = false; // skip very recent files
+            }
+          } catch (_) {}
+          if (!shouldDelete) continue;
+          deletedPaths.add(entry.path);
+          try {
+            await entry.delete();
+            if (name.startsWith("video_") && name.endsWith(".mp4")) {
+              deletedVideoNames.add(name);
+            }
+          } catch (e) {
+            Log.e('Error deleting file ${entry.path}: $e');
+          }
+        }
+        Log.d('Cleared camera folder: ${videoDir.path}');
       } catch (e) {
-        Log.e('Error deleting folder: $e');
+        Log.e('Error clearing folder: $e');
       }
     }
 
-    // FIXME: what if we receive a new video/thumbnail right here, when the videos directory doesn't exist?
-
-    // Create the (empty) videos directory again
+    // Ensure videos directory exists
     try {
       await videoDir.create(recursive: true);
     } catch (e) {
@@ -348,7 +404,47 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     final videosToDelete = query.find();
     query.close();
 
-    _videoBox.removeMany(videosToDelete.map((v) => v.id).toList());
+    final ids =
+        videosToDelete
+            .where((v) => deletedVideoNames.contains(v.video))
+            .map((v) => v.id)
+            .toList();
+    try {
+      if (ids.isNotEmpty) {
+        _videoBox.removeMany(ids);
+      }
+    } catch (e) {
+      Log.e("Error deleting videos from DB; retrying once: $e");
+      try {
+        if (ids.isNotEmpty) {
+          _videoBox.removeMany(ids);
+        }
+      } catch (e2) {
+        Log.e("DB delete retry failed: $e2");
+      }
+    }
+
+    try {
+      final countQuery =
+          _videoBox.query(Video_.camera.equals(widget.cameraName)).build();
+      final dbCount = countQuery.count();
+      countQuery.close();
+
+      final remainingDeletedPaths = <String>[];
+      for (final path in deletedPaths) {
+        if (await File(path).exists()) {
+          remainingDeletedPaths.add(path);
+        }
+      }
+
+      if (dbCount != 0 || remainingDeletedPaths.isNotEmpty) {
+        Log.e(
+          "Delete all mismatch for ${widget.cameraName}: dbCount=$dbCount remainingFiles=$remainingDeletedPaths dir=${videoDir.path}",
+        );
+      }
+    } catch (e) {
+      Log.e("Error verifying delete all for ${widget.cameraName}: $e");
+    }
 
     setState(() {
       _videos.clear();
@@ -369,6 +465,62 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     _videoThumbFutures.clear();
 
     reloadVideos();
+    await _logDeleteAllState(videoDir);
+  }
+
+  Future<void> _logDeleteAllState(Directory videoDir) async {
+    try {
+      final countQuery =
+          _videoBox.query(Video_.camera.equals(widget.cameraName)).build();
+      final dbCount = countQuery.count();
+      final remainingVideos = countQuery.find();
+      countQuery.close();
+
+      final files = <String>[];
+      final retainedThumbs = <String>[];
+      int? newestVideoTs;
+      if (await videoDir.exists()) {
+        final entries = await videoDir.list(followLinks: false).toList();
+        for (final entry in entries) {
+          if (entry is! File) continue;
+          final name = p.basename(entry.path);
+          final ts = _timestampFromVideo(name);
+          if (ts != null) {
+            final parsed = int.tryParse(ts);
+            if (parsed != null) {
+              if (newestVideoTs == null || parsed > newestVideoTs!) {
+                newestVideoTs = parsed;
+              }
+            }
+          }
+          if (entry.path.endsWith(".mp4")) {
+            files.add(entry.path);
+          }
+        }
+        if (newestVideoTs != null) {
+          for (final entry in entries) {
+            if (entry is! File) continue;
+            final name = p.basename(entry.path);
+            if (name.startsWith("thumbnail_") && name.endsWith(".png")) {
+              final tsStr = name.substring(
+                "thumbnail_".length,
+                name.length - 4,
+              );
+              final ts = int.tryParse(tsStr);
+              if (ts != null && ts > newestVideoTs!) {
+                retainedThumbs.add(entry.path);
+              }
+            }
+          }
+        }
+      }
+
+      Log.d(
+        "Delete all debug for ${widget.cameraName}: dbCount=$dbCount dbVideos=${remainingVideos.map((v) => v.video).toList()} files=$files retainedThumbs=$retainedThumbs",
+      );
+    } catch (e) {
+      Log.e("Delete all debug failed for ${widget.cameraName}: $e");
+    }
   }
 
   void _deleteOne(Video v, int index) async {
@@ -649,9 +801,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
                     ),
                     decoration: BoxDecoration(
                       color:
-                          dark
-                              ? Colors.blueGrey.shade800
-                              : Colors.blue.shade50,
+                          dark ? Colors.blueGrey.shade800 : Colors.blue.shade50,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color:
