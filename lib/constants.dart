@@ -14,6 +14,8 @@ class Constants {
       14; // The number of bytes within a user credentials QR code that belong to the password [username bytes, username bytes + X]
   static const downloadBatchSize =
       2; // The number of cameras to simultaneously download from
+  static const cameraQrCodeVersion =
+      "v1"; // The version string to match against for compatibility for camera QR codes
 }
 
 // Types to be used for groups in Rust

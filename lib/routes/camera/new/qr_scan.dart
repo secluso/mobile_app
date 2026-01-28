@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'dart:async';
+import 'package:secluso_flutter/utilities/logger.dart';
+import 'dart:convert';
 
 /// This dialog displays the camera preview and scans for a single QR code.
 /// After the first successful scan, it prompts the user for a camera name
@@ -48,21 +50,38 @@ class _QrScanDialogState extends State<QrScanDialog> {
     final barcodes = capture.barcodes;
 
     for (final barcode in barcodes) {
-      final rawBytes = barcode.rawBytes;
-      final rawBytesLen = rawBytes?.length;
-      if (rawBytes != null && rawBytes.isNotEmpty) {
-        if (rawBytesLen == Constants.numCameraSecretBytes) {
-          _hasScannedCode = true; // mark as handled
-          // Stop the camera
-          _cameraController.stop();
-
-          Navigator.of(context).pop(rawBytes);
-
-          // Once we return from that, break out completely
-          break;
-        } else {
+      final text = barcode.rawValue;
+      Log.d("Detected barcode with text: $text");
+      if (text != null && text.isNotEmpty) {
+        try {
+          jsonDecode(text);
+        } catch (e) {
           _showInvalidQrCode("Invalid QR code shown");
+          continue;
         }
+
+        final jsonData = jsonDecode(text);
+        if (jsonData is! Map || !jsonData.containsKey("version")) {
+          _showInvalidQrCode("Invalid QR code shown");
+          continue;
+        }
+
+        final versionKey = jsonData["version"];
+        if (versionKey != Constants.cameraQrCodeVersion) {
+          _showInvalidQrCode("Unsupported QR code version: $versionKey");
+          continue;
+        }
+
+        final rawBytes = Uint8List.fromList(jsonData["secret"].cast<int>());
+
+        _hasScannedCode = true; // mark as handled
+        // Stop the camera
+        _cameraController.stop();
+
+        Navigator.of(context).pop(rawBytes);
+
+        // Once we return from that, break out completely
+        break;
       }
     }
   }
