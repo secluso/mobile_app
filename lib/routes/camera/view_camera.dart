@@ -837,10 +837,11 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
                   ),
                 ),
               Expanded(
-                child: RefreshIndicator(
+                child: RefreshIndicator.adaptive(
                   onRefresh: _onPullToRefresh,
                   child: ListView.builder(
                     controller: _scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(),
                     itemCount: _videos.length + (_hasMore ? 1 : 0),
                     itemBuilder: (ctx, i) {
                       if (i >= _videos.length) {
