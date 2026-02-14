@@ -15,7 +15,7 @@ class Constants {
   static const downloadBatchSize =
       2; // The number of cameras to simultaneously download from
   static const cameraQrCodeVersion =
-      "v1"; // The version string to match against for compatibility for camera QR codes
+      "v1.1"; // The version string to match against for compatibility for camera QR codes
 }
 
 // Types to be used for groups in Rust

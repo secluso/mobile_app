@@ -61,18 +61,21 @@ class _QrScanDialogState extends State<QrScanDialog> {
         }
 
         final jsonData = jsonDecode(text);
-        if (jsonData is! Map || !jsonData.containsKey("version")) {
+        if (jsonData is! Map ||
+            !jsonData.containsKey("v") ||
+            !jsonData.containsKey("cs")) {
           _showInvalidQrCode("Invalid QR code shown");
           continue;
         }
 
-        final versionKey = jsonData["version"];
+        final versionKey = jsonData["v"];
         if (versionKey != Constants.cameraQrCodeVersion) {
           _showInvalidQrCode("Unsupported QR code version: $versionKey");
           continue;
         }
 
-        final rawBytes = Uint8List.fromList(jsonData["secret"].cast<int>());
+        // read base64 instead of bytes
+        final rawBytes = base64Decode(jsonData["cs"]);
         if (rawBytes.length != Constants.numCameraSecretBytes) {
           _showInvalidQrCode("Invalid QR code shown");
           continue;
