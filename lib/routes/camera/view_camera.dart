@@ -58,6 +58,8 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
   static const Duration _thumbStableWaitTimeout = Duration(seconds: 2);
   static const Duration _thumbStableWaitPoll = Duration(milliseconds: 120);
   static const int _minThumbPngSizeBytes = 32;
+  final enableSettings = false;
+
   static const List<int> _pngSignature = <int>[
     0x89,
     0x50,
@@ -727,17 +729,20 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          IconButton(
-            tooltip: 'Settings',
-            icon: const Icon(Icons.settings),
-            onPressed:
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => SettingsPage(cameraName: widget.cameraName),
+          if (enableSettings)
+            IconButton(
+              tooltip: 'Settings',
+              icon: const Icon(Icons.settings),
+
+              onPressed:
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder:
+                          (_) => SettingsPage(cameraName: widget.cameraName),
+                    ),
                   ),
-                ),
-          ),
+            ),
         ],
       ),
       body: Stack(
