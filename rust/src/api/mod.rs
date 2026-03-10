@@ -304,7 +304,7 @@ pub fn deregister_camera(camera_name: String) {
 pub fn decrypt_video(
     camera_name: String,
     enc_filename: String,
-    assumed_epoch: u64,
+    _assumed_epoch: u64,
 ) -> String {
     let (camera_name, trace_id) = split_trace_camera(&camera_name);
     let _trace_guard = logger::set_log_trace(trace_id);
@@ -326,7 +326,6 @@ pub fn decrypt_video(
     match secluso_app_native::decrypt_video(
         &mut *client_guard,
         enc_filename,
-        assumed_epoch,
     ) {
         Ok(decrypted_filename) => {
             return decrypted_filename;
@@ -343,7 +342,7 @@ pub fn decrypt_thumbnail(
     camera_name: String,
     enc_filename: String,
     pending_meta_directory: String,
-    assumed_epoch: u64,
+    _assumed_epoch: u64,
 ) -> String {
     let (camera_name, trace_id) = split_trace_camera(&camera_name);
     let _trace_guard = logger::set_log_trace(trace_id);
@@ -366,7 +365,6 @@ pub fn decrypt_thumbnail(
         &mut *client_guard,
         enc_filename,
         pending_meta_directory,
-        assumed_epoch,
     ) {
         Ok(decrypted_filename) => {
             return decrypted_filename;
