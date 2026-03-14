@@ -20,10 +20,11 @@ import 'logger.dart';
 
 // Entity used to return from download()
 class DownloadResult {
+  final bool not_found;
   final File? file;
   final Uint8List? data;
 
-  DownloadResult({this.file, this.data});
+  DownloadResult({this.not_found = false, this.file, this.data});
 }
 
 class _SilentException implements Exception {
@@ -333,9 +334,7 @@ class HttpClientService {
     await _handleServerVersionHeader(response);
     if (response.statusCode != 200) {
       if (response.statusCode == 404) {
-        throw _SilentException(
-          'Failed to download file: ${response.statusCode} ${response.reasonPhrase}',
-        );
+        return DownloadResult(not_found: true);
       } else {
         throw Exception(
           'Failed to download file: ${response.statusCode} ${response.reasonPhrase}',

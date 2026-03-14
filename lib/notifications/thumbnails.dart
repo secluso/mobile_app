@@ -186,6 +186,7 @@ class ThumbnailManager {
     }
   }
 
+  //FIXME: _session() and retrieveThumbnails have a lot of shared code
   static Future<void> _session({
     required String camera,
     required Duration timeBudget,
@@ -213,67 +214,376 @@ class ThumbnailManager {
           final sw = Stopwatch()..start();
 
           while (sw.elapsed <= timeBudget) {
-          // Epoch for this starts at 2 when not set from before.
-          final epoch = await readEpoch(camera, "thumbnail");
-          final assumedEpoch = epoch > 0 ? epoch - 1 : 0;
-          Log.d("Thumbnail Epoch = $epoch");
-          final fileName = "encThumbnail$epoch";
-          final downloadSw = Stopwatch()..start();
-          var result = await HttpClientService.instance.download(
-            destinationFile: fileName,
-            cameraName: camera,
-            serverFile: epoch.toString(),
-            type: Group.thumbnail,
-            timeout: _downloadTimeout,
-          );
-          downloadSw.stop();
-          if (!kReleaseMode) {
-            Log.d(
-              "[perf] Download thumbnail $camera epoch $epoch in ${downloadSw.elapsedMilliseconds}ms (ok=${result.isSuccess})",
+            // Epoch for this starts at 2 when not set from before.
+            final epoch = await readEpoch(camera, "thumbnail");
+            final assumedEpoch = epoch > 0 ? epoch - 1 : 0;
+            Log.d("Thumbnail Epoch = $epoch");
+            final fileName = "encThumbnail$epoch";
+            final downloadSw = Stopwatch()..start();
+            var result = await HttpClientService.instance.download(
+              destinationFile: fileName,
+              cameraName: camera,
+              serverFile: epoch.toString(),
+              type: Group.thumbnail,
+              timeout: _downloadTimeout,
             );
-          }
-
-          if (result.isFailure) break;
-
-          Log.d("Proceeding after thumbnail download");
-          final baseDir = await getApplicationDocumentsDirectory();
-          final metaDir = Directory(p.join(baseDir.path, 'waiting', 'meta'));
-          await metaDir.create(recursive: true);
-
-          // Decode the thumbnail
-          var file = result.value!.file!;
-          String decFileName;
-          final decryptSw = Stopwatch()..start();
-          try {
-            decFileName =
-                await decryptThumbnail(
-                  cameraName: camera,
-                  encFilename: fileName,
-                  pendingMetaDirectory: metaDir.path,
-                  assumedEpoch: BigInt.from(assumedEpoch),
-                ).timeout(_decryptTimeout);
-          } on TimeoutException {
-              Log.e(
-                "Thumbnail decrypt timeout for $camera after ${_decryptTimeout.inSeconds}s (${Log.ownerTag()})",
+            downloadSw.stop();
+            if (!kReleaseMode) {
+              Log.d(
+                "[perf] Download thumbnail $camera epoch $epoch in ${downloadSw.elapsedMilliseconds}ms (ok=${result.isSuccess})",
               );
-            return;
-          }
-          decryptSw.stop();
-          if (!kReleaseMode) {
-            Log.d(
-              "[perf] Decrypt thumbnail $camera $fileName in ${decryptSw.elapsedMilliseconds}ms (result=$decFileName)",
-            );
-          }
+            }
 
-          if (decFileName.startsWith("Error")) {
-            Log.w("Thumbnail decrypt failed for $camera epoch $epoch: $decFileName");
-            if (_isBusyError(decFileName)) {
-              Log.w(
-                "Thumbnail decrypt busy for $camera epoch $epoch; skipping for now",
+            if (result.isFailure) break;
+
+            final downloadValue = result.value!;
+            if (downloadValue.not_found) {
+              return;
+            }
+
+            if (downloadValue.file == null) {
+              Log.e("Successful download without file/data");
+              return;
+            }
+
+            Log.d("Proceeding after thumbnail download");
+            final baseDir = await getApplicationDocumentsDirectory();
+            final metaDir = Directory(p.join(baseDir.path, 'waiting', 'meta'));
+            await metaDir.create(recursive: true);
+
+            // Decode the thumbnail
+            var file = downloadValue.file!;
+            String decFileName;
+            final decryptSw = Stopwatch()..start();
+            try {
+              decFileName =
+                  await decryptThumbnail(
+                    cameraName: camera,
+                    encFilename: fileName,
+                    pendingMetaDirectory: metaDir.path,
+                    assumedEpoch: BigInt.from(assumedEpoch),
+                  ).timeout(_decryptTimeout);
+            } on TimeoutException {
+                Log.e(
+                  "Thumbnail decrypt timeout for $camera after ${_decryptTimeout.inSeconds}s (${Log.ownerTag()})",
+                );
+              return;
+            }
+            decryptSw.stop();
+            if (!kReleaseMode) {
+              Log.d(
+                "[perf] Decrypt thumbnail $camera $fileName in ${decryptSw.elapsedMilliseconds}ms (result=$decFileName)",
+              );
+            }
+
+            if (decFileName.startsWith("Error")) {
+              Log.w("Thumbnail decrypt failed for $camera epoch $epoch: $decFileName");
+              if (_isBusyError(decFileName)) {
+                Log.w(
+                  "Thumbnail decrypt busy for $camera epoch $epoch; skipping for now",
+                );
+                return;
+              }
+              if (_isEpochMismatch(decFileName)) {
+                final markerPayload =
+                    await readEpochMarker(camera, "thumbnail", epoch);
+                if (markerPayload != null && _isThumbnailFilename(markerPayload)) {
+                  final baseDir = await getApplicationDocumentsDirectory();
+                  final decPath = p.join(
+                    baseDir.path,
+                    'camera_dir_$camera',
+                    'videos',
+                    markerPayload,
+                  );
+                  if (await File(decPath).exists()) {
+                    ThumbnailNotifier.instance.notify(camera);
+                  } else {
+                    Log.w(
+                      "Epoch marker exists but thumbnail file missing: $decPath",
+                    );
+                  }
+                  Log.w(
+                    "Epoch mismatch for $camera thumbnail $epoch but marker exists; treating as duplicate",
+                  );
+                  await file.delete();
+                  await writeEpoch(camera, "thumbnail", epoch + 1);
+                  await HttpClientService.instance.delete(
+                    destinationFile: fileName,
+                    cameraName: camera,
+                    serverFile: epoch.toString(),
+                    type: Group.thumbnail,
+                  );
+                  continue;
+                } else if (markerPayload != null) {
+                  Log.w(
+                    "Epoch marker exists for $camera thumbnail $epoch but payload is invalid; not skipping",
+                  );
+                }
+              }
+              final forceOk = await _maybeForceInit(camera, "decrypt_thumbnail");
+              if (forceOk) {
+                final retrySw = Stopwatch()..start();
+                try {
+                  decFileName =
+                      await decryptThumbnail(
+                        cameraName: camera,
+                        encFilename: fileName,
+                        pendingMetaDirectory: metaDir.path,
+                        assumedEpoch: BigInt.from(assumedEpoch),
+                      ).timeout(_decryptTimeout);
+                } on TimeoutException {
+                  Log.e(
+                    "Thumbnail decrypt timeout after forced init for $camera (${Log.ownerTag()})",
+                  );
+                  return;
+                }
+                retrySw.stop();
+                if (!kReleaseMode) {
+                  Log.d(
+                    "[perf] Decrypt thumbnail retry $camera $fileName in ${retrySw.elapsedMilliseconds}ms (result=$decFileName)",
+                  );
+                }
+              }
+            }
+
+            Log.d("Thumbnail dec file name = $decFileName");
+
+            if (decFileName == "Duplicate") {
+              final markerPayload =
+                  await readEpochMarker(camera, "thumbnail", epoch);
+              if (markerPayload != null && _isThumbnailFilename(markerPayload)) {
+                final baseDir = await getApplicationDocumentsDirectory();
+                final decPath = p.join(
+                  baseDir.path,
+                  'camera_dir_$camera',
+                  'videos',
+                  markerPayload,
+                );
+                if (await File(decPath).exists()) {
+                  ThumbnailNotifier.instance.notify(camera);
+                  if (markerPayload == "thumbnail_$targetTimestamp.png") {
+                    Log.d("Received target thumbnail");
+                    onTargetReady(true);
+                    return;
+                  }
+                } else {
+                  Log.w("Duplicate thumbnail marker missing file: $decPath");
+                }
+              }
+
+              await file.delete();
+              await writeEpoch(camera, "thumbnail", epoch + 1);
+              await HttpClientService.instance.delete(
+                destinationFile: fileName,
+                cameraName: camera,
+                serverFile: epoch.toString(),
+                type: Group.thumbnail,
+              );
+              continue;
+            }
+
+            if (!decFileName.startsWith("Error")) {
+              final decPath = p.join(
+                baseDir.path,
+                'camera_dir_$camera',
+                'videos',
+                decFileName,
+              );
+              final ready = await _waitForStablePng(decPath);
+              if (!ready) {
+                Log.e("Thumbnail file not ready or invalid: $decPath");
+                return;
+              }
+
+              await file.delete();
+              var result = decFileName == "thumbnail_$targetTimestamp.png";
+              Log.d(
+                "Received thumbnail 100%, comparing to thumbnail_$targetTimestamp.png ($result)",
+              );
+              ThumbnailNotifier.instance.notify(camera);
+
+              if (decFileName == "thumbnail_$targetTimestamp.png") {
+                Log.d("Received target thumbnail");
+                onTargetReady(true);
+              }
+            } else {
+              Log.e(
+                "Thumbnail decrypt failed for $camera epoch $epoch; leaving epoch unchanged",
               );
               return;
             }
-            if (_isEpochMismatch(decFileName)) {
+
+            await writeEpoch(camera, "thumbnail", epoch + 1);
+
+            await HttpClientService.instance.delete(
+              destinationFile: fileName,
+              cameraName: camera,
+              serverFile: epoch.toString(),
+              type: Group.thumbnail,
+            );
+          }
+        } finally {
+          await unlock(
+            "thumbnail$camera.lock",
+          ); // Always ensure this unlocks, even on exceptions
+        }
+      } else {
+        Log.w("Thumbnail session lock busy; skipping this cycle");
+      }
+    });
+  }
+
+  // RetriveAllThumbnails of a camera
+  static Future<bool> retrieveThumbnails({required String camera}) async {
+    return Log.runWithDerivedContext('thumb', () async {
+      Log.d("Entered retrieveThumbnails");
+      if (await lock("thumbnail$camera.lock")) {
+        final initOutcome = await initialize(camera);
+        if (!initOutcome.isOk) {
+          if (initOutcome == InitOutcome.timeout) {
+            Log.w(
+              "Thumbnail init timeout for camera $camera (${Log.ownerTag()})",
+            );
+          } else {
+            Log.e("Thumbnail init failed for camera $camera");
+          }
+          return false;
+        }
+
+        // Epoch for this starts at 2 when not set from before.
+        var epoch = await readEpoch(camera, "thumbnail");
+        try {
+          while (true) {
+            final assumedEpoch = epoch > 0 ? epoch - 1 : 0;
+            Log.d("Thumbnail Epoch = $epoch");
+            final fileName = "encThumbnail$epoch";
+            final downloadSw = Stopwatch()..start();
+            var result = await HttpClientService.instance.download(
+              destinationFile: fileName,
+              cameraName: camera,
+              serverFile: epoch.toString(),
+              type: Group.thumbnail,
+              timeout: _downloadTimeout,
+            );
+            downloadSw.stop();
+            if (!kReleaseMode) {
+              Log.d(
+                "[perf] Download thumbnail $camera epoch $epoch in ${downloadSw.elapsedMilliseconds}ms (ok=${result.isSuccess})",
+              );
+            }
+
+            if (result.isFailure) {
+              Log.d("HTTP download of encrypted thumbnail failed");
+              return false;
+            } else {
+              if (result.value!.not_found) {
+                Log.d("Finished downloading encrypted thumbnails for $camera");
+                return true;
+              }
+            }
+
+            Log.d("Proceeding after thumbnail download");
+            final baseDir = await getApplicationDocumentsDirectory();
+            final metaDir = Directory(p.join(baseDir.path, 'waiting', 'meta'));
+            await metaDir.create(recursive: true);
+
+            // Decode the thumbnail
+            var file = result.value!.file!;
+            String decFileName;
+            final decryptSw = Stopwatch()..start();
+            try {
+              decFileName =
+                  await decryptThumbnail(
+                    cameraName: camera,
+                    encFilename: fileName,
+                    pendingMetaDirectory: metaDir.path,
+                    assumedEpoch: BigInt.from(assumedEpoch),
+                  ).timeout(_decryptTimeout);
+            } on TimeoutException {
+                Log.e(
+                  "Thumbnail decrypt timeout for $camera after ${_decryptTimeout.inSeconds}s (${Log.ownerTag()})",
+                );
+              return false;
+            }
+            decryptSw.stop();
+            if (!kReleaseMode) {
+              Log.d(
+                "[perf] Decrypt thumbnail $camera $fileName in ${decryptSw.elapsedMilliseconds}ms (result=$decFileName)",
+              );
+            }
+
+            if (decFileName.startsWith("Error")) {
+              Log.w("Thumbnail decrypt failed for $camera epoch $epoch: $decFileName");
+              if (_isBusyError(decFileName)) {
+                Log.w(
+                  "Thumbnail decrypt busy for $camera epoch $epoch; skipping for now",
+                );
+              }
+              if (_isEpochMismatch(decFileName)) {
+                final markerPayload =
+                    await readEpochMarker(camera, "thumbnail", epoch);
+                if (markerPayload != null && _isThumbnailFilename(markerPayload)) {
+                  final baseDir = await getApplicationDocumentsDirectory();
+                  final decPath = p.join(
+                    baseDir.path,
+                    'camera_dir_$camera',
+                    'videos',
+                    markerPayload,
+                  );
+                  if (await File(decPath).exists()) {
+                    ThumbnailNotifier.instance.notify(camera);
+                  } else {
+                    Log.w(
+                      "Epoch marker exists but thumbnail file missing: $decPath",
+                    );
+                  }
+                  Log.w(
+                    "Epoch mismatch for $camera thumbnail $epoch but marker exists; treating as duplicate",
+                  );
+                  await file.delete();
+                  await writeEpoch(camera, "thumbnail", epoch + 1);
+                  await HttpClientService.instance.delete(
+                    destinationFile: fileName,
+                    cameraName: camera,
+                    serverFile: epoch.toString(),
+                    type: Group.thumbnail,
+                  );
+
+                } else if (markerPayload != null) {
+                  Log.w(
+                    "Epoch marker exists for $camera thumbnail $epoch but payload is invalid; not skipping",
+                  );
+                }
+              }
+              final forceOk = await _maybeForceInit(camera, "decrypt_thumbnail");
+              if (forceOk) {
+                final retrySw = Stopwatch()..start();
+                try {
+                  decFileName =
+                      await decryptThumbnail(
+                        cameraName: camera,
+                        encFilename: fileName,
+                        pendingMetaDirectory: metaDir.path,
+                        assumedEpoch: BigInt.from(assumedEpoch),
+                      ).timeout(_decryptTimeout);
+                } on TimeoutException {
+                  Log.e(
+                    "Thumbnail decrypt timeout after forced init for $camera (${Log.ownerTag()})",
+                  );
+                  return false;
+                }
+                retrySw.stop();
+                if (!kReleaseMode) {
+                  Log.d(
+                    "[perf] Decrypt thumbnail retry $camera $fileName in ${retrySw.elapsedMilliseconds}ms (result=$decFileName)",
+                  );
+                }
+              }
+            }
+
+            Log.d("Thumbnail dec file name = $decFileName");
+
+            if (decFileName == "Duplicate") {
               final markerPayload =
                   await readEpochMarker(camera, "thumbnail", epoch);
               if (markerPayload != null && _isThumbnailFilename(markerPayload)) {
@@ -287,240 +597,10 @@ class ThumbnailManager {
                 if (await File(decPath).exists()) {
                   ThumbnailNotifier.instance.notify(camera);
                 } else {
-                  Log.w(
-                    "Epoch marker exists but thumbnail file missing: $decPath",
-                  );
+                  Log.w("Duplicate thumbnail marker missing file: $decPath");
                 }
-                Log.w(
-                  "Epoch mismatch for $camera thumbnail $epoch but marker exists; treating as duplicate",
-                );
-                await file.delete();
-                await writeEpoch(camera, "thumbnail", epoch + 1);
-                await HttpClientService.instance.delete(
-                  destinationFile: fileName,
-                  cameraName: camera,
-                  serverFile: epoch.toString(),
-                  type: Group.thumbnail,
-                );
-                continue;
-              } else if (markerPayload != null) {
-                Log.w(
-                  "Epoch marker exists for $camera thumbnail $epoch but payload is invalid; not skipping",
-                );
               }
-            }
-            final forceOk = await _maybeForceInit(camera, "decrypt_thumbnail");
-            if (forceOk) {
-              final retrySw = Stopwatch()..start();
-              try {
-                decFileName =
-                    await decryptThumbnail(
-                      cameraName: camera,
-                      encFilename: fileName,
-                      pendingMetaDirectory: metaDir.path,
-                      assumedEpoch: BigInt.from(assumedEpoch),
-                    ).timeout(_decryptTimeout);
-              } on TimeoutException {
-                Log.e(
-                  "Thumbnail decrypt timeout after forced init for $camera (${Log.ownerTag()})",
-                );
-                return;
-              }
-              retrySw.stop();
-              if (!kReleaseMode) {
-                Log.d(
-                  "[perf] Decrypt thumbnail retry $camera $fileName in ${retrySw.elapsedMilliseconds}ms (result=$decFileName)",
-                );
-              }
-            }
-          }
 
-          Log.d("Thumbnail dec file name = $decFileName");
-
-          if (decFileName == "Duplicate") {
-            final markerPayload =
-                await readEpochMarker(camera, "thumbnail", epoch);
-            if (markerPayload != null && _isThumbnailFilename(markerPayload)) {
-              final baseDir = await getApplicationDocumentsDirectory();
-              final decPath = p.join(
-                baseDir.path,
-                'camera_dir_$camera',
-                'videos',
-                markerPayload,
-              );
-              if (await File(decPath).exists()) {
-                ThumbnailNotifier.instance.notify(camera);
-                if (markerPayload == "thumbnail_$targetTimestamp.png") {
-                  Log.d("Received target thumbnail");
-                  onTargetReady(true);
-                  return;
-                }
-              } else {
-                Log.w("Duplicate thumbnail marker missing file: $decPath");
-              }
-            }
-
-            await file.delete();
-            await writeEpoch(camera, "thumbnail", epoch + 1);
-            await HttpClientService.instance.delete(
-              destinationFile: fileName,
-              cameraName: camera,
-              serverFile: epoch.toString(),
-              type: Group.thumbnail,
-            );
-            continue;
-          }
-
-          if (!decFileName.startsWith("Error")) {
-            final decPath = p.join(
-              baseDir.path,
-              'camera_dir_$camera',
-              'videos',
-              decFileName,
-            );
-            final ready = await _waitForStablePng(decPath);
-            if (!ready) {
-              Log.e("Thumbnail file not ready or invalid: $decPath");
-              return;
-            }
-
-            await file.delete();
-            var result = decFileName == "thumbnail_$targetTimestamp.png";
-            Log.d(
-              "Received thumbnail 100%, comparing to thumbnail_$targetTimestamp.png ($result)",
-            );
-            ThumbnailNotifier.instance.notify(camera);
-
-            if (decFileName == "thumbnail_$targetTimestamp.png") {
-              Log.d("Received target thumbnail");
-              onTargetReady(true);
-            }
-          } else {
-            Log.e(
-              "Thumbnail decrypt failed for $camera epoch $epoch; leaving epoch unchanged",
-            );
-            return;
-          }
-
-          await writeEpoch(camera, "thumbnail", epoch + 1);
-
-          await HttpClientService.instance.delete(
-            destinationFile: fileName,
-            cameraName: camera,
-            serverFile: epoch.toString(),
-            type: Group.thumbnail,
-          );
-        }
-        } finally {
-          await unlock(
-            "thumbnail$camera.lock",
-          ); // Always ensure this unlocks, even on exceptions
-        }
-      } else {
-        Log.w("Thumbnail session lock busy; skipping this cycle");
-      }
-    });
-  }
-
-  // RetriveAllThumbnails of a camera
-  static Future<void> retrieveThumbnails({required String camera}) async {
-    return Log.runWithDerivedContext('thumb', () async {
-      Log.d("Entered retrieveThumbnails");
-      if (await lock("thumbnail$camera.lock")) {
-        try {
-          final initOutcome = await initialize(camera);
-          if (!initOutcome.isOk) {
-            if (initOutcome == InitOutcome.timeout) {
-              Log.w(
-                "Thumbnail init timeout for camera $camera (${Log.ownerTag()})",
-              );
-            } else {
-              Log.e("Thumbnail init failed for camera $camera");
-            }
-            return;
-          }
-
-        // Epoch for this starts at 2 when not set from before.
-        final epoch = await readEpoch(camera, "thumbnail");
-        final assumedEpoch = epoch > 0 ? epoch - 1 : 0;
-        Log.d("Thumbnail Epoch = $epoch");
-        final fileName = "encThumbnail$epoch";
-        final downloadSw = Stopwatch()..start();
-        var result = await HttpClientService.instance.download(
-          destinationFile: fileName,
-          cameraName: camera,
-          serverFile: epoch.toString(),
-          type: Group.thumbnail,
-          timeout: _downloadTimeout,
-        );
-        downloadSw.stop();
-        if (!kReleaseMode) {
-          Log.d(
-            "[perf] Download thumbnail $camera epoch $epoch in ${downloadSw.elapsedMilliseconds}ms (ok=${result.isSuccess})",
-          );
-        }
-
-        if (result.isFailure) return;
-
-        Log.d("Proceeding after thumbnail download");
-        final baseDir = await getApplicationDocumentsDirectory();
-        final metaDir = Directory(p.join(baseDir.path, 'waiting', 'meta'));
-        await metaDir.create(recursive: true);
-
-        // Decode the thumbnail
-        var file = result.value!.file!;
-        String decFileName;
-        final decryptSw = Stopwatch()..start();
-        try {
-          decFileName =
-              await decryptThumbnail(
-                cameraName: camera,
-                encFilename: fileName,
-                pendingMetaDirectory: metaDir.path,
-                assumedEpoch: BigInt.from(assumedEpoch),
-              ).timeout(_decryptTimeout);
-        } on TimeoutException {
-            Log.e(
-              "Thumbnail decrypt timeout for $camera after ${_decryptTimeout.inSeconds}s (${Log.ownerTag()})",
-            );
-          return;
-        }
-        decryptSw.stop();
-        if (!kReleaseMode) {
-          Log.d(
-            "[perf] Decrypt thumbnail $camera $fileName in ${decryptSw.elapsedMilliseconds}ms (result=$decFileName)",
-          );
-        }
-
-        if (decFileName.startsWith("Error")) {
-          Log.w("Thumbnail decrypt failed for $camera epoch $epoch: $decFileName");
-          if (_isBusyError(decFileName)) {
-            Log.w(
-              "Thumbnail decrypt busy for $camera epoch $epoch; skipping for now",
-            );
-            return;
-          }
-          if (_isEpochMismatch(decFileName)) {
-            final markerPayload =
-                await readEpochMarker(camera, "thumbnail", epoch);
-            if (markerPayload != null && _isThumbnailFilename(markerPayload)) {
-              final baseDir = await getApplicationDocumentsDirectory();
-              final decPath = p.join(
-                baseDir.path,
-                'camera_dir_$camera',
-                'videos',
-                markerPayload,
-              );
-              if (await File(decPath).exists()) {
-                ThumbnailNotifier.instance.notify(camera);
-              } else {
-                Log.w(
-                  "Epoch marker exists but thumbnail file missing: $decPath",
-                );
-              }
-              Log.w(
-                "Epoch mismatch for $camera thumbnail $epoch but marker exists; treating as duplicate",
-              );
               await file.delete();
               await writeEpoch(camera, "thumbnail", epoch + 1);
               await HttpClientService.instance.delete(
@@ -529,100 +609,42 @@ class ThumbnailManager {
                 serverFile: epoch.toString(),
                 type: Group.thumbnail,
               );
-              return;
-            } else if (markerPayload != null) {
-              Log.w(
-                "Epoch marker exists for $camera thumbnail $epoch but payload is invalid; not skipping",
-              );
-            }
-          }
-          final forceOk = await _maybeForceInit(camera, "decrypt_thumbnail");
-          if (forceOk) {
-            final retrySw = Stopwatch()..start();
-            try {
-              decFileName =
-                  await decryptThumbnail(
-                    cameraName: camera,
-                    encFilename: fileName,
-                    pendingMetaDirectory: metaDir.path,
-                    assumedEpoch: BigInt.from(assumedEpoch),
-                  ).timeout(_decryptTimeout);
-            } on TimeoutException {
-              Log.e(
-                "Thumbnail decrypt timeout after forced init for $camera (${Log.ownerTag()})",
-              );
-              return;
-            }
-            retrySw.stop();
-            if (!kReleaseMode) {
-              Log.d(
-                "[perf] Decrypt thumbnail retry $camera $fileName in ${retrySw.elapsedMilliseconds}ms (result=$decFileName)",
-              );
-            }
-          }
-        }
 
-        Log.d("Thumbnail dec file name = $decFileName");
+              epoch += 1;
+              continue;
+            }
 
-        if (decFileName == "Duplicate") {
-          final markerPayload =
-              await readEpochMarker(camera, "thumbnail", epoch);
-          if (markerPayload != null && _isThumbnailFilename(markerPayload)) {
-            final baseDir = await getApplicationDocumentsDirectory();
-            final decPath = p.join(
-              baseDir.path,
-              'camera_dir_$camera',
-              'videos',
-              markerPayload,
-            );
-            if (await File(decPath).exists()) {
+            if (!decFileName.startsWith("Error")) {
+              final decPath = p.join(
+                baseDir.path,
+                'camera_dir_$camera',
+                'videos',
+                decFileName,
+              );
+              final ready = await _waitForStablePng(decPath);
+              if (!ready) {
+                Log.e("Thumbnail file not ready or invalid: $decPath");
+              }
+
+              await file.delete();
               ThumbnailNotifier.instance.notify(camera);
             } else {
-              Log.w("Duplicate thumbnail marker missing file: $decPath");
+              Log.e(
+                "Thumbnail decrypt failed for $camera epoch $epoch; leaving epoch unchanged",
+              );
             }
+
+            await writeEpoch(camera, "thumbnail", epoch + 1);
+
+            await HttpClientService.instance.delete(
+              destinationFile: fileName,
+              cameraName: camera,
+              serverFile: epoch.toString(),
+              type: Group.thumbnail,
+            );
+
+            epoch += 1;
           }
-
-          await file.delete();
-          await writeEpoch(camera, "thumbnail", epoch + 1);
-          await HttpClientService.instance.delete(
-            destinationFile: fileName,
-            cameraName: camera,
-            serverFile: epoch.toString(),
-            type: Group.thumbnail,
-          );
-          return;
-        }
-
-        if (!decFileName.startsWith("Error")) {
-          final decPath = p.join(
-            baseDir.path,
-            'camera_dir_$camera',
-            'videos',
-            decFileName,
-          );
-          final ready = await _waitForStablePng(decPath);
-          if (!ready) {
-            Log.e("Thumbnail file not ready or invalid: $decPath");
-            return;
-          }
-
-          await file.delete();
-          ThumbnailNotifier.instance.notify(camera);
-        } else {
-          Log.e(
-            "Thumbnail decrypt failed for $camera epoch $epoch; leaving epoch unchanged",
-          );
-          return;
-        }
-
-        await writeEpoch(camera, "thumbnail", epoch + 1);
-
-        await HttpClientService.instance.delete(
-          destinationFile: fileName,
-          cameraName: camera,
-          serverFile: epoch.toString(),
-          type: Group.thumbnail,
-        );
         } finally {
           await unlock(
             "thumbnail$camera.lock",
@@ -630,6 +652,7 @@ class ThumbnailManager {
         }
       } else {
         Log.w("Thumbnail session lock busy; skipping this cycle");
+        return false;
       }
     });
   }

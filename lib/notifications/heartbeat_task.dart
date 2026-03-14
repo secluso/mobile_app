@@ -7,6 +7,7 @@ import 'package:secluso_flutter/notifications/notifications.dart';
 import 'package:secluso_flutter/notifications/thumbnails.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
+import 'package:secluso_flutter/utilities/lock.dart';
 import 'package:secluso_flutter/src/rust/frb_generated.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'dart:io';
@@ -48,161 +49,125 @@ List<String> splitAtUnderscore(String input) {
 
 Future<bool> _doHeartbeatTask(String cameraName) async {
   Log.d("$cameraName: Starting to work (heartbeat)");
+  final cameraHeartbeatLock = "heartbeat$cameraName.lock";
+  if (await lock(cameraHeartbeatLock)) {
+    //FIXME: don't attempt a heartbeat if we're livestreaming.
 
-  //FIXME: don't attempt a heartbeat if we're livestreaming.
+    final prefs = await SharedPreferences.getInstance();
+    final timestampInt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final timestamp = BigInt.from(timestampInt);
+    var successful = false;
+    var downloaded = false;
+    Log.d("$cameraName: Heartbeat timestamp = $timestamp");
 
-  final prefs = await SharedPreferences.getInstance();
-  final timestampInt = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-  final timestamp = BigInt.from(timestampInt);
-  var successful = false;
-  Log.d("$cameraName: Heartbeat timestamp = $timestamp");
-
-  var lastHeartbeatTimestamp =
-      prefs.getInt(PrefKeys.lastHeartbeatTimestampPrefix + cameraName) ?? 0;
-  if (timestampInt - lastHeartbeatTimestamp < 60) {
-    Log.d(
-      "$cameraName: Dropping this heartbeat task since we recently executed one.",
+    var lastHeartbeatTimestamp =
+        prefs.getInt(PrefKeys.lastHeartbeatTimestampPrefix + cameraName) ?? 0;
+    if (timestampInt - lastHeartbeatTimestamp < 60) {
+      Log.d(
+        "$cameraName: Dropping this heartbeat task since we recently executed one.",
+      );
+      return false;
+    }
+    await prefs.setInt(
+      PrefKeys.lastHeartbeatTimestampPrefix + cameraName,
+      timestampInt,
     );
-    return false;
-  }
-  await prefs.setInt(
-    PrefKeys.lastHeartbeatTimestampPrefix + cameraName,
-    timestampInt,
-  );
 
-  final encConfigMsg = await generateHeartbeatRequestConfigCommand(
-    cameraName: cameraName,
-    timestamp: timestamp,
-  );
+    final encConfigMsg = await generateHeartbeatRequestConfigCommand(
+      cameraName: cameraName,
+      timestamp: timestamp,
+    );
 
-  final res = await HttpClientService.instance.configCommand(
-    cameraName: cameraName,
-    command: encConfigMsg,
-  );
+    final res = await HttpClientService.instance.configCommand(
+      cameraName: cameraName,
+      command: encConfigMsg,
+    );
 
-  await res.fold(
-    (_) async {
-      for (int i = 0; i < 30 && !successful; i++) {
-        await Future.delayed(Duration(seconds: 2));
-        // Download pending videos and thumbnails before processing the heartbeat response.
-        // This prevents thinking that the MLS channel is corrupted if there
-        // are pending video files in the server.
-        await ThumbnailManager.retrieveThumbnails(camera: cameraName);
-        await retrieveVideos(cameraName);
+    await res.fold(
+      (_) async {
+        for (int i = 0; i < 30 && !successful; i++) {
+          await Future.delayed(Duration(seconds: 2));
+          // Download pending videos and thumbnails before processing the heartbeat response.
+          // This prevents thinking that the MLS channel is corrupted if there
+          // are pending video files in the server.
+          if (!await ThumbnailManager.retrieveThumbnails(camera: cameraName)) {
+            Log.d("$cameraName: retrieveThumbnails returned false. Will skip this iteration.");
+            continue;
+          }
+          if (!await retrieveVideos(cameraName)) {
+            Log.d("$cameraName: retrieveVideos returned false. Will skip this iteration.");
+            continue;
+          }
 
-        final fetchRes = await HttpClientService.instance.fetchConfigResponse(
-          cameraName: cameraName,
-        );
-        await fetchRes.fold(
-          (configResponse) async {
-            final heartbeatResult = await processHeartbeatConfigResponse(
-              cameraName: cameraName,
-              configResponse: configResponse,
-              expectedTimestamp: timestamp,
-            );
-            Log.d("$cameraName: heartbeatResult = $heartbeatResult");
-            final heartbeatResultParts = splitAtUnderscore(heartbeatResult);
+          downloaded = true; // Videos and thumbnails successfully downloaded
 
-            if (heartbeatResultParts[0] == "healthy") {
-              Log.d("$cameraName: Processing healthy heartbeat");
-              await prefs.setInt(
-                PrefKeys.numIgnoredHeartbeatsPrefix + cameraName,
-                0,
+          final fetchRes = await HttpClientService.instance.fetchConfigResponse(
+            cameraName: cameraName,
+          );
+          await fetchRes.fold(
+            (configResponse) async {
+              final heartbeatResult = await processHeartbeatConfigResponse(
+                cameraName: cameraName,
+                configResponse: configResponse,
+                expectedTimestamp: timestamp,
               );
-              var previousCameraStatus =
-                  prefs.getInt(PrefKeys.cameraStatusPrefix + cameraName) ??
-                  CameraStatus.online;
-              await prefs.setInt(
-                PrefKeys.cameraStatusPrefix + cameraName,
-                CameraStatus.online,
-              );
-              await prefs.setInt(
-                PrefKeys.numHeartbeatNotificationsPrefix + cameraName,
-                0,
-              );
-              final firmwareVersion = heartbeatResultParts[1];
-              if (firmwareVersion != "") {
-                final currentFirmware =
-                    prefs.getString(
-                      PrefKeys.firmwareVersionPrefix + cameraName,
-                    ) ??
-                    "";
-                if (currentFirmware != firmwareVersion) {
-                  showCameraStatusNotification(
-                    cameraName: cameraName,
-                    msg:
-                        "Camera's Secluso firmware version has been updated to $firmwareVersion.",
-                  );
+              Log.d("$cameraName: heartbeatResult = $heartbeatResult");
+              final heartbeatResultParts = splitAtUnderscore(heartbeatResult);
 
-                  // TODO: We should compare it with the app version. If they don't match, display notice to user.
-                }
-                await prefs.setString(
-                  PrefKeys.firmwareVersionPrefix + cameraName,
-                  heartbeatResultParts[1],
+              if (heartbeatResultParts[0] == "healthy") {
+                Log.d("$cameraName: Processing healthy heartbeat");
+                await prefs.setInt(
+                  PrefKeys.numIgnoredHeartbeatsPrefix + cameraName,
+                  0,
                 );
-              }
-              var sendNotificationGlobal =
-                  prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
-
-              if (previousCameraStatus != CameraStatus.online &&
-                  sendNotificationGlobal) {
-                Log.d("Showing notification: Camera connection is restored.");
-                showCameraStatusNotification(
-                  cameraName: cameraName,
-                  msg: "Camera connection is restored.",
-                );
-              }
-            } else if (heartbeatResultParts[0] == "invalid ciphertext") {
-              Log.d("$cameraName: Processing invalid ciphertext heartbeat");
-              await prefs.setInt(
-                PrefKeys.cameraStatusPrefix + cameraName,
-                CameraStatus.corrupted,
-              );
-              var numHeartbeatNotifications =
-                  prefs.getInt(
-                    PrefKeys.numHeartbeatNotificationsPrefix + cameraName,
-                  ) ??
-                  0;
-              var sendNotificationGlobal =
-                  prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
-              // It could be annoying if we keep showing these notifications.
-              if (numHeartbeatNotifications < 2 && sendNotificationGlobal) {
-                Log.d("Showing notification: Camera connection is corrupted.");
-                showCameraStatusNotification(
-                  cameraName: cameraName,
-                  msg: "Camera connection is corrupted. Pair again.",
+                var previousCameraStatus =
+                    prefs.getInt(PrefKeys.cameraStatusPrefix + cameraName) ??
+                    CameraStatus.online;
+                await prefs.setInt(
+                  PrefKeys.cameraStatusPrefix + cameraName,
+                  CameraStatus.online,
                 );
                 await prefs.setInt(
                   PrefKeys.numHeartbeatNotificationsPrefix + cameraName,
-                  numHeartbeatNotifications + 1,
+                  0,
                 );
-              }
-            } else {
-              //invalid timestamp || invalid epoch || Error
-              // Note on "invalid epoch": Ideally, we want to be able to move this case to the previous else if block (i.e, invalid ciphertext).
-              // That is, we want "invalid epoch" to clearly show an MLS channel corruption.
-              // However, "invalid epoch" could also happen if there's a race between a heartbeat
-              // and motion video trigger on the camera (or even a livestream start on the app).
-              // We've tried to prevent that for motion videos by downloading and processing any pending motion
-              // videos in the server before processing the heartbeat response.
-              // To prevent a race with livestream, we should disallow livestreaming while we're working on a heartbeat.
-              var numIgnoredHeartbeats =
-                  prefs.getInt(
-                    PrefKeys.numIgnoredHeartbeatsPrefix + cameraName,
-                  ) ??
-                  0;
-              numIgnoredHeartbeats++;
-              await prefs.setInt(
-                PrefKeys.numIgnoredHeartbeatsPrefix + cameraName,
-                numIgnoredHeartbeats,
-              );
-              Log.d(
-                "$cameraName: number of consecutive ignored heartbeats = $numIgnoredHeartbeats",
-              );
-              if (numIgnoredHeartbeats >= 2) {
+                final firmwareVersion = heartbeatResultParts[1];
+                if (firmwareVersion != "") {
+                  final currentFirmware =
+                      prefs.getString(
+                        PrefKeys.firmwareVersionPrefix + cameraName,
+                      ) ??
+                      "";
+                  if (currentFirmware != firmwareVersion) {
+                    showCameraStatusNotification(
+                      cameraName: cameraName,
+                      msg:
+                          "Camera's Secluso firmware version has been updated to $firmwareVersion.",
+                    );
+
+                    // TODO: We should compare it with the app version. If they don't match, display notice to user.
+                  }
+                  await prefs.setString(
+                    PrefKeys.firmwareVersionPrefix + cameraName,
+                    heartbeatResultParts[1],
+                  );
+                }
+                var sendNotificationGlobal =
+                    prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
+
+                if (previousCameraStatus != CameraStatus.online &&
+                    sendNotificationGlobal) {
+                  Log.d("Showing notification: Camera connection is restored.");
+                  showCameraStatusNotification(
+                    cameraName: cameraName,
+                    msg: "Camera connection is restored.",
+                  );
+                }
+              } else if (heartbeatResultParts[0] == "invalid ciphertext") {
+                Log.d("$cameraName: Processing invalid ciphertext heartbeat");
                 await prefs.setInt(
                   PrefKeys.cameraStatusPrefix + cameraName,
-                  CameraStatus.possiblyCorrupted,
+                  CameraStatus.corrupted,
                 );
                 var numHeartbeatNotifications =
                     prefs.getInt(
@@ -211,73 +176,123 @@ Future<bool> _doHeartbeatTask(String cameraName) async {
                     0;
                 var sendNotificationGlobal =
                     prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
+                // It could be annoying if we keep showing these notifications.
                 if (numHeartbeatNotifications < 2 && sendNotificationGlobal) {
-                  Log.d(
-                    "Showing notification: Camera connection is likely corrupted.",
-                  );
+                  Log.d("Showing notification: Camera connection is corrupted.");
                   showCameraStatusNotification(
                     cameraName: cameraName,
-                    msg: "Camera connection is likely corrupted. Pair again.",
+                    msg: "Camera connection is corrupted. Pair again.",
                   );
                   await prefs.setInt(
                     PrefKeys.numHeartbeatNotificationsPrefix + cameraName,
                     numHeartbeatNotifications + 1,
                   );
                 }
+              } else {
+                //invalid timestamp || invalid epoch || Error
+                // Note on "invalid epoch": Ideally, we want to be able to move this case to the previous else if block (i.e, invalid ciphertext).
+                // That is, we want "invalid epoch" to clearly show an MLS channel corruption.
+                // However, "invalid epoch" could also happen if there's a race between a heartbeat
+                // and motion video trigger on the camera (or even a livestream start on the app).
+                // We've tried to prevent that for motion videos by downloading and processing any pending motion
+                // videos in the server before processing the heartbeat response.
+                // To prevent a race with livestream, we should disallow livestreaming while we're working on a heartbeat.
+                var numIgnoredHeartbeats =
+                    prefs.getInt(
+                      PrefKeys.numIgnoredHeartbeatsPrefix + cameraName,
+                    ) ??
+                    0;
+                numIgnoredHeartbeats++;
+                await prefs.setInt(
+                  PrefKeys.numIgnoredHeartbeatsPrefix + cameraName,
+                  numIgnoredHeartbeats,
+                );
+                Log.d(
+                  "$cameraName: number of consecutive ignored heartbeats = $numIgnoredHeartbeats",
+                );
+                if (numIgnoredHeartbeats >= 2) {
+                  await prefs.setInt(
+                    PrefKeys.cameraStatusPrefix + cameraName,
+                    CameraStatus.possiblyCorrupted,
+                  );
+                  var numHeartbeatNotifications =
+                      prefs.getInt(
+                        PrefKeys.numHeartbeatNotificationsPrefix + cameraName,
+                      ) ??
+                      0;
+                  var sendNotificationGlobal =
+                      prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
+                  if (numHeartbeatNotifications < 2 && sendNotificationGlobal) {
+                    Log.d(
+                      "Showing notification: Camera connection is likely corrupted.",
+                    );
+                    showCameraStatusNotification(
+                      cameraName: cameraName,
+                      msg: "Camera connection is likely corrupted. Pair again.",
+                    );
+                    await prefs.setInt(
+                      PrefKeys.numHeartbeatNotificationsPrefix + cameraName,
+                      numHeartbeatNotifications + 1,
+                    );
+                  }
+                }
               }
-            }
 
-            successful = true;
-          },
-          (err) async {
+              successful = true;
+            },
+            (err) async {
+              Log.d(
+                '$cameraName: Error fetching heartbeat config response (attempt $i): $err',
+              );
+            },
+          );
+        }
+
+        if (downloaded && !successful) {
+          // We get here if we could not successfully fetch the response in all the attempts in the loop
+          // If we delete the camera while heartbeat is taking place, we could end up
+          // here after the camera is deleted. So we check that here.
+          final existingSet =
+              prefs.getStringList(PrefKeys.cameraSet) ?? <String>[];
+          if (existingSet.contains(cameraName)) {
             Log.d(
-              '$cameraName: Error fetching heartbeat config response (attempt $i): $err',
-            );
-          },
-        );
-      }
-
-      if (!successful) {
-        // We get here if we could not successfully fetch the response in all the attempts in the loop
-        // If we delete the camera while heartbeat is taking place, we could end up
-        // here after the camera is deleted. So we check that here.
-        final existingSet =
-            prefs.getStringList(PrefKeys.cameraSet) ?? <String>[];
-        if (existingSet.contains(cameraName)) {
-          Log.d(
-            '$cameraName: Error fetching heartbeat config response in all attempts.',
-          );
-          await prefs.setInt(
-            PrefKeys.cameraStatusPrefix + cameraName,
-            CameraStatus.offline,
-          );
-          var numHeartbeatNotifications =
-              prefs.getInt(
-                PrefKeys.numHeartbeatNotificationsPrefix + cameraName,
-              ) ??
-              0;
-          var sendNotificationGlobal =
-              prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
-          if (numHeartbeatNotifications < 2 && sendNotificationGlobal) {
-            Log.d("Showing notification: Camera is offline.");
-            showCameraStatusNotification(
-              cameraName: cameraName,
-              msg: "Camera seems to be offline.",
+              '$cameraName: Error fetching heartbeat config response in all attempts.',
             );
             await prefs.setInt(
-              PrefKeys.numHeartbeatNotificationsPrefix + cameraName,
-              numHeartbeatNotifications + 1,
+              PrefKeys.cameraStatusPrefix + cameraName,
+              CameraStatus.offline,
             );
+            var numHeartbeatNotifications =
+                prefs.getInt(
+                  PrefKeys.numHeartbeatNotificationsPrefix + cameraName,
+                ) ??
+                0;
+            var sendNotificationGlobal =
+                prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
+            if (numHeartbeatNotifications < 2 && sendNotificationGlobal) {
+              Log.d("Showing notification: Camera is offline.");
+              showCameraStatusNotification(
+                cameraName: cameraName,
+                msg: "Camera seems to be offline.",
+              );
+              await prefs.setInt(
+                PrefKeys.numHeartbeatNotificationsPrefix + cameraName,
+                numHeartbeatNotifications + 1,
+              );
+            }
           }
         }
-      }
-    },
-    (err) async {
-      Log.d('$cameraName: Error sending heartbeat config command: $err');
-    },
-  );
+      },
+      (err) async {
+        Log.d('$cameraName: Error sending heartbeat config command: $err');
+      },
+    );
 
-  return successful;
+    return successful;
+  } else {
+    Log.w("Heartbeat lock busy for $cameraName; skipping");
+    return false;
+  }
 }
 
 Future<void> updateCameraStatusFcmNotification(

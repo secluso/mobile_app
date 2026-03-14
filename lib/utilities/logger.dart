@@ -245,6 +245,14 @@ class Log {
     Level.fatal: 'F',
   };
 
+  static bool _shouldSuppressErrorBanner(dynamic msg, {String customLocation = ""}) {
+    final text = msg?.toString() ?? '';
+
+    if (text.contains('No address associated with hostname')) return true;
+
+    return false;
+  }
+
   static void _record(
     Level level,
     dynamic msg, {
@@ -258,24 +266,31 @@ class Log {
     _appendLine(line);
 
     if (level == Level.error || level == Level.fatal) {
-      _lastErrorEpochMs = DateTime.now().millisecondsSinceEpoch;
-      errorNotifier.value++;
-
-      final marker = _formatLine(
-        Level.warning,
-        'UI error banner flagged',
-        customLocation: 'logger.dart:errflag',
+      final suppressBanner = _shouldSuppressErrorBanner(
+        msg,
+        customLocation: customLocation,
       );
-      _appendLine(marker);
 
-      // Emit a visible marker in stdout without re-entering _record.
-      _ensureLogger().w(
-        LogMessage(
+      if (!suppressBanner) {
+        _lastErrorEpochMs = DateTime.now().millisecondsSinceEpoch;
+        errorNotifier.value++;
+
+        final marker = _formatLine(
+          Level.warning,
           'UI error banner flagged',
           customLocation: 'logger.dart:errflag',
-        ),
-        stackTrace: StackTrace.current,
-      );
+        );
+        _appendLine(marker);
+
+        // Emit a visible marker in stdout without re-entering _record.
+        _ensureLogger().w(
+          LogMessage(
+            'UI error banner flagged',
+            customLocation: 'logger.dart:errflag',
+          ),
+          stackTrace: StackTrace.current,
+        );
+      }
     }
 
     _scheduleFlush();

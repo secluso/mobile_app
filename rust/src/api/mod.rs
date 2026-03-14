@@ -41,12 +41,19 @@ static IS_SHUTTING_DOWN: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false))
 
 const CLIENT_LOCK_TIMEOUT: Duration = Duration::from_secs(8);
 const CLIENT_LOCK_WARN: Duration = Duration::from_millis(250);
+// TODO: using different channels for "Clients" break the heartbeat since the heartbeat needs to see the
+// latest state of different MLS channels. To solve that, we'll need to use one Clients objects.
+// The current fix uses the old code with one Clients channel. In order to be able to use a separate lock
+// for each MlsClient channel, we'll need to refactor the code.
+/*
 const CHANNEL_MOTION: &str = "motion";
 const CHANNEL_THUMBNAIL: &str = "thumbnail";
 //const CHANNEL_FCM: &str = "fcm";
 const CHANNEL_CONFIG: &str = "config";
 const CHANNEL_LIVESTREAM: &str = "livestream";
+*/
 const CHANNEL_SETUP: &str = "setup";
+const CHANNEL_FIXED: &str = "fixed";
 const TRACE_TAG: &str = "|trace=";
 
 fn split_trace_camera(camera_name: &str) -> (String, Option<&str>) {
@@ -308,7 +315,7 @@ pub fn decrypt_video(
 ) -> String {
     let (camera_name, trace_id) = split_trace_camera(&camera_name);
     let _trace_guard = logger::set_log_trace(trace_id);
-    let channel = CHANNEL_MOTION;
+    let channel = CHANNEL_FIXED;
     let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
     let op = "decrypt_video(motion)".to_string();
     let mut client_guard = lock_client_or_return!(
@@ -346,7 +353,7 @@ pub fn decrypt_thumbnail(
 ) -> String {
     let (camera_name, trace_id) = split_trace_camera(&camera_name);
     let _trace_guard = logger::set_log_trace(trace_id);
-    let channel = CHANNEL_THUMBNAIL;
+    let channel = CHANNEL_FIXED;
     let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
     let op = "decrypt_thumbnail(thumbnail)".to_string();
     let mut client_guard = lock_client_or_return!(
@@ -389,7 +396,7 @@ pub fn flutter_add_camera(
     let (camera_name, trace_id) = split_trace_camera(&camera_name);
     let _trace_guard = logger::set_log_trace(trace_id);
     let result = {
-        let channel = CHANNEL_SETUP;
+        let channel = CHANNEL_FIXED;
         let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
         let op = "flutter_add_camera(setup)".to_string();
         let mut client_guard = lock_client_or_return!(
@@ -503,7 +510,7 @@ pub fn ping_proprietary_device(camera_ip: String) -> bool {
 pub fn encrypt_settings_message(camera_name: String, data: Vec<u8>) -> Vec<u8> {
     let (camera_name, trace_id) = split_trace_camera(&camera_name);
     let _trace_guard = logger::set_log_trace(trace_id);
-    let channel = CHANNEL_CONFIG;
+    let channel = CHANNEL_FIXED;
     let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
     let op = "encrypt_settings_message(config)".to_string();
     let mut client_guard = lock_client_or_return!(
@@ -533,7 +540,7 @@ pub fn encrypt_settings_message(camera_name: String, data: Vec<u8>) -> Vec<u8> {
 pub fn decrypt_message(client_tag: String, camera_name: String, data: Vec<u8>) -> String {
     let (camera_name, trace_id) = split_trace_camera(&camera_name);
     let _trace_guard = logger::set_log_trace(trace_id);
-    let channel = client_tag.as_str();
+    let channel = CHANNEL_FIXED;
     let op = format!("decrypt_message({})", channel);
     let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
     let mut client_guard = lock_client_or_return!(
@@ -563,7 +570,7 @@ pub fn decrypt_message(client_tag: String, camera_name: String, data: Vec<u8>) -
 pub fn get_group_name(client_tag: String, camera_name: String) -> String {
     let (camera_name, trace_id) = split_trace_camera(&camera_name);
     let _trace_guard = logger::set_log_trace(trace_id);
-    let channel = client_tag.as_str();
+    let channel = CHANNEL_FIXED;
     let op = format!("get_group_name({})", channel);
     let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
     let mut client_guard = lock_client_or_return!(
@@ -593,7 +600,7 @@ pub fn get_group_name(client_tag: String, camera_name: String) -> String {
 pub fn livestream_update(camera_name: String, msg: Vec<u8>) -> bool {
     let (camera_name, trace_id) = split_trace_camera(&camera_name);
     let _trace_guard = logger::set_log_trace(trace_id);
-    let channel = CHANNEL_LIVESTREAM;
+    let channel = CHANNEL_FIXED;
     let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
     let op = "livestream_update(livestream)".to_string();
     let mut client_guard = lock_client_or_return!(
@@ -623,7 +630,7 @@ pub fn livestream_update(camera_name: String, msg: Vec<u8>) -> bool {
 pub fn livestream_decrypt(camera_name: String, data: Vec<u8>, expected_chunk_number: u64) -> Vec<u8> {
     let (camera_name, trace_id) = split_trace_camera(&camera_name);
     let _trace_guard = logger::set_log_trace(trace_id);
-    let channel = CHANNEL_LIVESTREAM;
+    let channel = CHANNEL_FIXED;
     let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
     let op = "livestream_decrypt(livestream)".to_string();
     let mut client_guard = lock_client_or_return!(
@@ -658,7 +665,7 @@ pub fn rust_lib_version() -> String {
 pub fn generate_heartbeat_request_config_command(camera_name: String, timestamp: u64) -> Vec<u8> {
     let (camera_name, trace_id) = split_trace_camera(&camera_name);
     let _trace_guard = logger::set_log_trace(trace_id);
-    let channel = CHANNEL_CONFIG;
+    let channel = CHANNEL_FIXED;
     let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
     let op = "generate_heartbeat_request_config_command(config)".to_string();
     let mut client_guard = lock_client_or_return!(
@@ -688,7 +695,7 @@ pub fn generate_heartbeat_request_config_command(camera_name: String, timestamp:
 pub fn process_heartbeat_config_response(camera_name: String, config_response: Vec<u8>, expected_timestamp: u64) -> String {
     let (camera_name, trace_id) = split_trace_camera(&camera_name);
     let _trace_guard = logger::set_log_trace(trace_id);
-    let channel = CHANNEL_CONFIG;
+    let channel = CHANNEL_FIXED;
     let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
     let op = "process_heartbeat_config_response(config)".to_string();
     let mut client_guard = lock_client_or_return!(

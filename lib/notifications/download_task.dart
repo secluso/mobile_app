@@ -384,179 +384,180 @@ Future<List<String>> _sanitizeDownloadQueue(List<String> queue) async {
 Future<bool> retrieveVideos(String cameraName) async {
   Log.d("Entered for $cameraName");
   final cameraLock = "motion$cameraName.lock";
-  if (!await lock(cameraLock)) {
-    Log.w("Motion download lock busy for $cameraName; skipping");
-    return false;
-  }
-  await DownloadStatus.markActive(cameraName, true);
-  var epoch = await readEpoch(cameraName, "video");
-  const downloadTimeout = Duration(seconds: 60);
+  if (await lock(cameraLock)) {
+    await DownloadStatus.markActive(cameraName, true);
+    var epoch = await readEpoch(cameraName, "video");
+    const downloadTimeout = Duration(seconds: 60);
 
-  // We could crash/be terminated at any point during execution.
-  // We need to perform the following steps carefully so that we
-  // don't end up with a "fatal crash point", i.e., a crash that
-  // will corrupt the MLS channel for good. For example, imagine
-  // that we download the video and delete it from the server and
-  // then we crash before decrypting it. At that point, the video
-  // file, which includes the MLS commit msg, is gone and we won't
-  // be able to decrypt any other videos on that channel anymore.
-  // So here's the order of steps that should work:
-  // 1. Download the video
-  // 2. Decrypt the video (which merges the MLS commit)
-  //    We should not terminate the loop if this step fails
-  //    since that could happen if we previously crashed between
-  //    steps 2 and 3.
-  // 3. Increase epoch number in shared preferences
-  // 4. Delete file from server
+    // We could crash/be terminated at any point during execution.
+    // We need to perform the following steps carefully so that we
+    // don't end up with a "fatal crash point", i.e., a crash that
+    // will corrupt the MLS channel for good. For example, imagine
+    // that we download the video and delete it from the server and
+    // then we crash before decrypting it. At that point, the video
+    // file, which includes the MLS commit msg, is gone and we won't
+    // be able to decrypt any other videos on that channel anymore.
+    // So here's the order of steps that should work:
+    // 1. Download the video
+    // 2. Decrypt the video (which merges the MLS commit)
+    //    We should not terminate the loop if this step fails
+    //    since that could happen if we previously crashed between
+    //    steps 2 and 3.
+    // 3. Increase epoch number in shared preferences
+    // 4. Delete file from server
 
-  try {
-    while (true) {
-      Log.d(
-        "Trying to download video for epoch $epoch with $cameraName and encVideo$epoch",
-      );
-
-      final assumedEpoch = epoch > 0 ? epoch - 1 : 0;
-      final fileName = "encVideo$epoch";
-      final downloadSw = Stopwatch()..start();
-      var result = await HttpClientService.instance.download(
-        destinationFile: fileName,
-        cameraName: cameraName,
-        serverFile: epoch.toString(),
-        type: Group.motion,
-        timeout: downloadTimeout,
-      );
-      downloadSw.stop();
-      if (!kReleaseMode) {
+    try {
+      while (true) {
         Log.d(
-          "[perf] Download motion $cameraName epoch $epoch in ${downloadSw.elapsedMilliseconds}ms (ok=${result.isSuccess})",
+          "Trying to download video for epoch $epoch with $cameraName and encVideo$epoch",
         );
-      }
 
-      if (result.isSuccess) {
-        Log.d("Success!");
-        var file = result.value!.file!;
-        final decryptSw = Stopwatch()..start();
-        var decFileName = await decryptVideo(
-          cameraName: cameraName,
-          encFilename: fileName,
-          assumedEpoch: BigInt.from(assumedEpoch),
-        );
-        decryptSw.stop();
-        if (!kReleaseMode) {
-          Log.d(
-            "[perf] Decrypt motion $cameraName $fileName in ${decryptSw.elapsedMilliseconds}ms (result=$decFileName)",
-          );
-        }
-        if (decFileName.startsWith("Error")) {
-          Log.w("Decrypt failed for $cameraName epoch $epoch: $decFileName");
-          if (_isBusyError(decFileName)) {
-            Log.w(
-              "Motion decrypt busy for $cameraName epoch $epoch; skipping for now",
-            );
-            return false;
-          }
-          if (_isEpochMismatch(decFileName)) {
-            final markerPayload =
-                await readEpochMarker(cameraName, "motion", epoch);
-            if (markerPayload != null) {
-              final baseDir = await getApplicationDocumentsDirectory();
-              final decPath = p.join(
-                baseDir.path,
-                'camera_dir_$cameraName',
-                'videos',
-                markerPayload,
-              );
-              final decFile = File(decPath);
-              if (await decFile.exists()) {
-                await _enqueuePendingVideo(cameraName, markerPayload);
-              } else {
-                Log.w(
-                  "Epoch marker exists but decrypted file missing: $decPath",
-                );
-              }
-              Log.w(
-                "Epoch mismatch for $cameraName epoch $epoch but marker exists; treating as duplicate",
-              );
-              await file.delete();
-              await writeEpoch(cameraName, "video", epoch + 1);
-              await HttpClientService.instance.delete(
-                destinationFile: fileName,
-                cameraName: cameraName,
-                serverFile: epoch.toString(),
-                type: Group.motion,
-              );
-              epoch += 1;
-              continue;
-            } else {
-              Log.w(
-                "Epoch marker exists for $cameraName epoch $epoch but no payload; not skipping",
-              );
-            }
-          }
-          final forceOk = await _maybeForceInit(cameraName, "decrypt_video");
-          if (forceOk) {
-            final retrySw = Stopwatch()..start();
-            decFileName = await decryptVideo(
-              cameraName: cameraName,
-              encFilename: fileName,
-              assumedEpoch: BigInt.from(assumedEpoch),
-            );
-            retrySw.stop();
-            if (!kReleaseMode) {
-              Log.d(
-                "[perf] Decrypt motion retry $cameraName $fileName in ${retrySw.elapsedMilliseconds}ms (result=$decFileName)",
-              );
-            }
-          }
-        }
-
-        if (decFileName.startsWith("Error")) {
-          Log.e(
-            "Decrypt failed for $cameraName epoch $epoch; leaving epoch unchanged",
-          );
-          return false;
-        }
-
-        Log.d("Dec file name = $decFileName");
-
-        // Delete only after successful decrypt to avoid losing MLS commits.
-        if (await file.exists()) {
-          try {
-            await file.delete();
-          } catch (e) {
-            Log.e("Failed to delete encrypted file $fileName: $e");
-          }
-        } else {
-          Log.w("Encrypted file already missing: $fileName");
-        }
-
-        Log.d("Received 100%");
-
-        if (decFileName != "Duplicate") {
-          await _enqueuePendingVideo(cameraName, decFileName);
-        }
-
-        await writeEpoch(cameraName, "video", epoch + 1);
-
-        await HttpClientService.instance.delete(
+        final assumedEpoch = epoch > 0 ? epoch - 1 : 0;
+        final fileName = "encVideo$epoch";
+        final downloadSw = Stopwatch()..start();
+        var result = await HttpClientService.instance.download(
           destinationFile: fileName,
           cameraName: cameraName,
           serverFile: epoch.toString(),
           type: Group.motion,
+          timeout: downloadTimeout,
         );
+        downloadSw.stop();
+        if (!kReleaseMode) {
+          Log.d(
+            "[perf] Download motion $cameraName epoch $epoch in ${downloadSw.elapsedMilliseconds}ms (ok=${result.isSuccess})",
+          );
+        }
 
-        epoch += 1;
-      } else {
-        Log.d("Failed here");
-        // We keep trying until hitting an error. Allows us to catch up on epochs.
-        break;
+        if (result.isFailure) {
+            Log.d("HTTP download of encrypted video failed");
+            return false;
+        } else { //result.isSuccess
+          if (result.value!.not_found) {
+            // There's no video to download
+            Log.d("Finished downloading encrypted videos for $cameraName");
+            return true;
+          }
+
+          Log.d("Success!");
+          var file = result.value!.file!;
+          final decryptSw = Stopwatch()..start();
+          var decFileName = await decryptVideo(
+            cameraName: cameraName,
+            encFilename: fileName,
+            assumedEpoch: BigInt.from(assumedEpoch),
+          );
+          decryptSw.stop();
+          if (!kReleaseMode) {
+            Log.d(
+              "[perf] Decrypt motion $cameraName $fileName in ${decryptSw.elapsedMilliseconds}ms (result=$decFileName)",
+            );
+          }
+          if (decFileName.startsWith("Error")) {
+            Log.w("Decrypt failed for $cameraName epoch $epoch: $decFileName");
+            if (_isBusyError(decFileName)) {
+              Log.w(
+                "Motion decrypt busy for $cameraName epoch $epoch; skipping for now",
+              );
+            }
+            if (_isEpochMismatch(decFileName)) {
+              final markerPayload =
+                  await readEpochMarker(cameraName, "motion", epoch);
+              if (markerPayload != null) {
+                final baseDir = await getApplicationDocumentsDirectory();
+                final decPath = p.join(
+                  baseDir.path,
+                  'camera_dir_$cameraName',
+                  'videos',
+                  markerPayload,
+                );
+                final decFile = File(decPath);
+                if (await decFile.exists()) {
+                  await _enqueuePendingVideo(cameraName, markerPayload);
+                } else {
+                  Log.w(
+                    "Epoch marker exists but decrypted file missing: $decPath",
+                  );
+                }
+                Log.w(
+                  "Epoch mismatch for $cameraName epoch $epoch but marker exists; treating as duplicate",
+                );
+                await file.delete();
+                await writeEpoch(cameraName, "video", epoch + 1);
+                await HttpClientService.instance.delete(
+                  destinationFile: fileName,
+                  cameraName: cameraName,
+                  serverFile: epoch.toString(),
+                  type: Group.motion,
+                );
+                epoch += 1;
+                continue;
+              } else {
+                Log.w(
+                  "Epoch marker exists for $cameraName epoch $epoch but no payload; not skipping",
+                );
+              }
+            }
+            final forceOk = await _maybeForceInit(cameraName, "decrypt_video");
+            if (forceOk) {
+              final retrySw = Stopwatch()..start();
+              decFileName = await decryptVideo(
+                cameraName: cameraName,
+                encFilename: fileName,
+                assumedEpoch: BigInt.from(assumedEpoch),
+              );
+              retrySw.stop();
+              if (!kReleaseMode) {
+                Log.d(
+                  "[perf] Decrypt motion retry $cameraName $fileName in ${retrySw.elapsedMilliseconds}ms (result=$decFileName)",
+                );
+              }
+            }
+          }
+
+          if (decFileName.startsWith("Error")) {
+            Log.e(
+              "Decrypt failed for $cameraName epoch $epoch; leaving epoch unchanged",
+            );
+          }
+
+          Log.d("Dec file name = $decFileName");
+
+          // Delete only after successful decrypt to avoid losing MLS commits.
+          if (await file.exists()) {
+            try {
+              await file.delete();
+            } catch (e) {
+              Log.e("Failed to delete encrypted file $fileName: $e");
+            }
+          } else {
+            Log.w("Encrypted file already missing: $fileName");
+          }
+
+          Log.d("Received 100%");
+
+          if (decFileName != "Duplicate") {
+            await _enqueuePendingVideo(cameraName, decFileName);
+          }
+
+          await writeEpoch(cameraName, "video", epoch + 1);
+
+          await HttpClientService.instance.delete(
+            destinationFile: fileName,
+            cameraName: cameraName,
+            serverFile: epoch.toString(),
+            type: Group.motion,
+          );
+
+          epoch += 1;
+        }
       }
+    } finally {
+      await DownloadStatus.markActive(cameraName, false);
+      await unlock(cameraLock);
     }
-
-    Log.d("Finished downloading for $cameraName");
-    return true; // TODO: We may wish to utilize a check in the future on if something truly failed that could be retried, so this is left here as an architecture to make that happen
-  } finally {
-    await DownloadStatus.markActive(cameraName, false);
-    await unlock(cameraLock);
+  } else {
+    Log.w("Motion download lock busy for $cameraName; skipping");
+    return false;
   }
 }
