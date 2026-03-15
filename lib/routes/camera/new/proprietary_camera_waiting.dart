@@ -1,7 +1,6 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:async';
 
 import 'package:uuid/data.dart';
@@ -21,7 +20,6 @@ import 'package:secluso_flutter/routes/camera/list_cameras.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
-import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/notifications/notification_permissions.dart';
 import 'proprietary_camera_option.dart';
 import 'package:path/path.dart' as p;
@@ -106,7 +104,7 @@ class _ProprietaryCameraWaitingDialogState
         return;
       }
 
-      sleep(
+      await Future<void>.delayed(
         const Duration(seconds: 3),
       ); // Make sure we have enough time for the other side to read before disconnecting the WiFi.
 
@@ -128,15 +126,17 @@ class _ProprietaryCameraWaitingDialogState
             Log.w("WiFi fetch SSID failed: $e");
           }
 
-          sleep(const Duration(seconds: 1));
+          await Future<void>.delayed(const Duration(seconds: 1));
         }
       }
 
       if (!mounted) return;
 
-      sleep(
+      await Future<void>.delayed(
         const Duration(seconds: 3),
       ); // wait 3 seconds to let phone reconnect to wifi / disassociate from private WiFi network
+
+      if (!mounted) return;
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(PrefKeys.lastCameraAdd, widget.cameraName);

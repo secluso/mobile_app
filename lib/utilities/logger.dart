@@ -3,9 +3,11 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:logger/logger.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:secluso_flutter/utilities/ui_state.dart';
 import 'package:secluso_flutter/utilities/trace_id.dart';
 
 class LogMessage {
@@ -235,6 +237,7 @@ class Log {
   static bool _storageReady = false;
   static bool _loadingStorage = false;
   static int _lastErrorEpochMs = 0;
+  static bool _errorBannerNotifyQueued = false;
 
   static const Map<Level, String> _levelMap = {
     Level.trace: 'T',
@@ -273,7 +276,7 @@ class Log {
 
       if (!suppressBanner) {
         _lastErrorEpochMs = DateTime.now().millisecondsSinceEpoch;
-        errorNotifier.value++;
+        _notifyErrorBanner();
 
         final marker = _formatLine(
           Level.warning,
@@ -294,6 +297,23 @@ class Log {
     }
 
     _scheduleFlush();
+  }
+
+  static void _notifyErrorBanner() {
+    if (UiState.isBindingReady) {
+      final scheduler = SchedulerBinding.instance;
+      if (scheduler.schedulerPhase != SchedulerPhase.idle) {
+        if (_errorBannerNotifyQueued) return;
+        _errorBannerNotifyQueued = true;
+        scheduler.addPostFrameCallback((timeStamp) {
+          _errorBannerNotifyQueued = false;
+          errorNotifier.value++;
+        });
+        return;
+      }
+    }
+
+    errorNotifier.value++;
   }
 
   static void _appendLine(String line) {
@@ -376,8 +396,8 @@ class _OneLinePrinter extends LogPrinter {
   };
   @override
   List<String> log(LogEvent event) {
-    final _time = DateFormat('HH:mm:ss.SSS');
-    final ts = _time.format(DateTime.now());
+    final timeFormat = DateFormat('HH:mm:ss.SSS');
+    final ts = timeFormat.format(DateTime.now());
     final tag = _levelMap[event.level] ?? '?';
 
     dynamic actualMessage = event.message;

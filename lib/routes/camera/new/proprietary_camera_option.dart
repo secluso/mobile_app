@@ -1,5 +1,7 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
+import 'dart:async';
+
 import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
@@ -13,7 +15,7 @@ import 'package:path_provider/path_provider.dart';
 import 'qr_scan.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:io' show Platform, Directory, sleep;
+import 'dart:io' show Platform, Directory;
 import 'package:path/path.dart' as p;
 
 /// Popup: User connects to camera's Wi-Fi hotspot.
@@ -40,25 +42,13 @@ class ProprietaryCameraConnectDialog extends StatefulWidget {
     pairingCompleted = false;
     pairingInProgress = true;
     currentSessionId = ++_sessionCounter;
+    final dialogContext = Navigator.of(context, rootNavigator: true).context;
 
     try {
-      // Show connect dialog
-      final connectResult = await showDialog<bool>(
-        context: context,
+      final flowResult = await showDialog<Map<String, Object>?>(
+        context: dialogContext,
         barrierDismissible: false,
         builder: (ctx) => const ProprietaryCameraConnectDialog(),
-      );
-
-      // If user canceled or closed
-      if (connectResult == null || connectResult == false) {
-        return null;
-      }
-
-      // Show camera info dialog
-      final infoResult = await showDialog<Map<String, Object>>(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => const ProprietaryCameraInfoDialog(),
       );
 
       ProprietaryCameraConnectDialog.pairingCompleted = true;
@@ -66,7 +56,7 @@ class ProprietaryCameraConnectDialog extends StatefulWidget {
       ProprietaryCameraConnectDialog.pairingInProgress = false;
 
       // Returns null if user canceled or final data if user tapped "Add Camera"
-      return infoResult;
+      return flowResult;
     } finally {
       // Reset regardless of outcome
       pairingInProgress = false;
@@ -122,7 +112,8 @@ class _ProprietaryCameraConnectDialogState
       if (result == "connected") {
         if (Platform.isIOS) {
           var duration = const Duration(seconds: 3);
-          sleep(duration);
+          await Future<void>.delayed(duration);
+          if (!mounted) return;
 
           //Connect again to ensure no awkward errors (not sure why this occurs sometimes), should be instant
           final result = await platform.invokeMethod<String>(
@@ -136,7 +127,8 @@ class _ProprietaryCameraConnectDialogState
         // We expect the same IP for all Raspberry Pi Cameras
         try {
           var duration = const Duration(seconds: 3);
-          sleep(duration);
+          await Future<void>.delayed(duration);
+          if (!mounted) return;
           Log.d("Starting to ping");
           bool connected = await pingProprietaryDevice(
             cameraIp: Constants.proprietaryCameraIp,
@@ -209,17 +201,22 @@ class _ProprietaryCameraConnectDialogState
     }
   }
 
-  void _onNext() {
+  Future<void> _onNext() async {
     _exitingToNext = true;
-    // Return true to indicate we're ready to go next
-    Navigator.of(context).pop(true);
+    final infoResult = await showDialog<Map<String, Object>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const ProprietaryCameraInfoDialog(),
+    );
+    if (!mounted) return;
+
+    Navigator.of(context).pop(infoResult);
   }
 
   void _onCancel() async {
-    await _maybeDisconnect();
+    _maybeDisconnect();
     ProprietaryCameraConnectDialog.pairingInProgress = false;
-    // Return false or just pop with no value => indicates cancel
-    Navigator.of(context).pop(false);
+    Navigator.of(context).pop();
   }
 
   @override
@@ -237,101 +234,108 @@ class _ProprietaryCameraConnectDialogState
       canPop: true,
       onPopInvokedWithResult: (bool didPop, Object? result) async {
         if (didPop) {
-          await _maybeDisconnect();
+          _maybeDisconnect();
         }
       },
       child: Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
           padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: _onCancel,
-                    tooltip: 'Cancel',
-                  ),
-                ],
-              ),
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).primaryColor,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.camera_alt,
-                  color: Colors.white,
-                  size: 36,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Connect to Your Camera',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'We need to connect to the camera. Ensure the camera is plugged in '
-                'before proceeding. Ensure that Wi-Fi is enabled '
-                'on your device (e.g., smartphone). If the camera has been '
-                'previously paired with the app, make sure to reset it before '
-                'pairing again.',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(height: 1.4),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text(
-                    'Status: ',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  Text(
-                    statusText,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color:
-                          _isConnecting
-                              ? Colors.orange
-                              : (_isConnected ? Colors.green : Colors.red),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: _onCancel,
+                      tooltip: 'Cancel',
                     ),
+                  ],
+                ),
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor,
+                    shape: BoxShape.circle,
                   ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed:
-                    _isConnected || _isConnecting
-                        ? null
-                        : () {
-                          _connectToCamera();
-                        },
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
+                  child: const Icon(
+                    Icons.camera_alt,
+                    color: Colors.white,
+                    size: 36,
+                  ),
                 ),
-                child: const Text('Connect'),
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: _isConnected ? _onNext : null,
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
+                const SizedBox(height: 16),
+                Text(
+                  'Connect to Your Camera',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
                 ),
-                child: const Text('Next'),
-              ),
-            ],
+                const SizedBox(height: 12),
+                Text(
+                  'We need to connect to the camera. Ensure the camera is plugged in '
+                  'before proceeding. Ensure that Wi-Fi is enabled '
+                  'on your device (e.g., smartphone). If the camera has been '
+                  'previously paired with the app, make sure to reset it before '
+                  'pairing again.',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(height: 1.4),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text(
+                      'Status: ',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      statusText,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color:
+                            _isConnecting
+                                ? Colors.orange
+                                : (_isConnected ? Colors.green : Colors.red),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed:
+                      _isConnected || _isConnecting
+                          ? null
+                          : () {
+                            _connectToCamera();
+                          },
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  child: const Text('Connect'),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed:
+                      _isConnected
+                          ? () {
+                            _onNext();
+                          }
+                          : null,
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  child: const Text('Next'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -353,6 +357,7 @@ class _ProprietaryCameraInfoDialogState
   final _cameraNameController = TextEditingController();
   final _wifiSsidController = TextEditingController();
   final _wifiPasswordController = TextEditingController();
+  final _cameraNameFocusNode = FocusNode();
 
   Uint8List? _qrCode;
 
@@ -360,6 +365,19 @@ class _ProprietaryCameraInfoDialogState
   void initState() {
     super.initState();
     ProprietaryCameraConnectDialog.pairingCompleted = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _cameraNameFocusNode.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _cameraNameController.dispose();
+    _wifiSsidController.dispose();
+    _wifiPasswordController.dispose();
+    _cameraNameFocusNode.dispose();
+    super.dispose();
   }
 
   void _onCancel() async {
@@ -495,6 +513,7 @@ class _ProprietaryCameraInfoDialogState
               const SizedBox(height: 20),
               TextField(
                 controller: _cameraNameController,
+                focusNode: _cameraNameFocusNode,
                 decoration: const InputDecoration(
                   labelText: 'Camera Name',
                   hintText: 'e.g. Front Door',
