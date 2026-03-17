@@ -12,6 +12,8 @@ import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/notifications/notification_permissions.dart';
+import 'package:secluso_flutter/ui/secluso_surfaces.dart';
+import 'package:secluso_flutter/ui/secluso_theme.dart';
 
 class CameraSetupStatusDialog extends StatefulWidget {
   final Map<String, dynamic> result;
@@ -115,27 +117,27 @@ class _CameraSetupStatusDialogState extends State<CameraSetupStatusDialog> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(maxWidth: 320),
-      padding: const EdgeInsets.all(24),
+      constraints: const BoxConstraints(maxWidth: 340),
       decoration: BoxDecoration(
-        color: Theme.of(context).dialogBackgroundColor,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 16,
-            offset: Offset(0, 8),
-          ),
-        ],
+        color: const Color(0xFF0D0E11),
+        borderRadius: BorderRadius.circular(28),
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF111216), Color(0xFF0B0B0D)],
+        ),
       ),
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        child:
-            _success == null
-                ? _buildLoading()
-                : _success == true
-                ? _buildSuccess()
-                : _buildError(),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          child:
+              _success == null
+                  ? _buildLoading()
+                  : _success == true
+                  ? _buildSuccess()
+                  : _buildError(),
+        ),
       ),
     );
   }
@@ -143,15 +145,28 @@ class _CameraSetupStatusDialogState extends State<CameraSetupStatusDialog> {
   Widget _buildLoading() => Column(
     key: const ValueKey('loading'),
     mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
     children: [
+      const SeclusoStatusChip(
+        label: 'Pairing in progress',
+        color: SeclusoColors.blueSoft,
+      ),
+      const SizedBox(height: 18),
       const CircularProgressIndicator(),
       const SizedBox(height: 20),
       Text(
-        'Setting up your camera...',
+        'Setting up the camera.',
         style: Theme.of(
           context,
-        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-        textAlign: TextAlign.center,
+        ).textTheme.headlineSmall?.copyWith(color: Colors.white, fontSize: 26),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        'The relay is registering the camera and applying its credentials now.',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Colors.white.withValues(alpha: 0.74),
+          height: 1.45,
+        ),
       ),
     ],
   );
@@ -159,15 +174,32 @@ class _CameraSetupStatusDialogState extends State<CameraSetupStatusDialog> {
   Widget _buildSuccess() => Column(
     key: const ValueKey('success'),
     mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const Icon(Icons.check_circle, color: Colors.green, size: 60),
-      const SizedBox(height: 20),
+      const SeclusoStatusChip(
+        label: 'Camera linked',
+        color: SeclusoColors.success,
+      ),
+      const SizedBox(height: 18),
+      const Icon(
+        Icons.check_circle_outline_rounded,
+        color: SeclusoColors.success,
+        size: 54,
+      ),
+      const SizedBox(height: 18),
       Text(
-        'Camera successfully added!',
+        'Camera added successfully.',
         style: Theme.of(
           context,
-        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-        textAlign: TextAlign.center,
+        ).textTheme.headlineSmall?.copyWith(color: Colors.white, fontSize: 26),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        'The new feed is ready and the app will return to the main screen shortly.',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Colors.white.withValues(alpha: 0.74),
+          height: 1.45,
+        ),
       ),
     ],
   );
@@ -175,26 +207,49 @@ class _CameraSetupStatusDialogState extends State<CameraSetupStatusDialog> {
   Widget _buildError() => Column(
     key: const ValueKey('error'),
     mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const Icon(Icons.error_outline, color: Colors.redAccent, size: 60),
-      const SizedBox(height: 20),
+      const SeclusoStatusChip(
+        label: 'Pairing failed',
+        color: SeclusoColors.danger,
+      ),
+      const SizedBox(height: 18),
+      const Icon(
+        Icons.error_outline_rounded,
+        color: SeclusoColors.danger,
+        size: 54,
+      ),
+      const SizedBox(height: 18),
       Text(
-        'Failed to add camera.\nWould you like to try again?',
+        'Failed to add the camera.',
         style: Theme.of(
           context,
-        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-        textAlign: TextAlign.center,
+        ).textTheme.headlineSmall?.copyWith(color: Colors.white, fontSize: 26),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        'The relay did not finish importing this device. You can go back or retry the setup flow.',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Colors.white.withValues(alpha: 0.74),
+          height: 1.45,
+        ),
       ),
       const SizedBox(height: 24),
       Row(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Back'),
+          Expanded(
+            child: OutlinedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Back'),
+            ),
           ),
-          const SizedBox(width: 16),
-          ElevatedButton(onPressed: _startSetup, child: const Text('Retry')),
+          const SizedBox(width: 12),
+          Expanded(
+            child: FilledButton(
+              onPressed: _startSetup,
+              child: const Text('Retry'),
+            ),
+          ),
         ],
       ),
     ],

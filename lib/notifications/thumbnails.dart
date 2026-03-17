@@ -108,6 +108,39 @@ class ThumbnailManager {
     return false;
   }
 
+  static Future<void> _logThumbnailFileState(
+    String camera,
+    String filePath, {
+    required String stage,
+  }) async {
+    final file = File(filePath);
+    final exists = await file.exists();
+    if (!exists) {
+      Log.w("[thumbnail] $stage missing for $camera at $filePath");
+      return;
+    }
+
+    final stat = await file.stat();
+    final parent = file.parent;
+    int siblingCount = 0;
+    try {
+      siblingCount =
+          await parent
+              .list()
+              .where(
+                (entity) =>
+                    entity is File &&
+                    _isThumbnailFilename(p.basename(entity.path)),
+              )
+              .length;
+    } catch (_) {}
+
+    Log.d(
+      "[thumbnail] $stage ready for $camera at $filePath "
+      "(size=${stat.size}, siblings=$siblingCount)",
+    );
+  }
+
   static Future<void> _ensureSession({
     required String camera,
     required Duration timeBudget,
@@ -296,6 +329,11 @@ class ThumbnailManager {
                     markerPayload,
                   );
                   if (await File(decPath).exists()) {
+                    await _logThumbnailFileState(
+                      camera,
+                      decPath,
+                      stage: "session epoch marker",
+                    );
                     ThumbnailNotifier.instance.notify(camera);
                   } else {
                     Log.w(
@@ -360,6 +398,11 @@ class ThumbnailManager {
                   markerPayload,
                 );
                 if (await File(decPath).exists()) {
+                  await _logThumbnailFileState(
+                    camera,
+                    decPath,
+                    stage: "session duplicate marker",
+                  );
                   ThumbnailNotifier.instance.notify(camera);
                   if (markerPayload == "thumbnail_$targetTimestamp.png") {
                     Log.d("Received target thumbnail");
@@ -394,6 +437,12 @@ class ThumbnailManager {
                 Log.e("Thumbnail file not ready or invalid: $decPath");
                 return;
               }
+
+              await _logThumbnailFileState(
+                camera,
+                decPath,
+                stage: "session decrypt",
+              );
 
               await file.delete();
               var result = decFileName == "thumbnail_$targetTimestamp.png";
@@ -531,6 +580,11 @@ class ThumbnailManager {
                     markerPayload,
                   );
                   if (await File(decPath).exists()) {
+                    await _logThumbnailFileState(
+                      camera,
+                      decPath,
+                      stage: "retrieve epoch marker",
+                    );
                     ThumbnailNotifier.instance.notify(camera);
                   } else {
                     Log.w(
@@ -595,6 +649,11 @@ class ThumbnailManager {
                   markerPayload,
                 );
                 if (await File(decPath).exists()) {
+                  await _logThumbnailFileState(
+                    camera,
+                    decPath,
+                    stage: "retrieve duplicate marker",
+                  );
                   ThumbnailNotifier.instance.notify(camera);
                 } else {
                   Log.w("Duplicate thumbnail marker missing file: $decPath");
@@ -624,6 +683,12 @@ class ThumbnailManager {
               final ready = await _waitForStablePng(decPath);
               if (!ready) {
                 Log.e("Thumbnail file not ready or invalid: $decPath");
+              } else {
+                await _logThumbnailFileState(
+                  camera,
+                  decPath,
+                  stage: "retrieve decrypt",
+                );
               }
 
               await file.delete();

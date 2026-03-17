@@ -8,6 +8,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:path/path.dart' as p;
 import 'package:gal/gal.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/ui/secluso_surfaces.dart';
+import 'package:secluso_flutter/ui/secluso_theme.dart';
 
 import 'package:secluso_flutter/database/app_stores.dart';
 import 'package:secluso_flutter/database/entities.dart';
@@ -20,15 +22,23 @@ class VideoViewPage extends StatefulWidget {
   final bool canDownload;
   final String cameraName;
   final bool isLivestream;
+  final String? previewAssetPath;
+  final Set<String>? previewDetections;
+  final Duration previewDuration;
+  final Duration previewPosition;
 
   const VideoViewPage({
-    Key? key,
+    super.key,
     required this.videoTitle,
     required this.visibleVideoTitle,
     required this.canDownload,
     required this.cameraName,
     required this.isLivestream,
-  }) : super(key: key);
+    this.previewAssetPath,
+    this.previewDetections,
+    this.previewDuration = const Duration(seconds: 42),
+    this.previewPosition = const Duration(seconds: 12),
+  });
 
   @override
   State<VideoViewPage> createState() => _VideoViewPageState();
@@ -37,19 +47,34 @@ class VideoViewPage extends StatefulWidget {
 class _VideoViewPageState extends State<VideoViewPage> {
   late VideoPlayerController _controller;
   bool _initialized = false;
+  String? _loadError;
   late String _videoPath;
   late Box<Detection> _detBox;
   Set<String> _dets = {};
-  bool _detsLoaded = false;
+
+  bool get _isPreviewMode => widget.previewAssetPath != null;
 
   @override
   void initState() {
     super.initState();
+    if (_isPreviewMode) {
+      _dets = widget.previewDetections ?? const <String>{};
+      _initialized = true;
+      return;
+    }
     _openBoxesAndLoadDetections();
     _initVideo();
   }
 
   Future<void> _openBoxesAndLoadDetections() async {
+    if (!AppStores.isInitialized) {
+      try {
+        await AppStores.init();
+      } catch (e, st) {
+        Log.e("Failed to init AppStores in video view: $e\n$st");
+        return;
+      }
+    }
     _detBox = AppStores.instance.detectionStore.box<Detection>();
     await _loadDetections();
   }
@@ -74,71 +99,94 @@ class _VideoViewPageState extends State<VideoViewPage> {
     if (mounted) {
       setState(() {
         _dets = types;
-        _detsLoaded = true;
       });
     }
   }
 
   Future<void> _initVideo() async {
-    final dir = await getApplicationDocumentsDirectory();
-    var cam = widget.cameraName;
-    _videoPath = p.join(
-      dir.path,
-      "camera_dir_$cam",
-      'videos',
-      widget.videoTitle,
-    );
-    Log.d("Found path: $_videoPath");
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      var cam = widget.cameraName;
+      _videoPath = p.join(
+        dir.path,
+        "camera_dir_$cam",
+        'videos',
+        widget.videoTitle,
+      );
+      Log.d("Found path: $_videoPath");
 
-    // apply patch only for livestreams, and only once
-    if (widget.isLivestream) {
-      final markerPath = '$_videoPath.patched_livestream';
-      final marker = File(markerPath);
-      final alreadyFixed = await marker.exists();
-
-      if (alreadyFixed) {
-        Log.d("[fix] skip: marker exists ($markerPath)");
-      } else {
-        Log.d("Attempting to fix (livestream only)");
-        final res = await Mp4DurationFixer(File(_videoPath), log: Log.d).fix();
-
-        // Only mark if it actually patched something
-        if (res.patched) {
-          try {
-            await marker.writeAsString(
-              "ok ${res.duration.inMilliseconds}ms fps=${res.fps.toStringAsFixed(3)}",
-              flush: true,
-            );
-            Log.d("[fix] marker written ($markerPath)");
-          } catch (e) {
-            Log.d("[fix] could not write marker: $e");
-          }
-        } else {
-          Log.d(
-            "[fix] no patch applied (res.patched=false) — not writing marker",
-          );
+      final sourceFile = File(_videoPath);
+      if (!await sourceFile.exists()) {
+        if (mounted) {
+          setState(() {
+            _loadError = 'Clip file is not available on this device yet.';
+          });
         }
+        return;
       }
-    } else {
-      Log.d("[fix] not a livestream — skipping patch");
+
+      // apply patch only for livestreams, and only once
+      if (widget.isLivestream) {
+        final markerPath = '$_videoPath.patched_livestream';
+        final marker = File(markerPath);
+        final alreadyFixed = await marker.exists();
+
+        if (alreadyFixed) {
+          Log.d("[fix] skip: marker exists ($markerPath)");
+        } else {
+          Log.d("Attempting to fix (livestream only)");
+          final res = await Mp4DurationFixer(sourceFile, log: Log.d).fix();
+
+          // Only mark if it actually patched something
+          if (res.patched) {
+            try {
+              await marker.writeAsString(
+                "ok ${res.duration.inMilliseconds}ms fps=${res.fps.toStringAsFixed(3)}",
+                flush: true,
+              );
+              Log.d("[fix] marker written ($markerPath)");
+            } catch (e) {
+              Log.d("[fix] could not write marker: $e");
+            }
+          } else {
+            Log.d(
+              "[fix] no patch applied (res.patched=false) — not writing marker",
+            );
+          }
+        }
+      } else {
+        Log.d("[fix] not a livestream — skipping patch");
+      }
+
+      _controller = VideoPlayerController.file(sourceFile);
+
+      await _controller.initialize();
+      await _controller.setLooping(true);
+      _controller.addListener(() {
+        if (mounted) setState(() {});
+      });
+      _controller.play();
+      if (mounted) {
+        setState(() {
+          _initialized = true;
+          _loadError = null;
+        });
+      }
+    } catch (e, st) {
+      Log.e("Failed to initialize video view: $e\n$st");
+      if (mounted) {
+        setState(() {
+          _loadError = 'Unable to open this saved clip.';
+        });
+      }
     }
-
-    _controller = VideoPlayerController.file(File(_videoPath));
-
-    await _controller.initialize();
-    await _controller.setLooping(true);
-    _controller.addListener(() {
-      if (mounted) setState(() {});
-    });
-    _controller.play();
-    setState(() {
-      _initialized = true;
-    });
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    if (!_isPreviewMode) {
+      _controller.dispose();
+    }
     super.dispose();
   }
 
@@ -211,31 +259,11 @@ class _VideoViewPageState extends State<VideoViewPage> {
     });
   }
 
-  List<Widget> _detectionIcons(Set<String> types) {
-    final hasHuman = types.contains('human');
-    final hasVehicle = types.contains('vehicle');
-    final hasPet = types.contains('pet') || types.contains('pets');
-
-    final icons = <IconData>[
-      if (hasHuman) Icons.person,
-      if (hasVehicle) Icons.directions_car,
-      if (hasPet) Icons.pets,
-    ];
-    return icons
-        .map(
-          (i) => Padding(
-            padding: const EdgeInsets.only(left: 8),
-            child: Icon(i, size: 18, color: Colors.grey),
-          ),
-        )
-        .toList();
-  }
-
   String _detectionLabel(Set<String> types) {
     if (types.isEmpty) return 'None';
     final norm = {for (final t in types) (t == 'pets' ? 'pet' : t)};
     final ordered = <String>[];
-    if (norm.contains('human')) ordered.add('Human');
+    if (norm.contains('human')) ordered.add('Person');
     if (norm.contains('vehicle')) ordered.add('Vehicle');
     if (norm.contains('pet')) ordered.add('Pet');
     return ordered.join(', ');
@@ -245,21 +273,31 @@ class _VideoViewPageState extends State<VideoViewPage> {
   Widget build(BuildContext context) {
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+
+    if (_isPreviewMode) {
+      return Scaffold(
+        backgroundColor:
+            dark ? const Color(0xFF050505) : const Color(0xFFF2F2F7),
+        body: _buildPreviewContent(),
+      );
+    }
 
     return Scaffold(
-      appBar:
-          isLandscape
-              ? null
-              : AppBar(
-                title: Text(
-                  widget.visibleVideoTitle,
-                  style: const TextStyle(color: Colors.white),
-                ),
-                iconTheme: const IconThemeData(color: Colors.white),
-                backgroundColor: const Color.fromARGB(255, 139, 179, 238),
-              ),
+      backgroundColor: dark ? const Color(0xFF050505) : const Color(0xFFF2F2F7),
       body:
-          _initialized
+          _loadError != null
+              ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    _loadError!,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                ),
+              )
+              : _initialized
               ? isLandscape
                   ? _buildLandscapePlayer()
                   : _buildPortraitContent()
@@ -281,30 +319,36 @@ class _VideoViewPageState extends State<VideoViewPage> {
           left: 16,
           right: 16,
           bottom: 80,
-          child: Column(
-            children: [
-              VideoProgressIndicator(
-                _controller,
-                allowScrubbing: false,
-                colors: const VideoProgressColors(
-                  playedColor: Color.fromARGB(255, 139, 179, 238),
+          child: SeclusoGlassCard(
+            borderRadius: 24,
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            tint: Colors.black.withValues(alpha: 0.48),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                VideoProgressIndicator(
+                  _controller,
+                  allowScrubbing: false,
+                  colors: const VideoProgressColors(
+                    playedColor: SeclusoColors.blue,
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 4),
                 ),
-                padding: const EdgeInsets.symmetric(vertical: 4),
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    _formatDuration(_controller.value.position),
-                    style: const TextStyle(fontSize: 12, color: Colors.white),
-                  ),
-                  Text(
-                    _formatDuration(_controller.value.duration),
-                    style: const TextStyle(fontSize: 12, color: Colors.white),
-                  ),
-                ],
-              ),
-            ],
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _formatDuration(_controller.value.position),
+                      style: const TextStyle(fontSize: 12, color: Colors.white),
+                    ),
+                    Text(
+                      _formatDuration(_controller.value.duration),
+                      style: const TextStyle(fontSize: 12, color: Colors.white),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
         // Playback controls
@@ -361,126 +405,480 @@ class _VideoViewPageState extends State<VideoViewPage> {
   }
 
   Widget _buildPortraitContent() {
-    final effective = _dets;
+    return _buildPortraitShell(
+      aspectRatio: _controller.value.aspectRatio,
+      media: VideoPlayer(_controller),
+      position: _controller.value.position,
+      duration: _controller.value.duration,
+      detections: _dets,
+      canDownload: widget.canDownload,
+      onDownload: _downloadVideo,
+      isPlaying: _controller.value.isPlaying,
+      onTogglePlay: _togglePlayPause,
+      onRewind: () {
+        final current = _controller.value.position;
+        final newPosition = current - const Duration(seconds: 5);
+        _controller.seekTo(
+          newPosition >= Duration.zero ? newPosition : Duration.zero,
+        );
+      },
+      onFastForward: () {
+        final current = _controller.value.position;
+        final max = _controller.value.duration;
+        final newPosition = current + const Duration(seconds: 5);
+        _controller.seekTo(newPosition <= max ? newPosition : max);
+      },
+    );
+  }
 
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            AspectRatio(
-              aspectRatio: _controller.value.aspectRatio,
-              child: VideoPlayer(_controller),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
+  Widget _buildPreviewContent() {
+    return _buildPortraitShell(
+      aspectRatio: 16 / 9,
+      media: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (widget.previewAssetPath == 'assets/design/light_backdrop.png')
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFFAEC4DE), Color(0xFFB7CBDD)],
+                ),
+              ),
+            )
+          else
+            Image.asset(widget.previewAssetPath!, fit: BoxFit.cover),
+        ],
+      ),
+      position: widget.previewPosition,
+      duration: widget.previewDuration,
+      detections: widget.previewDetections ?? const <String>{},
+      canDownload: widget.canDownload,
+      onDownload: () {},
+      isPlaying: true,
+      onTogglePlay: () {},
+      onRewind: () {},
+      onFastForward: () {},
+    );
+  }
+
+  Widget _buildPortraitShell({
+    required double aspectRatio,
+    required Widget media,
+    required Duration position,
+    required Duration duration,
+    required Set<String> detections,
+    required bool canDownload,
+    required VoidCallback onDownload,
+    required bool isPlaying,
+    required VoidCallback onTogglePlay,
+    required VoidCallback onRewind,
+    required VoidCallback onFastForward,
+  }) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final metrics = _ClipViewMetrics.forWidth(MediaQuery.sizeOf(context).width);
+    final effectiveDuration =
+        duration > Duration.zero ? duration : const Duration(seconds: 1);
+    final maxMs = effectiveDuration.inMilliseconds.toDouble();
+    final currentMs =
+        position.inMilliseconds
+            .clamp(0, effectiveDuration.inMilliseconds)
+            .toDouble();
+    final activeDetection = _detectionLabel(detections).split(',').first;
+
+    return SafeArea(
+      bottom: false,
+      child: ListView(
+        padding: EdgeInsets.fromLTRB(
+          metrics.pageInset,
+          metrics.topPadding,
+          metrics.pageInset,
+          metrics.bottomPadding + MediaQuery.paddingOf(context).bottom,
+        ),
+        children: [
+          Row(
+            children: [
+              _ClipCircleButton(
+                size: metrics.backButtonSize,
+                fill:
+                    dark
+                        ? Colors.white.withValues(alpha: 0.06)
+                        : const Color(0xFFE5E7EB),
+                onTap: () => Navigator.of(context).maybePop(),
+                child: _ClipBackIcon(
+                  size: metrics.backIconSize,
+                  color:
+                      dark
+                          ? Colors.white.withValues(alpha: 0.7)
+                          : const Color(0xFF6B7280),
+                ),
+              ),
+              SizedBox(width: metrics.headerGap),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  VideoProgressIndicator(
-                    _controller,
-                    colors: const VideoProgressColors(
-                      playedColor: Color.fromARGB(255, 139, 179, 238),
+                  Text(
+                    widget.cameraName,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontSize: metrics.titleSize,
+                      fontWeight: FontWeight.w600,
+                      color: dark ? Colors.white : const Color(0xFF111827),
                     ),
-                    allowScrubbing: false,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
                   ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _formatDuration(_controller.value.position),
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      Text(
-                        _formatDuration(_controller.value.duration),
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ],
+                  SizedBox(height: metrics.subtitleGap),
+                  Text(
+                    'Recorded Clip',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontSize: metrics.subtitleSize,
+                      color:
+                          dark
+                              ? Colors.white.withValues(alpha: 0.4)
+                              : const Color(0xFF6B7280),
+                    ),
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.replay_5),
-                        iconSize: 36,
-                        onPressed: () {
-                          final current = _controller.value.position;
-                          final newPosition =
-                              current - const Duration(seconds: 5);
-                          _controller.seekTo(
-                            newPosition >= Duration.zero
-                                ? newPosition
-                                : Duration.zero,
-                          );
-                        },
+                ],
+              ),
+            ],
+          ),
+          SizedBox(height: metrics.headerToMediaGap),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF111827),
+              borderRadius: BorderRadius.circular(metrics.mediaRadius),
+              border: Border.all(
+                color:
+                    dark
+                        ? Colors.white.withValues(alpha: 0.06)
+                        : const Color(0x00000000),
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(metrics.mediaRadius),
+              child: AspectRatio(
+                aspectRatio: 258 / 145.13,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    media,
+                    Center(
+                      child: _ClipPlayOverlayButton(
+                        size: metrics.playButtonSize,
+                        dark: dark,
+                        onTap: onTogglePlay,
                       ),
-                      const SizedBox(width: 24),
-                      IconButton(
-                        icon: Icon(
-                          _controller.value.isPlaying
-                              ? Icons.pause
-                              : Icons.play_arrow,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: metrics.mediaToProgressGap),
+          _ClipProgressBar(
+            valueMs: currentMs,
+            maxMs: maxMs,
+            dark: dark,
+            height: metrics.progressHeight,
+            thumbRadius: metrics.progressThumbRadius,
+            onChanged:
+                _isPreviewMode
+                    ? null
+                    : (value) async {
+                      await _controller.seekTo(
+                        Duration(milliseconds: value.round()),
+                      );
+                    },
+          ),
+          SizedBox(height: metrics.progressToTimeGap),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                _formatDuration(position),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: metrics.timeSize,
+                  color:
+                      dark
+                          ? Colors.white.withValues(alpha: 0.4)
+                          : const Color(0xFF6B7280),
+                ),
+              ),
+              Text(
+                _formatDuration(effectiveDuration),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: metrics.timeSize,
+                  color:
+                      dark
+                          ? Colors.white.withValues(alpha: 0.4)
+                          : const Color(0xFF6B7280),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: metrics.timeToControlsGap),
+          Row(
+            children: [
+              _ClipBareIconButton(
+                size: metrics.controlIconSize,
+                onTap: onRewind,
+                child: _ClipRewindIcon(
+                  size: metrics.controlIconSize,
+                  color:
+                      dark
+                          ? Colors.white.withValues(alpha: 0.7)
+                          : const Color(0xFF6B7280),
+                ),
+              ),
+              SizedBox(width: metrics.controlIconGap),
+              _ClipBareIconButton(
+                size: metrics.controlIconSize,
+                onTap: onFastForward,
+                child: _ClipForwardIcon(
+                  size: metrics.controlIconSize,
+                  color:
+                      dark
+                          ? Colors.white.withValues(alpha: 0.7)
+                          : const Color(0xFF6B7280),
+                ),
+              ),
+              const Spacer(),
+              _speedChip('0.5×', false, metrics: metrics),
+              SizedBox(width: metrics.speedChipGap),
+              _speedChip('1×', true, metrics: metrics),
+              SizedBox(width: metrics.speedChipGap),
+              _speedChip('2×', false, metrics: metrics),
+            ],
+          ),
+          SizedBox(height: metrics.controlsToDetailsGap),
+          Container(
+            decoration: BoxDecoration(
+              color: dark ? const Color(0xFF111113) : Colors.white,
+              borderRadius: BorderRadius.circular(metrics.detailCardRadius),
+              border: Border.all(
+                color:
+                    dark
+                        ? Colors.white.withValues(alpha: 0.05)
+                        : const Color(0x14000000),
+              ),
+              boxShadow:
+                  dark
+                      ? null
+                      : const [
+                        BoxShadow(
+                          color: Color(0x0D000000),
+                          blurRadius: 2,
+                          offset: Offset(0, 1),
                         ),
-                        iconSize: 44,
-                        onPressed: _togglePlayPause,
+                      ],
+            ),
+            child: Padding(
+              padding: EdgeInsets.all(metrics.detailCardInset),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          widget.visibleVideoTitle.replaceAll('·', ','),
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontSize: metrics.detailTitleSize,
+                            fontWeight: FontWeight.w600,
+                            color:
+                                dark ? Colors.white : const Color(0xFF111827),
+                          ),
+                        ),
                       ),
-                      const SizedBox(width: 24),
-                      IconButton(
-                        icon: const Icon(Icons.forward_5),
-                        iconSize: 36,
-                        onPressed: () {
-                          final current = _controller.value.position;
-                          final max = _controller.value.duration;
-                          final newPosition =
-                              current + const Duration(seconds: 5);
-                          _controller.seekTo(
-                            newPosition <= max ? newPosition : max,
-                          );
-                        },
+                      if (detections.isNotEmpty)
+                        Container(
+                          height: metrics.badgeHeight,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: metrics.badgeHorizontalPadding,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFF8BB3EE,
+                            ).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(
+                              metrics.badgeRadius,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _ClipPersonBadgeIcon(
+                                size: metrics.badgeIconSize,
+                                color: const Color(0xFF8BB3EE),
+                              ),
+                              SizedBox(width: metrics.badgeIconGap),
+                              Text(
+                                activeDetection.toUpperCase(),
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontSize: metrics.badgeTextSize,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: metrics.badgeLetterSpacing,
+                                  color: const Color(0xFF8BB3EE),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                  SizedBox(height: metrics.detailTitleGap),
+                  Row(
+                    children: [
+                      _ClipLockIcon(
+                        size: metrics.metaLockSize,
+                        color:
+                            dark
+                                ? Colors.white.withValues(alpha: 0.2)
+                                : const Color(0xFF9CA3AF),
+                      ),
+                      SizedBox(width: metrics.metaLockGap),
+                      Text(
+                        'End-to-end encrypted',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: metrics.metaTextSize,
+                          color:
+                              dark
+                                  ? Colors.white.withValues(alpha: 0.2)
+                                  : const Color(0xFF9CA3AF),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: metrics.detailDividerTopGap),
+                  Container(
+                    height: 1,
+                    color:
+                        dark
+                            ? Colors.white.withValues(alpha: 0.04)
+                            : const Color(0xFFE5E7EB),
+                  ),
+                  SizedBox(height: metrics.detailDividerBottomGap),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _ClipActionButton(
+                          metrics: metrics,
+                          dark: dark,
+                          label: 'Save',
+                          onTap: canDownload ? onDownload : () {},
+                          child: _ClipDownloadIcon(
+                            size: metrics.actionIconSize,
+                            color:
+                                dark ? Colors.white : const Color(0xFF111827),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: metrics.actionGap),
+                      Expanded(
+                        child: _ClipActionButton(
+                          metrics: metrics,
+                          dark: dark,
+                          label: 'Share',
+                          onTap: () {},
+                          child: _ClipShareIcon(
+                            size: metrics.actionIconSize,
+                            color:
+                                dark ? Colors.white : const Color(0xFF111827),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: metrics.detailFooterTopGap),
+                  Container(
+                    height: 1,
+                    color:
+                        dark
+                            ? Colors.white.withValues(alpha: 0.04)
+                            : const Color(0xFFE5E7EB),
+                  ),
+                  SizedBox(height: metrics.detailFooterBottomGap),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.only(top: metrics.scaled(1)),
+                        child: _ClipLockIcon(
+                          size: metrics.footerLockSize,
+                          color:
+                              dark
+                                  ? Colors.white.withValues(alpha: 0.2)
+                                  : const Color(0xFF9CA3AF),
+                        ),
+                      ),
+                      SizedBox(width: metrics.footerLockGap),
+                      Expanded(
+                        child: Text(
+                          'Shared clips are decrypted for the recipient.\nOnly share with people you trust.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontSize: metrics.footerTextSize,
+                            height: 14.63 / 9,
+                            color:
+                                dark
+                                    ? Colors.white.withValues(alpha: 0.4)
+                                    : const Color(0xFF6B7280),
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      "Detections: ${_detectionLabel(effective)}",
-                      style: const TextStyle(fontSize: 16),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  ..._detectionIcons(effective),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                "(Delivered end-to-end encrypted from the camera)",
-                style: const TextStyle(fontSize: 16),
-              ),
-            ),
-            if (widget.canDownload)
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                child: ElevatedButton(
-                  onPressed: _downloadVideo,
-                  child: const Text("Save Video to Gallery"),
-                ),
-              ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _speedChip(
+    String label,
+    bool selected, {
+    required _ClipViewMetrics metrics,
+  }) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    return Container(
+      width:
+          label == '0.5×'
+              ? metrics.speedChipWideWidth
+              : metrics.speedChipNarrowWidth,
+      height: metrics.speedChipHeight,
+      decoration: BoxDecoration(
+        color:
+            selected
+                ? const Color(0xFF8BB1F4).withValues(alpha: 0.14)
+                : (dark
+                    ? Colors.white.withValues(alpha: 0.04)
+                    : const Color(0xFFF3F4F6)),
+        borderRadius: BorderRadius.circular(metrics.speedChipRadius),
+        border: Border.all(
+          color:
+              selected
+                  ? const Color(0xFF8BB1F4)
+                  : (dark
+                      ? Colors.white.withValues(alpha: 0.06)
+                      : const Color(0xFFE5E7EB)),
+        ),
+      ),
+      child: Center(
+        child: Text(
+          label,
+          style: theme.textTheme.labelLarge?.copyWith(
+            fontSize: metrics.speedChipTextSize,
+            color:
+                selected
+                    ? const Color(0xFF8BB1F4)
+                    : (dark
+                        ? Colors.white.withValues(alpha: 0.4)
+                        : const Color(0xFF6B7280)),
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
     );
@@ -492,4 +890,614 @@ class _VideoViewPageState extends State<VideoViewPage> {
     final seconds = twoDigits(position.inSeconds.remainder(60));
     return "${position.inHours > 0 ? '${twoDigits(position.inHours)}:' : ''}$minutes:$seconds";
   }
+}
+
+class _ClipViewMetrics {
+  const _ClipViewMetrics(this.scale);
+
+  final double scale;
+
+  double scaled(double value) => value * scale;
+
+  static _ClipViewMetrics forWidth(double width) {
+    final scale = width / 290;
+    return _ClipViewMetrics(scale);
+  }
+
+  double get pageInset => scaled(20);
+  double get topPadding => scaled(12);
+  double get bottomPadding => scaled(28);
+  double get backButtonSize => scaled(32);
+  double get backIconSize => scaled(16);
+  double get headerGap => scaled(12);
+  double get titleSize => scaled(15);
+  double get subtitleSize => scaled(10);
+  double get subtitleGap => scaled(4);
+  double get headerToMediaGap => scaled(22.5);
+  double get mediaRadius => scaled(16);
+  double get playButtonSize => scaled(48);
+  double get mediaToProgressGap => scaled(12);
+  double get progressHeight => scaled(8);
+  double get progressThumbRadius => scaled(6);
+  double get progressToTimeGap => scaled(6);
+  double get timeSize => scaled(9);
+  double get timeToControlsGap => scaled(14);
+  double get controlIconSize => scaled(16);
+  double get controlIconGap => scaled(16);
+  double get speedChipWideWidth => scaled(48.27);
+  double get speedChipNarrowWidth => scaled(38.96);
+  double get speedChipHeight => scaled(29);
+  double get speedChipRadius => scaled(8);
+  double get speedChipGap => scaled(8);
+  double get speedChipTextSize => scaled(10);
+  double get controlsToDetailsGap => scaled(22.5);
+  double get detailCardRadius => scaled(12);
+  double get detailCardInset => scaled(16);
+  double get detailTitleSize => scaled(16);
+  double get detailTitleGap => scaled(8);
+  double get badgeHeight => scaled(23);
+  double get badgeRadius => scaled(6);
+  double get badgeHorizontalPadding => scaled(10);
+  double get badgeIconSize => scaled(10);
+  double get badgeIconGap => scaled(6);
+  double get badgeTextSize => scaled(10);
+  double get badgeLetterSpacing => scaled(0.5);
+  double get metaLockSize => scaled(10);
+  double get metaLockGap => scaled(6);
+  double get metaTextSize => scaled(9);
+  double get detailDividerTopGap => scaled(16);
+  double get detailDividerBottomGap => scaled(16);
+  double get actionGap => scaled(12);
+  double get actionHeight => scaled(36.5);
+  double get actionRadius => scaled(8);
+  double get actionIconSize => scaled(14);
+  double get actionIconGap => scaled(8);
+  double get actionTextSize => scaled(11);
+  double get detailFooterTopGap => scaled(16);
+  double get detailFooterBottomGap => scaled(14);
+  double get footerLockSize => scaled(10);
+  double get footerLockGap => scaled(8);
+  double get footerTextSize => scaled(9);
+}
+
+class _ClipProgressBar extends StatelessWidget {
+  const _ClipProgressBar({
+    required this.valueMs,
+    required this.maxMs,
+    required this.dark,
+    required this.height,
+    required this.thumbRadius,
+    required this.onChanged,
+  });
+
+  final double valueMs;
+  final double maxMs;
+  final bool dark;
+  final double height;
+  final double thumbRadius;
+  final ValueChanged<double>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SliderTheme(
+      data: SliderTheme.of(context).copyWith(
+        trackHeight: height,
+        activeTrackColor: const Color(0xFF8BB3EE),
+        inactiveTrackColor:
+            dark
+                ? Colors.white.withValues(alpha: 0.1)
+                : const Color(0xFFE5E7EB),
+        thumbColor: Colors.white,
+        overlayShape: SliderComponentShape.noOverlay,
+        trackShape: const RoundedRectSliderTrackShape(),
+        thumbShape: RoundSliderThumbShape(enabledThumbRadius: thumbRadius),
+      ),
+      child: Slider(
+        value: valueMs.clamp(0, maxMs),
+        max: maxMs <= 0 ? 1 : maxMs,
+        onChanged: onChanged,
+      ),
+    );
+  }
+}
+
+class _ClipCircleButton extends StatelessWidget {
+  const _ClipCircleButton({
+    required this.size,
+    required this.fill,
+    required this.onTap,
+    required this.child,
+  });
+
+  final double size;
+  final Color fill;
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: fill,
+      borderRadius: BorderRadius.circular(size / 2),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(size / 2),
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(size / 2),
+          ),
+          child: Center(child: child),
+        ),
+      ),
+    );
+  }
+}
+
+class _ClipBareIconButton extends StatelessWidget {
+  const _ClipBareIconButton({
+    required this.size,
+    required this.onTap,
+    required this.child,
+  });
+
+  final double size;
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: SizedBox(
+        width: size + 8,
+        height: size + 8,
+        child: Center(child: child),
+      ),
+    );
+  }
+}
+
+class _ClipPlayOverlayButton extends StatelessWidget {
+  const _ClipPlayOverlayButton({
+    required this.size,
+    required this.dark,
+    required this.onTap,
+  });
+
+  final double size;
+  final bool dark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.2),
+      borderRadius: BorderRadius.circular(size / 2),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(size / 2),
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(size / 2),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x1A000000),
+                blurRadius: 15,
+                offset: Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Center(
+            child: _ClipPlayIcon(
+              size: size * 0.42,
+              color: Colors.white.withValues(alpha: 0.95),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ClipActionButton extends StatelessWidget {
+  const _ClipActionButton({
+    required this.metrics,
+    required this.dark,
+    required this.label,
+    required this.onTap,
+    required this.child,
+  });
+
+  final _ClipViewMetrics metrics;
+  final bool dark;
+  final String label;
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color:
+          dark ? Colors.white.withValues(alpha: 0.06) : const Color(0xFFF3F4F6),
+      borderRadius: BorderRadius.circular(metrics.actionRadius),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(metrics.actionRadius),
+        onTap: onTap,
+        child: SizedBox(
+          height: metrics.actionHeight,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              child,
+              SizedBox(width: metrics.actionIconGap),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontSize: metrics.actionTextSize,
+                  fontWeight: FontWeight.w500,
+                  color: dark ? Colors.white : const Color(0xFF111827),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ClipBackIcon extends StatelessWidget {
+  const _ClipBackIcon({required this.size, required this.color});
+  final double size;
+  final Color color;
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: size,
+    height: size,
+    child: CustomPaint(painter: _ClipBackPainter(color)),
+  );
+}
+
+class _ClipPlayIcon extends StatelessWidget {
+  const _ClipPlayIcon({required this.size, required this.color});
+  final double size;
+  final Color color;
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: size,
+    height: size,
+    child: CustomPaint(painter: _ClipPlayPainter(color)),
+  );
+}
+
+class _ClipRewindIcon extends StatelessWidget {
+  const _ClipRewindIcon({required this.size, required this.color});
+  final double size;
+  final Color color;
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: size,
+    height: size,
+    child: CustomPaint(painter: _ClipRewindPainter(color)),
+  );
+}
+
+class _ClipForwardIcon extends StatelessWidget {
+  const _ClipForwardIcon({required this.size, required this.color});
+  final double size;
+  final Color color;
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: size,
+    height: size,
+    child: CustomPaint(painter: _ClipForwardPainter(color)),
+  );
+}
+
+class _ClipDownloadIcon extends StatelessWidget {
+  const _ClipDownloadIcon({required this.size, required this.color});
+  final double size;
+  final Color color;
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: size,
+    height: size,
+    child: CustomPaint(painter: _ClipDownloadPainter(color)),
+  );
+}
+
+class _ClipShareIcon extends StatelessWidget {
+  const _ClipShareIcon({required this.size, required this.color});
+  final double size;
+  final Color color;
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: size,
+    height: size,
+    child: CustomPaint(painter: _ClipSharePainter(color)),
+  );
+}
+
+class _ClipLockIcon extends StatelessWidget {
+  const _ClipLockIcon({required this.size, required this.color});
+  final double size;
+  final Color color;
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: size,
+    height: size,
+    child: CustomPaint(painter: _ClipLockPainter(color)),
+  );
+}
+
+class _ClipPersonBadgeIcon extends StatelessWidget {
+  const _ClipPersonBadgeIcon({required this.size, required this.color});
+  final double size;
+  final Color color;
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: size,
+    height: size,
+    child: CustomPaint(painter: _ClipPersonPainter(color)),
+  );
+}
+
+class _ClipBackPainter extends CustomPainter {
+  const _ClipBackPainter(this.color);
+  final Color color;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = size.width * 0.125
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..color = color;
+    final path =
+        Path()
+          ..moveTo(size.width * 0.62, size.height * 0.2)
+          ..lineTo(size.width * 0.32, size.height * 0.5)
+          ..lineTo(size.width * 0.62, size.height * 0.8);
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ClipBackPainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+
+class _ClipPlayPainter extends CustomPainter {
+  const _ClipPlayPainter(this.color);
+  final Color color;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path =
+        Path()
+          ..moveTo(size.width * 0.28, size.height * 0.18)
+          ..lineTo(size.width * 0.78, size.height * 0.5)
+          ..lineTo(size.width * 0.28, size.height * 0.82)
+          ..close();
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color
+        ..isAntiAlias = true,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _ClipPlayPainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+
+class _ClipRewindPainter extends CustomPainter {
+  const _ClipRewindPainter(this.color);
+  final Color color;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = size.width * 0.11
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..color = color;
+    final first =
+        Path()
+          ..moveTo(size.width * 0.62, size.height * 0.18)
+          ..lineTo(size.width * 0.34, size.height * 0.5)
+          ..lineTo(size.width * 0.62, size.height * 0.82);
+    final second =
+        Path()
+          ..moveTo(size.width * 0.88, size.height * 0.18)
+          ..lineTo(size.width * 0.6, size.height * 0.5)
+          ..lineTo(size.width * 0.88, size.height * 0.82);
+    canvas.drawPath(first, paint);
+    canvas.drawPath(second, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ClipRewindPainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+
+class _ClipForwardPainter extends CustomPainter {
+  const _ClipForwardPainter(this.color);
+  final Color color;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = size.width * 0.11
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..color = color;
+    final first =
+        Path()
+          ..moveTo(size.width * 0.12, size.height * 0.18)
+          ..lineTo(size.width * 0.4, size.height * 0.5)
+          ..lineTo(size.width * 0.12, size.height * 0.82);
+    final second =
+        Path()
+          ..moveTo(size.width * 0.38, size.height * 0.18)
+          ..lineTo(size.width * 0.66, size.height * 0.5)
+          ..lineTo(size.width * 0.38, size.height * 0.82);
+    canvas.drawPath(first, paint);
+    canvas.drawPath(second, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ClipForwardPainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+
+class _ClipDownloadPainter extends CustomPainter {
+  const _ClipDownloadPainter(this.color);
+  final Color color;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = size.width * 0.12
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..color = color;
+    canvas.drawLine(
+      Offset(size.width * 0.5, size.height * 0.18),
+      Offset(size.width * 0.5, size.height * 0.62),
+      paint,
+    );
+    final arrow =
+        Path()
+          ..moveTo(size.width * 0.3, size.height * 0.46)
+          ..lineTo(size.width * 0.5, size.height * 0.66)
+          ..lineTo(size.width * 0.7, size.height * 0.46);
+    canvas.drawPath(arrow, paint);
+    final tray =
+        Path()
+          ..moveTo(size.width * 0.22, size.height * 0.78)
+          ..lineTo(size.width * 0.78, size.height * 0.78)
+          ..lineTo(size.width * 0.7, size.height * 0.92)
+          ..lineTo(size.width * 0.3, size.height * 0.92)
+          ..close();
+    canvas.drawPath(tray, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ClipDownloadPainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+
+class _ClipSharePainter extends CustomPainter {
+  const _ClipSharePainter(this.color);
+  final Color color;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = size.width * 0.12
+          ..strokeCap = StrokeCap.round
+          ..color = color;
+    final fill =
+        Paint()
+          ..style = PaintingStyle.fill
+          ..color = color;
+    final a = Offset(size.width * 0.28, size.height * 0.52);
+    final b = Offset(size.width * 0.68, size.height * 0.28);
+    final c = Offset(size.width * 0.72, size.height * 0.76);
+    canvas.drawLine(a, b, stroke);
+    canvas.drawLine(a, c, stroke);
+    canvas.drawCircle(a, size.width * 0.1, fill);
+    canvas.drawCircle(b, size.width * 0.1, fill);
+    canvas.drawCircle(c, size.width * 0.1, fill);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ClipSharePainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+
+class _ClipLockPainter extends CustomPainter {
+  const _ClipLockPainter(this.color);
+  final Color color;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = size.width * 0.14
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..color = color;
+    final body = RRect.fromRectAndRadius(
+      Rect.fromLTWH(
+        size.width * 0.18,
+        size.height * 0.42,
+        size.width * 0.64,
+        size.height * 0.42,
+      ),
+      Radius.circular(size.width * 0.12),
+    );
+    canvas.drawRRect(body, paint);
+    final shackle =
+        Path()
+          ..moveTo(size.width * 0.32, size.height * 0.42)
+          ..lineTo(size.width * 0.32, size.height * 0.26)
+          ..arcToPoint(
+            Offset(size.width * 0.68, size.height * 0.26),
+            radius: Radius.circular(size.width * 0.18),
+          )
+          ..lineTo(size.width * 0.68, size.height * 0.42);
+    canvas.drawPath(shackle, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ClipLockPainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+
+class _ClipPersonPainter extends CustomPainter {
+  const _ClipPersonPainter(this.color);
+  final Color color;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = size.width * 0.15
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..color = color;
+    canvas.drawCircle(
+      Offset(size.width * 0.5, size.height * 0.34),
+      size.width * 0.18,
+      paint,
+    );
+    final body =
+        Path()
+          ..moveTo(size.width * 0.18, size.height * 0.88)
+          ..lineTo(size.width * 0.18, size.height * 0.74)
+          ..quadraticBezierTo(
+            size.width * 0.5,
+            size.height * 0.48,
+            size.width * 0.82,
+            size.height * 0.74,
+          )
+          ..lineTo(size.width * 0.82, size.height * 0.88);
+    canvas.drawPath(body, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ClipPersonPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

@@ -7,11 +7,28 @@ import UIKit
 /// and forwards debug logs and aspect ratio changes back to Dart through a FlutterMethodChannel.
 /// The view instance is tied to a specific stream ID so multiple independent players can be mounted simultaneously.
 final class BytePlayerPlatformView: NSObject, FlutterPlatformView {
+    private final class WeakRef {
+        weak var value: BytePlayerPlatformView?
+        init(_ value: BytePlayerPlatformView) { self.value = value }
+    }
+
+    private static var registry: [Int: WeakRef] = [:]
+    private static let registryLock = NSLock()
+
+    static func shutdownStream(id: Int) {
+        registryLock.lock()
+        let view = registry[id]?.value
+        registryLock.unlock()
+        view?.shutdown()
+    }
+
     private let container = ByteSampleBufferView()
     private let methodChannel: FlutterMethodChannel
     private let demuxer: MP4H264Demuxer
     private var running = true
     private let streamId: Int
+    private var pumpTask: Task<Void, Never>?
+    private var hasShutdown = false
 
     /// The initializer constructs the container view, configures the method channel based on the stream ID,
     /// and attaches a small debug overlay for visibility during development.
@@ -28,9 +45,17 @@ final class BytePlayerPlatformView: NSObject, FlutterPlatformView {
         container.onDebug = { [weak methodChannel] msg in
             methodChannel?.invokeMethod("debug", arguments: msg)
         }
+        container.onFirstFrame = { [weak methodChannel] in
+            DispatchQueue.main.async {
+                methodChannel?.invokeMethod("onFirstFrame", arguments: nil)
+            }
+        }
 
         self.demuxer = MP4H264Demuxer(view: container)
         super.init()
+        Self.registryLock.lock()
+        Self.registry[streamId] = WeakRef(self)
+        Self.registryLock.unlock()
 
         Task { [weak self] in
             guard let self else { return }
@@ -48,8 +73,7 @@ final class BytePlayerPlatformView: NSObject, FlutterPlatformView {
         }
 
         emit("Low-level MP4 path starting (ftyp/moov/mdat expected)")
-        // start it
-        Task.detached { [weak self] in
+        pumpTask = Task { [weak self] in
             await self?.pump()
         }
     }
@@ -63,7 +87,7 @@ final class BytePlayerPlatformView: NSObject, FlutterPlatformView {
         var backoff: TimeInterval = 0.0
         let maxBackoff: TimeInterval = 0.02
 
-        while running {
+        while running && !Task.isCancelled {
             if let chunk = ByteQueueManager.pop(id: streamId) {
                 if chunk.isEmpty {
                     emit("[MP4] EOF from queue")
@@ -86,14 +110,37 @@ final class BytePlayerPlatformView: NSObject, FlutterPlatformView {
     /// It exposes the render surface to the platform view system without giving direct access to internal details like the demuxer.
     func view() -> UIView { container }
 
+    func shutdown() {
+        guard !hasShutdown else { return }
+        hasShutdown = true
+        running = false
+        pumpTask?.cancel()
+        container.onDebug = nil
+        container.onFirstFrame = nil
+
+        if Thread.isMainThread {
+            container.shutdown()
+        } else {
+            DispatchQueue.main.sync {
+                container.shutdown()
+            }
+        }
+
+        Task {
+            await demuxer.setOnDebug(nil)
+            await demuxer.setOnAspectRatio(nil)
+            await demuxer.finish()
+        }
+        ByteQueueManager.drop(id: streamId)
+    }
+
     //The deinitializer ensures a clean shutdown by stopping the pump loop, signaling the demuxer to finish, and flushing the container’s display layer on the main thread.
     //  This guarantees that no stale frames remain displayed and the actor is left in a stable state when the platform view is destroyed.
     deinit {
-        running = false
-        Task { await demuxer.finish() }
-        Task { @MainActor in
-            container.flush()
-        }
+        Self.registryLock.lock()
+        Self.registry[streamId] = nil
+        Self.registryLock.unlock()
+        shutdown()
     }
 
     /// This helper wraps debug string forwarding into the method channel.

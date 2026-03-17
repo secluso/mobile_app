@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
+import 'package:secluso_flutter/routes/camera/camera_ui_bridge.dart';
 import 'package:secluso_flutter/routes/camera/view_camera.dart';
 
 Map<String, dynamic> _collectPendingWork(String baseDirPath) {
@@ -203,6 +204,12 @@ class QueueProcessor {
     final detectionBox = stores.detectionStore.box<Detection>();
     final cameras = await cameraBox.getAllAsync();
     final cameraByName = {for (final cam in cameras) cam.name: cam};
+    final existingVideosQuery = videoBox.query().build();
+    final existingVideos = existingVideosQuery.find();
+    existingVideosQuery.close();
+    final videoByCameraAndFile = {
+      for (final video in existingVideos) '${video.camera}\n${video.video}': video,
+    };
 
     final videosToPut = <Video>[];
     final detectionsToPut = <Detection>[];
@@ -254,7 +261,26 @@ class QueueProcessor {
         continue;
       }
 
-      videosToPut.add(Video(cameraName, videoFile, true, true));
+      final videoKey = '$cameraName\n$videoFile';
+      final existingVideo = videoByCameraAndFile[videoKey];
+      if (existingVideo != null) {
+        var videoChanged = false;
+        if (!existingVideo.received) {
+          existingVideo.received = true;
+          videoChanged = true;
+        }
+        if (!existingVideo.motion) {
+          existingVideo.motion = true;
+          videoChanged = true;
+        }
+        if (videoChanged) {
+          videosToPut.add(existingVideo);
+        }
+      } else {
+        final newVideo = Video(cameraName, videoFile, true, true);
+        videosToPut.add(newVideo);
+        videoByCameraAndFile[videoKey] = newVideo;
+      }
 
       for (final d in detections) {
         detectionsToPut.add(
@@ -310,6 +336,9 @@ class QueueProcessor {
         updatedCameraNames.contains(currentCamera)) {
       currentState?.reloadVideos();
     }
+
+    CameraUiBridge.refreshCameraListCallback?.call();
+    CameraUiBridge.refreshActivityCallback?.call();
   }
 
   void dispose() {

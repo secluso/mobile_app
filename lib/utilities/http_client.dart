@@ -306,12 +306,15 @@ class HttpClientService {
   });
 
   /// Downloads fcm config
-  Future<Result<FcmConfig>> fetchFcmConfig() => _wrap(() async {
+  Future<Result<FcmConfig>> fetchFcmConfigWithCredentials({
+    required String serverAddr,
+    required String username,
+    required String password,
+  }) => _wrap(() async {
     Log.d("Fetching fcm config from server");
 
-    final creds = await _getValidatedCredentials();
-    final url = _buildUrl(creds.serverAddr, ['fcm_config']);
-    final headers = await _basicAuthHeaders(creds.username, creds.password);
+    final url = _buildUrl(serverAddr, ['fcm_config']);
+    final headers = await _basicAuthHeaders(username, password);
 
     // Fetch fcm config action
     final response = await http.get(url, headers: headers);
@@ -331,7 +334,16 @@ class HttpClientService {
     print(response.body);
     Log.d("Success fetching fcm config");
     return FcmConfig.fromJson(jsonDecode(response.body));
-  });
+  }, bypassVersionGate: true);
+
+  Future<Result<FcmConfig>> fetchFcmConfig() async {
+    final creds = await _getValidatedCredentials();
+    return fetchFcmConfigWithCredentials(
+      serverAddr: creds.serverAddr,
+      username: creds.username,
+      password: creds.password,
+    );
+  }
 
   /// Downloads file and saves as [fileName]
   Future<Result<DownloadResult>> download({

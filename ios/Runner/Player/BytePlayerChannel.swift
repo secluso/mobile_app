@@ -46,6 +46,17 @@ final class BytePlayerChannel {
                 ByteQueueManager.finish(id: id)
                 result(nil)
 
+            case "disposeStreamView":
+                guard
+                    let dict = call.arguments as? [String: Any],
+                    let id = dict["id"] as? Int
+                else {
+                    result(FlutterError(code: "bad_args", message: nil, details: nil))
+                    return
+                }
+                BytePlayerPlatformView.shutdownStream(id: id)
+                result(nil)
+
             case "qLen":
                 guard
                     let dict = call.arguments as? [String: Any],

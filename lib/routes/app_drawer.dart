@@ -1,144 +1,173 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'app_shell.dart';
 import 'camera/list_cameras.dart';
-import 'server_page.dart';
-import 'theme_provider.dart';
-import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:secluso_flutter/keys.dart';
+import 'design_lab_page.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
+import 'package:secluso_flutter/ui/secluso_preview_assets.dart';
+import 'package:secluso_flutter/ui/secluso_surfaces.dart';
+import 'package:secluso_flutter/ui/secluso_theme.dart';
 
 final GlobalKey<CamerasPageState> camerasPageKey =
     GlobalKey<CamerasPageState>();
 
-class AppDrawer extends StatefulWidget {
+class AppDrawer extends StatelessWidget {
   final Function(Widget) onNavigate;
 
-  AppDrawer({required this.onNavigate});
-
-  @override
-  _AppDrawerState createState() => _AppDrawerState();
-}
-
-class _AppDrawerState extends State<AppDrawer> {
-  late bool notificationsEnabled;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadNotificationPref();
-  }
-
-  void _loadNotificationPref() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      notificationsEnabled =
-          prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
-    });
-  }
+  const AppDrawer({super.key, required this.onNavigate});
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
     return Drawer(
-      child: Column(
+      backgroundColor: colors.surface.withValues(alpha: 0.98),
+      child: Stack(
         children: [
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF8BB3EE), Color(0xFF71A0E7)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-                child: Row(
-                  children: [
-                    Image.asset(
-                      'assets/icon_centered.png',
-                      width: 48,
-                      height: 48,
-                    ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+          const SeclusoBackdrop(),
+          SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
+                    child: SeclusoGlassCard(
+                      borderRadius: 28,
+                      tint:
+                          dark
+                              ? Colors.white.withValues(alpha: 0.03)
+                              : Colors.white.withValues(alpha: 0.9),
+                      padding: EdgeInsets.zero,
+                      child: Stack(
                         children: [
-                          Text(
-                            'Secluso Camera',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
+                          Positioned.fill(
+                            child: Opacity(
+                              opacity: dark ? 0.34 : 0.2,
+                              child: Image.asset(
+                                dark
+                                    ? SeclusoPreviewAssets.darkMaterial
+                                    : SeclusoPreviewAssets.lightArchitecture,
+                                fit: BoxFit.cover,
+                                alignment:
+                                    dark
+                                        ? Alignment.centerRight
+                                        : Alignment.centerLeft,
+                              ),
                             ),
                           ),
-                          SizedBox(height: 4),
-                          Row(
-                            children: [
-                              SizedBox(width: 4),
-                              Text(
-                                'End-to-End Encrypted',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 14,
-                                  fontStyle: FontStyle.normal,
+                          Positioned.fill(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    Colors.black.withValues(
+                                      alpha: dark ? 0.42 : 0.08,
+                                    ),
+                                    Colors.black.withValues(
+                                      alpha: dark ? 0.18 : 0.02,
+                                    ),
+                                    Colors.transparent,
+                                  ],
                                 ),
                               ),
-                            ],
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Secluso'.toUpperCase(),
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: SeclusoColors.blue,
+                                    letterSpacing: 2.4,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                RichText(
+                                  text: TextSpan(
+                                    style: theme.textTheme.headlineSmall
+                                        ?.copyWith(fontSize: 20),
+                                    children: [
+                                      const TextSpan(text: 'See everything.\n'),
+                                      const TextSpan(text: 'Share '),
+                                      TextSpan(
+                                        text: 'nothing.',
+                                        style: theme.textTheme.headlineSmall
+                                            ?.copyWith(
+                                              fontSize: 20,
+                                              color: SeclusoColors.blueSoft,
+                                              fontStyle: FontStyle.italic,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'A private control room for indoor feeds, relay pairing, and fast review.',
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          ),
-          // Drawer Items
-          Expanded(
-            child: Column(
-              children: [
+                const SizedBox(height: 22),
                 _buildDrawerItem(
-                  themeProvider,
-                  Icons.camera_alt,
+                  context,
+                  Icons.camera_alt_outlined,
                   'Cameras',
-                  () => widget.onNavigate(CamerasPage(key: camerasPageKey)),
+                  'Feeds, events, and archive review.',
+                  () => onNavigate(CamerasPage(key: camerasPageKey)),
                 ),
+                const SizedBox(height: 10),
                 _buildDrawerItem(
-                  themeProvider,
-                  Icons.cloud,
+                  context,
+                  Icons.hub_outlined,
                   'Server',
-                  () => widget.onNavigate(ServerPage(showBackButton: false)),
+                  'Relay pairing, trust, and sync.',
+                  () => onNavigate(const AppShell(initialIndex: 2)),
                 ),
-
+                const SizedBox(height: 10),
                 _buildDrawerItem(
-                  themeProvider,
-                  Icons.settings,
-                  'Settings',
-                  () => _showSettingsSheet(context, themeProvider),
+                  context,
+                  Icons.tune_outlined,
+                  'Preferences',
+                  'Theme, alerts, and app controls.',
+                  () => onNavigate(const AppShell(initialIndex: 3)),
                 ),
-                Spacer(),
-                Divider(height: 1),
+                if (kDebugMode) ...[
+                  const SizedBox(height: 10),
+                  _buildDrawerItem(
+                    context,
+                    Icons.science_outlined,
+                    'Design Lab',
+                    'Open stable preview screens and pairing dialogs.',
+                    () => onNavigate(const DesignLabPage()),
+                  ),
+                ],
+                const SizedBox(height: 18),
                 Align(
-                  alignment: Alignment.centerRight,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () async => _openLicenses(context),
+                    icon: Icon(
+                      Icons.description_outlined,
+                      color: colors.onSurfaceVariant,
                     ),
-                    child: Tooltip(
-                      message: 'Licenses',
-                      child: IconButton(
-                        icon: Icon(Icons.description_outlined),
-                        color:
-                            themeProvider.isDarkMode ? Colors.white : Colors.black,
-                        onPressed: () async => _openLicenses(context),
-                      ),
-                    ),
+                    label: const Text('Licenses and version'),
                   ),
                 ),
               ],
@@ -165,73 +194,53 @@ class _AppDrawerState extends State<AppDrawer> {
     );
   }
 
-  void _showSettingsSheet(BuildContext context, ThemeProvider themeProvider) {
-    showModalBottomSheet(
-      context: context,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    "Settings",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 12),
-                  SwitchListTile(
-                    title: Text("Dark Mode"),
-                    value: themeProvider.isDarkMode,
-                    onChanged: (_) {
-                      themeProvider.toggleTheme();
-                      setState(() {}); // update local switch UI
-                    },
-                    secondary: Icon(Icons.dark_mode),
-                  ),
-                  SwitchListTile(
-                    title: Text("Notifications"),
-                    value: notificationsEnabled,
-                    onChanged: (_) async {
-                      final prefs = await SharedPreferences.getInstance();
-                      setState(() {
-                        notificationsEnabled = !notificationsEnabled;
-                        // TODO: Do we need to request notification access?
-                        prefs.setBool(
-                          PrefKeys.notificationsEnabled,
-                          notificationsEnabled,
-                        );
-                      });
-                    },
-                    secondary: Icon(Icons.notifications),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
   Widget _buildDrawerItem(
-    ThemeProvider themeProvider,
+    BuildContext context,
     IconData icon,
     String text,
+    String subtitle,
     VoidCallback onTap,
   ) {
-    return ListTile(
-      leading: Icon(
-        icon,
-        color: themeProvider.isDarkMode ? Colors.white : Colors.black,
-        size: 25,
-      ),
-      title: Text(text, style: TextStyle(fontSize: 18)),
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+        decoration: BoxDecoration(
+          color:
+              dark
+                  ? Colors.white.withValues(alpha: 0.03)
+                  : Colors.white.withValues(alpha: 0.9),
+          borderRadius: BorderRadius.circular(24),
+          border:
+              dark ? null : Border.all(color: theme.colorScheme.outlineVariant),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: SeclusoColors.blue, size: 17),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(text, style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 4),
+                  Text(subtitle, style: theme.textTheme.bodySmall),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.arrow_forward,
+              size: 18,
+              color: dark ? Colors.white70 : theme.colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

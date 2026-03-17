@@ -16,7 +16,9 @@ extension MP4H264Demuxer {
     /// flush or finalize, since the display layer will continue to
     /// present the last decoded frame once no further buffers arrive.
     func finish() {
-        // nothing special; display layer will keep last image
+        Task { @MainActor in
+            latencyOverlay.stop()
+        }
     }
 
     /// Registers a callback for receiving debug log messages emitted

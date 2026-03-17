@@ -8,7 +8,8 @@ import UIKit
 /// that starts paused and is anchored to the PTS of the first enqueued frame.
 /// This makes it trivial to feed already-timestamped samples without having to
 /// manage host-time conversions on the caller side. The display layer is sized
-/// to the view’s bounds and uses resizeAspect by default.
+/// to the view’s bounds and uses resizeAspectFill so the feed fills the wider
+/// livestream frame instead of preserving letterbox bars.
 ///
 /// Logging focuses on the relationship between each sample’s PTS and the layer’s
 /// timebase so late or early frames are immediately visible in the console. The
@@ -19,6 +20,7 @@ final class ByteSampleBufferView: UIView {
     /// Optional callback for clients that want to react to coded aspect changes.
     var onAspectRatio: ((Double) -> Void)?
     var onDebug: ((String) -> Void)?
+    var onFirstFrame: (() -> Void)?
 
     private func debug(_ s: String) { onDebug?(s) }
 
@@ -26,6 +28,9 @@ final class ByteSampleBufferView: UIView {
 
     private var timebase: CMTimebase?
     private var hasAnchored = false
+    private var hasDeliveredFirstFrame = false
+    private var isObservingDisplayLayer = false
+    private(set) var isShuttingDown = false
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -36,8 +41,9 @@ final class ByteSampleBufferView: UIView {
         // Observe status and error to surface layer state changes in logs.
         displayLayer.addObserver(self, forKeyPath: "status", options: [.new], context: nil)
         displayLayer.addObserver(self, forKeyPath: "error", options: [.new], context: nil)
+        isObservingDisplayLayer = true
 
-        displayLayer.videoGravity = .resizeAspect
+        displayLayer.videoGravity = .resizeAspectFill
 
         // Create a paused timebase and bind it to the layer. It will be started
         // when the first sample arrives so scheduling aligns to that PTS.
@@ -58,8 +64,7 @@ final class ByteSampleBufferView: UIView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     deinit {
-        displayLayer.removeObserver(self, forKeyPath: "status")
-        displayLayer.removeObserver(self, forKeyPath: "error")
+        removeDisplayLayerObserversIfNeeded()
     }
 
     override func layoutSubviews() {
@@ -71,12 +76,14 @@ final class ByteSampleBufferView: UIView {
     /// anchor flag so the next frame will re-anchor the clock. Use this when
     /// recovering from decoder failures or when seeking.
     func flush() {
+        guard !isShuttingDown else { return }
         displayLayer.flushAndRemoveImage()
         if let tb = timebase {
             CMTimebaseSetRate(tb, rate: 0.0)
             CMTimebaseSetTime(tb, time: .zero)
         }
         hasAnchored = false
+        hasDeliveredFirstFrame = false
         debug("[SBDisplayLayer] flush() reset TB and cleared anchor")
     }
 
@@ -86,6 +93,7 @@ final class ByteSampleBufferView: UIView {
     /// playback. Attachment keys are updated so sync frames are correctly marked
     /// and the first frame may bypass scheduling when requested.
     func enqueue(_ sbuf: CMSampleBuffer, isIDR: Bool, isFirst: Bool = false) {
+        guard !isShuttingDown else { return }
         // If the layer has failed, or if the (read-only) flag says we must flush to resume, do it.
         if displayLayer.status == .failed || displayLayer.requiresFlushToResumeDecoding {
             flush()
@@ -128,6 +136,10 @@ final class ByteSampleBufferView: UIView {
             flush()
         }
         displayLayer.enqueue(sbuf)
+        if !hasDeliveredFirstFrame {
+            hasDeliveredFirstFrame = true
+            onFirstFrame?()
+        }
 
         #if DEBUG
             debug("[SWIFT] AVSampleBufferDisplayLayer status=\(displayLayer.status.rawValue)")
@@ -137,6 +149,24 @@ final class ByteSampleBufferView: UIView {
         debug(
             "[SBDisplayLayer] did enqueue   status=\(displayLayer.status.rawValue) ready=\(displayLayer.isReadyForMoreMediaData) tbNow=\(tbNow2.seconds)"
         )
+    }
+
+    func shutdown() {
+        guard !isShuttingDown else { return }
+        isShuttingDown = true
+        onDebug = nil
+        onAspectRatio = nil
+        onFirstFrame = nil
+        removeDisplayLayerObserversIfNeeded()
+        displayLayer.flushAndRemoveImage()
+        displayLayer.removeFromSuperlayer()
+        if let tb = timebase {
+            CMTimebaseSetRate(tb, rate: 0.0)
+            CMTimebaseSetTime(tb, time: .zero)
+        }
+        hasAnchored = false
+        hasDeliveredFirstFrame = false
+        timebase = nil
     }
 
     /// Returns the current time of the internal timebase or .invalid if none
@@ -172,10 +202,18 @@ final class ByteSampleBufferView: UIView {
         change: [NSKeyValueChangeKey: Any]?,
         context: UnsafeMutableRawPointer?
     ) {
+        guard !isShuttingDown else { return }
         if keyPath == "status" {
             debug("[SBDisplayLayer] status -> \(displayLayer.status.rawValue)")
         } else if keyPath == "error" {
             debug("[SBDisplayLayer] error -> \(String(describing: displayLayer.error))")
         }
+    }
+
+    private func removeDisplayLayerObserversIfNeeded() {
+        guard isObservingDisplayLayer else { return }
+        displayLayer.removeObserver(self, forKeyPath: "status")
+        displayLayer.removeObserver(self, forKeyPath: "error")
+        isObservingDisplayLayer = false
     }
 }

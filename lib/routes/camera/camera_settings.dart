@@ -1,15 +1,35 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
 import 'package:flutter/material.dart';
-import 'package:secluso_flutter/keys.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/ui/secluso_surfaces.dart';
+import 'package:secluso_flutter/ui/secluso_shell_ui.dart';
+import 'camera_ui_bridge.dart';
+
+enum CameraSettingsAction { removeCamera }
 
 class SettingsPage extends StatefulWidget {
   final String cameraName;
-  const SettingsPage({super.key, required this.cameraName});
+  final String? previewFirmwareVersion;
+  final String? previewSelectedResolution;
+  final int? previewSelectedFps;
+  final bool? previewNotificationsEnabled;
+  final Set<String>? previewSelectedNotificationEvents;
+
+  const SettingsPage({
+    super.key,
+    required this.cameraName,
+    this.previewFirmwareVersion,
+    this.previewSelectedResolution,
+    this.previewSelectedFps,
+    this.previewNotificationsEnabled,
+    this.previewSelectedNotificationEvents,
+  });
 
   @override
-  _SettingsPageState createState() => _SettingsPageState();
+  State<SettingsPage> createState() => _SettingsPageState();
 }
 
 class _SettingsPageState extends State<SettingsPage> {
@@ -26,6 +46,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
   // Notification settings
   bool notificationsEnabled = true;
+  bool preRollEnabled = true;
+  String? firmwareVersion;
 
   // Options: user can select "All" or choose specific events like Motion, Humans, Vehicles, or Pets.
   final List<String> notificationOptions = [
@@ -36,223 +58,583 @@ class _SettingsPageState extends State<SettingsPage> {
   ];
   List<String> selectedNotificationEvents = ['All'];
 
-  String _firmwareVersion = "Not known yet";
+  bool get _isPreviewMode => widget.previewFirmwareVersion != null;
 
   @override
   void initState() {
     super.initState();
-    _loadFirmwareVersion();
+    if (_isPreviewMode) {
+      firmwareVersion = widget.previewFirmwareVersion;
+      selectedResolution =
+          widget.previewSelectedResolution ?? selectedResolution;
+      selectedFps = widget.previewSelectedFps ?? selectedFps;
+      notificationsEnabled =
+          widget.previewNotificationsEnabled ?? notificationsEnabled;
+      preRollEnabled = widget.previewNotificationsEnabled ?? preRollEnabled;
+      selectedNotificationEvents =
+          widget.previewSelectedNotificationEvents?.toList() ??
+          selectedNotificationEvents;
+      return;
+    }
+    _loadLiveUiState();
   }
 
-  Future<void> _loadFirmwareVersion() async {
+  Future<void> _loadLiveUiState() async {
     final prefs = await SharedPreferences.getInstance();
-    final version =
-        prefs.getString(PrefKeys.firmwareVersionPrefix + widget.cameraName) ??
-        "Not known yet";
+    if (!mounted) return;
     setState(() {
-      _firmwareVersion = version;
+      firmwareVersion = prefs.getString(
+        PrefKeys.firmwareVersionPrefix + widget.cameraName,
+      );
+      notificationsEnabled =
+          prefs.getBool(PrefKeys.notificationsEnabled) ?? notificationsEnabled;
     });
+  }
+
+  Future<void> _confirmRemoveCamera() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Delete this camera?'),
+            content: const Text(
+              'This will delete the camera, all its videos, and its saved folder. This cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text(
+                  'Delete',
+                  style: TextStyle(color: Colors.red),
+                ),
+              ),
+            ],
+          ),
+    );
+    if (confirm == true && mounted) {
+      await CameraUiBridge.deleteCamera(widget.cameraName);
+      CameraUiBridge.refreshCameraListCallback?.call();
+      if (!mounted) return;
+      Navigator.of(context).pop(CameraSettingsAction.removeCamera);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          "Camera Settings",
-          style: TextStyle(color: Colors.white),
-        ),
-        backgroundColor: const Color.fromARGB(255, 27, 114, 60),
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // Video Quality Card
-            Card(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final metrics = _CameraSettingsMetrics.forWidth(
+      MediaQuery.sizeOf(context).width,
+    );
+    final titleStyle = GoogleFonts.inter(
+      color: dark ? Colors.white : const Color(0xFF111827),
+      fontSize: metrics.headerTitleSize,
+      fontWeight: FontWeight.w600,
+      fontStyle: FontStyle.normal,
+      letterSpacing: 0,
+      height: 28 / 18,
+    );
+    final sectionTitleStyle = GoogleFonts.inter(
+      color:
+          dark ? Colors.white.withValues(alpha: 0.2) : const Color(0xFF9CA3AF),
+      fontSize: metrics.sectionTitleSize,
+      fontWeight: FontWeight.w600,
+      fontStyle: FontStyle.normal,
+      letterSpacing: metrics.sectionTitleLetterSpacing,
+      height: 13.5 / 9,
+    );
+    final rowTitleStyle = GoogleFonts.inter(
+      color: dark ? Colors.white : const Color(0xFF111827),
+      fontSize: metrics.rowTitleSize,
+      fontWeight: FontWeight.w400,
+      fontStyle: FontStyle.normal,
+      letterSpacing: 0,
+      height: 19.5 / 13,
+    );
+    final rowValueStyle = GoogleFonts.inter(
+      color:
+          dark ? Colors.white.withValues(alpha: 0.6) : const Color(0xFF6B7280),
+      fontSize: metrics.rowValueSize,
+      fontWeight: FontWeight.w400,
+      fontStyle: FontStyle.normal,
+      letterSpacing: 0,
+      height: 19.5 / 13,
+    );
+    final cardShadow =
+        dark
+            ? const <BoxShadow>[]
+            : const [
+              BoxShadow(
+                color: Color(0x0D000000),
+                blurRadius: 2,
+                offset: Offset(0, 1),
               ),
-              elevation: 4,
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            ];
+    final personDetectionEnabled =
+        selectedNotificationEvents.contains('All') ||
+        selectedNotificationEvents.contains('Humans');
+
+    return SeclusoScaffold(
+      body: ColoredBox(
+        color: dark ? const Color(0xFF050505) : const Color(0xFFF2F2F7),
+        child: SafeArea(
+          bottom: false,
+          child: ListView(
+            padding: EdgeInsets.only(
+              top: metrics.pageTopPadding,
+              bottom: metrics.pageBottomPadding,
+            ),
+            children: [
+              Padding(
+                padding: EdgeInsets.only(
+                  left: metrics.headerLeftInset,
+                  right: metrics.headerRightInset,
+                ),
+                child: Row(
                   children: [
-                    Text(
-                      "Video Quality",
-                      style: Theme.of(context).textTheme.headlineSmall,
+                    _CameraSettingsBackButton(
+                      size: metrics.backButtonSize,
+                      iconSize: metrics.backButtonIconSize,
+                      fillColor:
+                          dark
+                              ? Colors.white.withValues(alpha: 0.06)
+                              : const Color(0xFFE5E7EB),
+                      iconColor: dark ? Colors.white : const Color(0xFF6B7280),
+                      onTap: () => Navigator.of(context).maybePop(),
                     ),
-                    const Divider(),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("Resolution:"),
-                        DropdownButton<String>(
-                          value: selectedResolution,
-                          onChanged: (String? newValue) {
-                            setState(() {
-                              selectedResolution = newValue!;
-                              // Adjust FPS if current selection isn't valid for the new resolution
-                              if (!fpsMapping[selectedResolution]!.contains(
-                                selectedFps,
-                              )) {
-                                selectedFps =
-                                    fpsMapping[selectedResolution]!.first;
-                              }
-                            });
-                          },
-                          items:
-                              fpsMapping.keys.map((String resolution) {
-                                return DropdownMenuItem<String>(
-                                  value: resolution,
-                                  child: Text(resolution),
-                                );
-                              }).toList(),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text("Frame Rate (FPS):"),
-                        DropdownButton<int>(
-                          value: selectedFps,
-                          onChanged: (int? newValue) {
-                            setState(() {
-                              selectedFps = newValue!;
-                            });
-                          },
-                          items:
-                              fpsMapping[selectedResolution]!
-                                  .map(
-                                    (int fps) => DropdownMenuItem<int>(
-                                      value: fps,
-                                      child: Text(fps.toString()),
-                                    ),
-                                  )
-                                  .toList(),
-                        ),
-                      ],
+                    SizedBox(width: metrics.headerGap),
+                    Expanded(
+                      child: Text(
+                        '${widget.cameraName} Settings',
+                        style: titleStyle,
+                      ),
                     ),
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-            // Notification Settings Card
-            Card(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              elevation: 4,
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Notification Settings",
-                      style: Theme.of(context).textTheme.headlineSmall,
+              SizedBox(height: metrics.headerBottomGap),
+              _buildGroup(
+                context,
+                metrics: metrics,
+                title: 'GENERAL',
+                titleStyle: sectionTitleStyle,
+                cardShadow: cardShadow,
+                rows: [
+                  ShellSettingsRow(
+                    title: 'Camera Name',
+                    value: widget.cameraName,
+                    trailing: const SizedBox.shrink(),
+                    height: metrics.shortRowHeight,
+                    horizontalPadding: metrics.rowHorizontalPadding,
+                    titleStyle: rowTitleStyle,
+                    valueStyle: rowValueStyle,
+                    valueChevronGap: 0,
+                  ),
+                  if (firmwareVersion != null)
+                    ShellSettingsRow(
+                      title: 'Firmware',
+                      value: firmwareVersion!,
+                      trailing: const SizedBox.shrink(),
+                      height: metrics.shortRowHeight,
+                      horizontalPadding: metrics.rowHorizontalPadding,
+                      titleStyle: rowTitleStyle,
+                      valueStyle: rowValueStyle,
+                      valueChevronGap: 0,
                     ),
-                    const Divider(),
-                    const SizedBox(height: 16),
-                    SwitchListTile(
-                      title: const Text("Enable Notifications"),
-                      value: notificationsEnabled,
-                      onChanged: (bool value) {
+                  ShellSettingsRow(
+                    title: 'Location',
+                    value: 'Front',
+                    trailing: const SizedBox.shrink(),
+                    height: metrics.shortRowHeight + metrics.shortRowDelta,
+                    horizontalPadding: metrics.rowHorizontalPadding,
+                    titleStyle: rowTitleStyle,
+                    valueStyle: rowValueStyle,
+                    valueChevronGap: 0,
+                  ),
+                ],
+              ),
+              SizedBox(height: metrics.sectionGap),
+              _buildGroup(
+                context,
+                metrics: metrics,
+                title: 'DETECTION',
+                titleStyle: sectionTitleStyle,
+                cardShadow: cardShadow,
+                rows: [
+                  ShellSettingsRow(
+                    title: 'Motion Sensitivity',
+                    value: 'Medium',
+                    trailing: const SizedBox.shrink(),
+                    height: metrics.shortRowHeight,
+                    horizontalPadding: metrics.rowHorizontalPadding,
+                    titleStyle: rowTitleStyle,
+                    valueStyle: rowValueStyle,
+                    valueChevronGap: 0,
+                  ),
+                  ShellSettingsRow(
+                    title: 'Person Detection',
+                    trailing: ShellToggle(
+                      value: personDetectionEnabled,
+                      onChanged: (value) {
                         setState(() {
-                          notificationsEnabled = value;
+                          if (value) {
+                            if (!selectedNotificationEvents.contains(
+                              'Humans',
+                            )) {
+                              selectedNotificationEvents = [
+                                ...selectedNotificationEvents.where(
+                                  (e) => e != 'All',
+                                ),
+                                'Humans',
+                              ];
+                            }
+                          } else {
+                            selectedNotificationEvents.remove('Humans');
+                            selectedNotificationEvents.remove('All');
+                          }
                         });
                       },
+                      width: metrics.toggleWidth,
+                      height: metrics.toggleHeight,
+                      padding: metrics.togglePadding,
+                      thumbSize: metrics.toggleThumbSize,
+                      activeColor: const Color(0xFF8BB3EE),
+                      inactiveColor: const Color(0xFFD1D5DB),
+                      thumbShadow: const [
+                        BoxShadow(
+                          color: Color(0x0D000000),
+                          blurRadius: 2,
+                          offset: Offset(0, 1),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      "Notify me for events:",
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      children:
-                          notificationOptions.map((option) {
-                            final bool isSelected = selectedNotificationEvents
-                                .contains(option);
-                            return ChoiceChip(
-                              label: Text(option),
-                              selected: isSelected,
-                              onSelected: (bool selected) {
-                                setState(() {
-                                  if (selected) {
-                                    if (option == 'All') {
-                                      selectedNotificationEvents = ['All'];
-                                    } else {
-                                      selectedNotificationEvents.remove('All');
-                                      selectedNotificationEvents.add(option);
-                                    }
-                                  } else {
-                                    selectedNotificationEvents.remove(option);
-                                    if (selectedNotificationEvents.isEmpty) {
-                                      selectedNotificationEvents = ['All'];
-                                    }
-                                  }
-                                });
-                              },
-                            );
-                          }).toList(),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Settings saved!"),
-                    duration: Duration(seconds: 2),
+                    height: metrics.toggleRowHeight,
+                    horizontalPadding: metrics.rowHorizontalPadding,
+                    titleStyle: rowTitleStyle,
                   ),
-                );
-                Navigator.pop(context);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color.fromARGB(255, 27, 114, 60),
-                padding: const EdgeInsets.symmetric(
-                  vertical: 16,
-                  horizontal: 32,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                  ShellSettingsRow(
+                    title: 'Detection Zones',
+                    height: metrics.bottomRowHeight,
+                    horizontalPadding: metrics.rowHorizontalPadding,
+                    titleStyle: rowTitleStyle,
+                    chevronSize: metrics.chevronSize,
+                    chevronColor:
+                        dark
+                            ? Colors.white.withValues(alpha: 0.2)
+                            : const Color(0xFF9CA3AF),
+                  ),
+                ],
               ),
-              child: const Text(
-                "Save Settings",
-                style: TextStyle(fontSize: 16, color: Colors.white),
+              SizedBox(height: metrics.sectionGap),
+              _buildGroup(
+                context,
+                metrics: metrics,
+                title: 'RECORDING',
+                titleStyle: sectionTitleStyle,
+                cardShadow: cardShadow,
+                rows: [
+                  ShellSettingsRow(
+                    title: 'Clip Length',
+                    value: '15s',
+                    trailing: const SizedBox.shrink(),
+                    height: metrics.shortRowHeight,
+                    horizontalPadding: metrics.rowHorizontalPadding,
+                    titleStyle: rowTitleStyle,
+                    valueStyle: rowValueStyle,
+                    valueChevronGap: 0,
+                  ),
+                  ShellSettingsRow(
+                    title: 'Pre-roll',
+                    trailing: ShellToggle(
+                      value: preRollEnabled,
+                      onChanged:
+                          (value) => setState(() => preRollEnabled = value),
+                      width: metrics.toggleWidth,
+                      height: metrics.toggleHeight,
+                      padding: metrics.togglePadding,
+                      thumbSize: metrics.toggleThumbSize,
+                      activeColor: const Color(0xFF8BB3EE),
+                      inactiveColor: const Color(0xFFD1D5DB),
+                      thumbShadow: const [
+                        BoxShadow(
+                          color: Color(0x0D000000),
+                          blurRadius: 2,
+                          offset: Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    height: metrics.toggleRowHeight + metrics.shortRowDelta,
+                    horizontalPadding: metrics.rowHorizontalPadding,
+                    titleStyle: rowTitleStyle,
+                  ),
+                ],
               ),
-            ),
-
-            const SizedBox(height: 48),
-
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey[200],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade400),
+              SizedBox(height: metrics.sectionGap),
+              _buildGroup(
+                context,
+                metrics: metrics,
+                title: 'ADVANCED',
+                titleStyle: sectionTitleStyle,
+                cardShadow: cardShadow,
+                rows: [
+                  ShellSettingsRow(
+                    title: 'Restart Camera',
+                    trailing: const SizedBox.shrink(),
+                    height: metrics.shortRowHeight,
+                    horizontalPadding: metrics.rowHorizontalPadding,
+                    titleStyle: rowTitleStyle,
+                  ),
+                  ShellSettingsRow(
+                    title: 'Remove Camera',
+                    onTap: _confirmRemoveCamera,
+                    trailing: const SizedBox.shrink(),
+                    height: metrics.advancedBottomRowHeight,
+                    horizontalPadding: metrics.rowHorizontalPadding,
+                    titleStyle: rowTitleStyle.copyWith(
+                      color: const Color(0xFFEF4444),
+                    ),
+                  ),
+                ],
               ),
-              child: Text(
-                "Camera's Secluso firmware version:  $_firmwareVersion",
-                style: const TextStyle(fontSize: 14),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
+
+  Widget _buildGroup(
+    BuildContext context, {
+    required _CameraSettingsMetrics metrics,
+    required String title,
+    required TextStyle titleStyle,
+    required List<BoxShadow> cardShadow,
+    required List<Widget> rows,
+  }) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.only(left: metrics.sectionTitleLeftInset),
+          child: Text(title, style: titleStyle),
+        ),
+        SizedBox(height: metrics.sectionTitleGap),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: metrics.cardSideInset),
+          child: ShellCard(
+            padding: EdgeInsets.zero,
+            radius: metrics.cardRadius,
+            color: dark ? Colors.white.withValues(alpha: 0.03) : Colors.white,
+            borderColor:
+                dark
+                    ? Colors.white.withValues(alpha: 0.05)
+                    : const Color(0x0A000000),
+            boxShadow: cardShadow,
+            child: Column(
+              children: [
+                for (var i = 0; i < rows.length; i++) ...[
+                  rows[i],
+                  if (i != rows.length - 1)
+                    Divider(
+                      height: 1,
+                      color:
+                          dark
+                              ? Colors.white.withValues(alpha: 0.04)
+                              : const Color(0xFFE5E7EB),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CameraSettingsBackButton extends StatelessWidget {
+  const _CameraSettingsBackButton({
+    required this.size,
+    required this.iconSize,
+    required this.fillColor,
+    required this.iconColor,
+    required this.onTap,
+  });
+
+  final double size;
+  final double iconSize;
+  final Color fillColor;
+  final Color iconColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: fillColor,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Center(
+            child: _CameraSettingsBackIcon(size: iconSize, color: iconColor),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CameraSettingsBackIcon extends StatelessWidget {
+  const _CameraSettingsBackIcon({required this.size, required this.color});
+
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(painter: _CameraSettingsBackPainter(color)),
+    );
+  }
+}
+
+class _CameraSettingsMetrics {
+  const _CameraSettingsMetrics({
+    required this.scale,
+    required this.pageTopPadding,
+    required this.pageBottomPadding,
+    required this.headerLeftInset,
+    required this.headerRightInset,
+    required this.backButtonSize,
+    required this.backButtonIconSize,
+    required this.headerGap,
+    required this.headerTitleSize,
+    required this.headerBottomGap,
+    required this.sectionGap,
+    required this.sectionTitleLeftInset,
+    required this.sectionTitleGap,
+    required this.sectionTitleSize,
+    required this.sectionTitleLetterSpacing,
+    required this.cardSideInset,
+    required this.cardRadius,
+    required this.rowHorizontalPadding,
+    required this.rowTitleSize,
+    required this.rowValueSize,
+    required this.chevronSize,
+    required this.shortRowHeight,
+    required this.shortRowDelta,
+    required this.toggleRowHeight,
+    required this.bottomRowHeight,
+    required this.advancedBottomRowHeight,
+    required this.toggleWidth,
+    required this.toggleHeight,
+    required this.togglePadding,
+    required this.toggleThumbSize,
+  });
+
+  final double scale;
+  final double pageTopPadding;
+  final double pageBottomPadding;
+  final double headerLeftInset;
+  final double headerRightInset;
+  final double backButtonSize;
+  final double backButtonIconSize;
+  final double headerGap;
+  final double headerTitleSize;
+  final double headerBottomGap;
+  final double sectionGap;
+  final double sectionTitleLeftInset;
+  final double sectionTitleGap;
+  final double sectionTitleSize;
+  final double sectionTitleLetterSpacing;
+  final double cardSideInset;
+  final double cardRadius;
+  final double rowHorizontalPadding;
+  final double rowTitleSize;
+  final double rowValueSize;
+  final double chevronSize;
+  final double shortRowHeight;
+  final double shortRowDelta;
+  final double toggleRowHeight;
+  final double bottomRowHeight;
+  final double advancedBottomRowHeight;
+  final double toggleWidth;
+  final double toggleHeight;
+  final double togglePadding;
+  final double toggleThumbSize;
+
+  factory _CameraSettingsMetrics.forWidth(double width) {
+    final scale = width / 290;
+    double s(double value) => value * scale;
+    return _CameraSettingsMetrics(
+      scale: scale,
+      pageTopPadding: s(20),
+      pageBottomPadding: s(24),
+      headerLeftInset: s(20),
+      headerRightInset: s(20),
+      backButtonSize: s(32),
+      backButtonIconSize: s(16),
+      headerGap: s(12),
+      headerTitleSize: s(18),
+      headerBottomGap: s(20),
+      sectionGap: s(18),
+      sectionTitleLeftInset: s(20),
+      sectionTitleGap: s(8),
+      sectionTitleSize: s(9),
+      sectionTitleLetterSpacing: s(0.9),
+      cardSideInset: s(16),
+      cardRadius: s(12),
+      rowHorizontalPadding: s(14),
+      rowTitleSize: s(13),
+      rowValueSize: s(13),
+      chevronSize: s(14),
+      shortRowHeight: s(48.5),
+      shortRowDelta: s(1),
+      toggleRowHeight: s(53),
+      bottomRowHeight: s(49.5),
+      advancedBottomRowHeight: s(47.5),
+      toggleWidth: s(40),
+      toggleHeight: s(24),
+      togglePadding: s(2),
+      toggleThumbSize: s(20),
+    );
+  }
+}
+
+class _CameraSettingsBackPainter extends CustomPainter {
+  const _CameraSettingsBackPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = size.width * (1.5 / 16)
+          ..color = color
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..isAntiAlias = true;
+    final path =
+        Path()
+          ..moveTo(size.width * (10 / 16), size.height * (3 / 16))
+          ..lineTo(size.width * (5 / 16), size.height * (8 / 16))
+          ..lineTo(size.width * (10 / 16), size.height * (13 / 16));
+    canvas.drawPath(path, stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _CameraSettingsBackPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

@@ -7,23 +7,26 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:lottie/lottie.dart';
 import 'package:path_provider/path_provider.dart';
-import 'dart:ui';
 import 'dart:io';
 import 'dart:async';
 
-import 'package:secluso_flutter/utilities/rust_api.dart';
+import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/notifications/firebase.dart';
 import 'package:secluso_flutter/utilities/firebase_init.dart';
-import 'package:secluso_flutter/utilities/rust_util.dart';
-import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/main.dart';
+import 'package:secluso_flutter/routes/app_shell.dart';
+import 'package:secluso_flutter/ui/secluso_preview_assets.dart';
+import 'package:secluso_flutter/ui/secluso_luxury.dart';
+import 'package:secluso_flutter/ui/secluso_surfaces.dart';
+import 'package:secluso_flutter/ui/secluso_theme.dart';
+import 'package:secluso_flutter/routes/camera/shell_home_page.dart';
 import 'view_camera.dart';
+import 'camera_ui_bridge.dart';
 import 'new/show_new_camera_options.dart';
 import '../../objectbox.g.dart';
 import '../server_page.dart';
@@ -48,8 +51,73 @@ class CameraListNotifier {
   CameraListNotifier._();
 }
 
+class CameraPreviewData {
+  const CameraPreviewData({
+    required this.name,
+    this.icon = Icons.videocam,
+    this.unreadMessages = false,
+    this.previewAssetPath,
+    this.statusLabel,
+    this.recentActivityTitle,
+    this.recentActivityTimeLabel,
+    this.isLive = true,
+    this.isOffline = false,
+  });
+
+  final String name;
+  final IconData icon;
+  final bool unreadMessages;
+  final String? previewAssetPath;
+  final String? statusLabel;
+  final String? recentActivityTitle;
+  final String? recentActivityTimeLabel;
+  final bool isLive;
+  final bool isOffline;
+}
+
+class HomeRecentEventPreviewData {
+  const HomeRecentEventPreviewData({
+    required this.title,
+    required this.subtitle,
+    required this.timeLabel,
+    this.previewAssetPath,
+    required this.accentColor,
+    this.videoName,
+    this.detections = const <String>{},
+    this.motion = true,
+    this.canDownload = false,
+  });
+
+  final String title;
+  final String subtitle;
+  final String timeLabel;
+  final String? previewAssetPath;
+  final Color accentColor;
+  final String? videoName;
+  final Set<String> detections;
+  final bool motion;
+  final bool canDownload;
+}
+
 class CamerasPage extends StatefulWidget {
-  const CamerasPage({Key? key}) : super(key: key);
+  const CamerasPage({
+    super.key,
+    this.previewServerHasSynced,
+    this.previewCameras,
+    this.previewRecentEvents,
+    this.previewUnreadCount,
+    this.previewShowNotificationWarning = false,
+    this.previewShowRecentError = false,
+    this.shellMode = false,
+  });
+
+  final bool? previewServerHasSynced;
+  final List<CameraPreviewData>? previewCameras;
+  final List<HomeRecentEventPreviewData>? previewRecentEvents;
+  final int? previewUnreadCount;
+  final bool previewShowNotificationWarning;
+  final bool previewShowRecentError;
+  final bool shellMode;
 
   @override
   CamerasPageState createState() => CamerasPageState();
@@ -59,11 +127,15 @@ class CameraCard extends StatefulWidget {
   final String cameraName;
   final IconData icon;
   final bool unreadMessages;
+  final String? previewAssetPath;
+  final bool enableInteractions;
 
   const CameraCard({
     required this.cameraName,
     required this.icon,
     required this.unreadMessages,
+    this.previewAssetPath,
+    this.enableInteractions = true,
     super.key,
   });
 
@@ -79,88 +151,146 @@ class _CameraCardState extends State<CameraCard>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return GestureDetector(
-      onTap:
-          () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => CameraViewPage(cameraName: widget.cameraName),
-            ),
-          ),
-      onLongPress: () => _confirmDeleteCamera(context, widget.cameraName),
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        height: 200,
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final surfaceColor =
+        dark ? const Color(0xFF0C0D10) : Colors.white.withValues(alpha: 0.96);
+    final titleColor = dark ? Colors.white : theme.colorScheme.onSurface;
+    final bodyColor =
+        dark
+            ? Colors.white.withValues(alpha: 0.74)
+            : theme.colorScheme.onSurface.withValues(alpha: 0.66);
+    return SizedBox(
+      width: 176,
+      child: DecoratedBox(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black26,
-              offset: Offset(0, 4),
-              blurRadius: 6,
-            ),
-          ],
+          color: surfaceColor,
+          borderRadius: BorderRadius.circular(28),
+          border:
+              dark ? null : Border.all(color: theme.colorScheme.outlineVariant),
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Stack(
-            children: [
-              // Thumbnail + overlay logic
-              Positioned.fill(child: _thumbnailWithOverlay(widget.cameraName)),
-
-              // Name + Icon
-              Positioned(
-                bottom: 12,
-                left: 12,
-                right: 12,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Icon(widget.icon, color: Colors.white, size: 24),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        widget.cameraName,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap:
+                  widget.enableInteractions
+                      ? () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder:
+                              (_) =>
+                                  CameraViewPage(cameraName: widget.cameraName),
                         ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              if (widget.unreadMessages)
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.redAccent,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.notifications,
-                      color: Colors.white,
-                      size: 16,
+                      )
+                      : null,
+              onLongPress:
+                  widget.enableInteractions
+                      ? () => _confirmDeleteCamera(context, widget.cameraName)
+                      : null,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    height: 130,
+                    width: double.infinity,
+                    child: _thumbnailWithOverlay(
+                      widget.cameraName,
+                      widget.previewAssetPath,
                     ),
                   ),
-                ),
-            ],
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SeclusoStatusChip(
+                          label:
+                              widget.unreadMessages
+                                  ? 'New activity'
+                                  : 'Indoor feed',
+                          color:
+                              widget.unreadMessages
+                                  ? SeclusoColors.blueSoft
+                                  : SeclusoColors.blue,
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          widget.cameraName,
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            color: titleColor,
+                            fontSize: 18,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          widget.unreadMessages
+                              ? 'Activity waiting.'
+                              : 'Ready to review.',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: bodyColor,
+                            fontSize: 14,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Text(
+                              'Open',
+                              style: theme.textTheme.labelLarge?.copyWith(
+                                color: titleColor,
+                              ),
+                            ),
+                            const Spacer(),
+                            Icon(
+                              Icons.arrow_forward,
+                              size: 18,
+                              color:
+                                  dark
+                                      ? Colors.white.withValues(alpha: 0.72)
+                                      : theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _thumbnailWithOverlay(String camName) {
+  Widget _thumbnailWithOverlay(String camName, String? previewAssetPath) {
+    if (previewAssetPath != null) {
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(previewAssetPath, fit: BoxFit.cover),
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Colors.black.withValues(alpha: 0.16),
+                  Colors.black.withValues(alpha: 0.54),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     final state = context.findAncestorStateOfType<CamerasPageState>()!;
     final initial = state._thumbCache[camName];
 
@@ -174,7 +304,7 @@ class _CameraCardState extends State<CameraCard>
         final hasBytes = bytes != null;
         final image =
             hasBytes
-                ? Image.memory(bytes!, fit: BoxFit.cover, gaplessPlayback: true)
+                ? Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true)
                 : const Image(
                   image: AssetImage(
                     'assets/android_thumbnail_placeholder.jpeg',
@@ -182,19 +312,18 @@ class _CameraCardState extends State<CameraCard>
                   fit: BoxFit.cover,
                 );
 
-        // Overlay depends on if we have a thumbnail
         final overlay = Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors:
                   hasBytes
                       ? [
-                        Colors.black.withOpacity(0.2),
-                        Colors.black.withOpacity(0.6),
+                        Colors.black.withValues(alpha: 0.16),
+                        Colors.black.withValues(alpha: 0.54),
                       ]
                       : [
-                        Colors.black.withOpacity(0.3),
-                        Colors.black.withOpacity(0.7),
+                        Colors.black.withValues(alpha: 0.26),
+                        Colors.black.withValues(alpha: 0.66),
                       ],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
@@ -215,23 +344,14 @@ class _CameraCardState extends State<CameraCard>
                     vertical: 10,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.6),
+                    color: Colors.black.withValues(alpha: 0.54),
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Colors.black45,
-                        offset: Offset(0, 2),
-                        blurRadius: 4,
-                      ),
-                    ],
                   ),
-                  child: const Text(
-                    "No Image Yet",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: Text(
+                    'Awaiting first frame',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleMedium?.copyWith(color: Colors.white),
                   ),
                 ),
               ),
@@ -273,18 +393,19 @@ class _CameraCardState extends State<CameraCard>
 }
 
 class CamerasPageState extends State<CamerasPage>
-    with WidgetsBindingObserver, RouteAware, SingleTickerProviderStateMixin {
+    with WidgetsBindingObserver, RouteAware {
   final List<Map<String, dynamic>> cameras = [];
+  final List<Map<String, dynamic>> _liveRecentEvents = [];
+  final List<Map<String, dynamic>> _lastNonEmptyShellCameras = [];
+  final List<Map<String, dynamic>> _lastNonEmptyShellRecentEvents = [];
   late Future<SharedPreferences> _prefsFuture;
-  late final AnimationController _controller;
 
   late final StreamSubscription<String> _thumbSub;
-
-  bool _hasPlayedLockAnimation = false;
 
   bool _showNotificationWarning = false;
   bool _showRecentError = false;
   bool _backgroundDialogShown = false;
+  bool _hasCompletedCameraLoad = false;
 
   /// cache: cam-name to thumbnail bytes (null = tried but failed)
   final Map<String, Uint8List?> _thumbCache = {};
@@ -295,14 +416,43 @@ class CamerasPageState extends State<CamerasPage>
   /// avoid running the DB query + channel call more than once at a time
   final Map<String, Future<Uint8List?>> _thumbFutures = {};
 
+  /// cache validated recent-event thumbnails by "camera\nvideo"
+  final Map<String, Uint8List> _eventThumbCache = {};
+
+  /// avoid re-reading the same recent-event thumbnail concurrently
+  final Map<String, Future<Uint8List?>> _eventThumbFutures = {};
+
   // Poll the database every so often and update if there's currently read messages or not
   Timer? _pollingTimer;
   late final VoidCallback _errorListener;
 
+  bool get _isPreviewMode =>
+      widget.previewServerHasSynced != null || widget.previewCameras != null;
+
+  Future<SharedPreferences> _loadPrefsFresh() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    return prefs;
+  }
+
+  void _refreshHomeState() {
+    if (!mounted) return;
+    setState(() {
+      _prefsFuture = _loadPrefsFresh();
+    });
+    unawaited(_loadCamerasFromDatabase(true));
+  }
+
   void invalidateThumbnail(String cameraName) {
     _thumbCache.remove(cameraName);
     _thumbFutures.remove(cameraName);
-    setState(() {}); // triggers a rebuild so FutureBuilder runs again
+    _eventThumbCache.removeWhere((key, _) => key.startsWith('$cameraName\n'));
+    _eventThumbFutures.removeWhere((key, _) => key.startsWith('$cameraName\n'));
+    if (_isPreviewMode) {
+      setState(() {});
+      return;
+    }
+    unawaited(_loadCamerasFromDatabase(true));
   }
 
   Future<void> _loadRecentError() async {
@@ -314,18 +464,25 @@ class CamerasPageState extends State<CamerasPage>
   Future<void> _copyLogs(BuildContext context) async {
     final logs = await Log.getLogDump();
     final message =
-        logs.trim().isEmpty ? 'No logs available yet.' : 'Logs copied to clipboard.';
+        logs.trim().isEmpty
+            ? 'No logs available yet.'
+            : 'Logs copied to clipboard.';
     if (logs.trim().isNotEmpty) {
       await Clipboard.setData(ClipboardData(text: logs));
       await Log.clearErrorFlag();
     }
     if (!mounted) return;
     setState(() => _showRecentError = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _dismissRecentError() async {
+    await Log.clearErrorFlag();
+    if (!mounted) return;
+    setState(() => _showRecentError = false);
+  }
 
   Future<void> _maybeShowBackgroundLogDialog() async {
     if (_backgroundDialogShown) return;
@@ -337,8 +494,7 @@ class CamerasPageState extends State<CamerasPage>
         snapshot.timestamp == null
             ? ''
             : 'Time: ${snapshot.timestamp!.toLocal()}';
-    final reason =
-        snapshot.reason.isEmpty ? '' : 'Reason: ${snapshot.reason}';
+    final reason = snapshot.reason.isEmpty ? '' : 'Reason: ${snapshot.reason}';
     final lines = [reason, when]..removeWhere((line) => line.isEmpty);
     final detailText = lines.isEmpty ? '' : '\n${lines.join('\n')}';
 
@@ -367,16 +523,16 @@ class CamerasPageState extends State<CamerasPage>
               ),
               TextButton(
                 onPressed: () async {
-                  await Clipboard.setData(
-                    ClipboardData(text: snapshot.logs),
-                  );
+                  await Clipboard.setData(ClipboardData(text: snapshot.logs));
                   await Log.clearBackgroundSnapshot();
                   await Log.clearErrorFlag();
                   if (mounted) {
                     setState(() => _showRecentError = false);
                     Navigator.of(ctx).pop();
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Logs copied to clipboard.')),
+                      const SnackBar(
+                        content: Text('Logs copied to clipboard.'),
+                      ),
                     );
                   }
                 },
@@ -388,61 +544,47 @@ class CamerasPageState extends State<CamerasPage>
   }
 
   Widget _recentErrorBanner() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.red.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.red.shade200),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.error_outline, color: Colors.red),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Text(
-              'Error recently occurred! Please press this button to copy your logs, which you can then email to us for support!',
-              style: TextStyle(fontSize: 14, color: Colors.black87),
-            ),
-          ),
-          TextButton(
-            onPressed: () => _copyLogs(context),
-            child: const Text(
-              'Copy logs',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
+    return _noticeCard(
+      icon: Icons.error_outline,
+      color: SeclusoColors.danger,
+      message:
+          'A recent error was captured. Dismiss it or copy the logs so support can help diagnose it quickly.',
+      actionLabel: 'Dismiss',
+      onPressed: _dismissRecentError,
     );
   }
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-      lowerBound: 0.0,
-      upperBound: 0.85, // stop before the fade away
-    );
-
     _thumbSub = ThumbnailNotifier.instance.stream.listen((cam) {
       // only invalidate the one that updated
       invalidateThumbnail(cam);
     });
 
-    // Stop at the end after playing once
-    _controller.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        _controller.stop();
-        _controller.value = 0.85;
-      }
-    });
+    _prefsFuture = _loadPrefsFresh();
+    if (_isPreviewMode) {
+      cameras.addAll(
+        (widget.previewCameras ?? const <CameraPreviewData>[]).map(
+          (camera) => {
+            'name': camera.name,
+            'icon': camera.icon,
+            'unreadMessages': camera.unreadMessages,
+            'previewAsset': camera.previewAssetPath,
+            'statusLabel': camera.statusLabel,
+            'recentActivityTitle': camera.recentActivityTitle,
+            'recentActivityTimeLabel': camera.recentActivityTimeLabel,
+            'isLive': camera.isLive,
+            'isOffline': camera.isOffline,
+          },
+        ),
+      );
+      _showNotificationWarning = widget.previewShowNotificationWarning;
+      _showRecentError = widget.previewShowRecentError;
+      _errorListener = () {};
+      return;
+    }
 
-    _prefsFuture = SharedPreferences.getInstance();
     _prefsFuture.then((_) => _checkNotificationStatus());
     _loadRecentError();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -457,15 +599,19 @@ class CamerasPageState extends State<CamerasPage>
     Log.errorNotifier.addListener(_errorListener);
 
     WidgetsBinding.instance.addObserver(this);
-    CameraListNotifier.instance.refreshCallback = _loadCamerasFromDatabase;
+    CameraListNotifier.instance.refreshCallback = _refreshHomeState;
+    CameraUiBridge.deleteCameraCallback = deleteCamera;
+    CameraUiBridge.refreshCameraListCallback = _refreshHomeState;
     _pollingTimer = Timer.periodic(
       const Duration(seconds: 5),
       (_) => _loadCamerasFromDatabase(false), // refresh from DB every 5s
     );
+    unawaited(_loadCamerasFromDatabase(true));
   }
 
   @override
   void didPopNext() {
+    if (_isPreviewMode) return;
     Log.d("Returned to list cameras [pop]");
     _loadCamerasFromDatabase(true); // Load this every time we enter the page.
     _checkNotificationStatus();
@@ -473,6 +619,7 @@ class CamerasPageState extends State<CamerasPage>
 
   @override
   void didPush() {
+    if (_isPreviewMode) return;
     Log.d('Returned to list cameras [push]');
     _loadCamerasFromDatabase(true); // Load this every time we enter the page.
     _checkNotificationStatus();
@@ -480,18 +627,26 @@ class CamerasPageState extends State<CamerasPage>
 
   @override
   void dispose() {
-    Log.errorNotifier.removeListener(_errorListener);
+    if (!_isPreviewMode) {
+      Log.errorNotifier.removeListener(_errorListener);
+    }
     _thumbSub.cancel();
-    _controller.dispose();
     routeObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
     _pollingTimer?.cancel();
+    if (identical(CameraUiBridge.deleteCameraCallback, deleteCamera)) {
+      CameraUiBridge.deleteCameraCallback = null;
+    }
+    if (CameraUiBridge.refreshCameraListCallback != null) {
+      CameraUiBridge.refreshCameraListCallback = null;
+    }
     super.dispose();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_isPreviewMode) return;
     final ModalRoute? route = ModalRoute.of(context);
     if (route != null) {
       routeObserver.subscribe(this, route);
@@ -500,6 +655,7 @@ class CamerasPageState extends State<CamerasPage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_isPreviewMode) return;
     if (!mounted) return;
 
     if (state == AppLifecycleState.resumed) {
@@ -513,6 +669,7 @@ class CamerasPageState extends State<CamerasPage>
   }
 
   Future<void> _checkNotificationStatus() async {
+    if (_isPreviewMode) return;
     final prefs = await _prefsFuture;
     final notificationsRequested =
         prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
@@ -548,7 +705,9 @@ class CamerasPageState extends State<CamerasPage>
             //TODO: This might be necessary to work on iOS. Not 100% sure.
             if (Platform.isAndroid) {
               if (!FirebaseInit.isInitialized) {
-                Log.d("Skipping FCM permission request; Firebase not initialized");
+                Log.d(
+                  "Skipping FCM permission request; Firebase not initialized",
+                );
               } else {
                 await FirebaseMessaging.instance.requestPermission(
                   alert: true,
@@ -575,78 +734,9 @@ class CamerasPageState extends State<CamerasPage>
   }
 
   Future<void> deleteCamera(String cameraName) async {
-    //TODO: Remove from any waiting queues. Hold a lock for this to ensure no weird errors.
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.remove(PrefKeys.numIgnoredHeartbeatsPrefix + cameraName);
-    await prefs.remove(PrefKeys.cameraStatusPrefix + cameraName);
-    await prefs.remove(PrefKeys.numHeartbeatNotificationsPrefix + cameraName);
-    await prefs.remove(PrefKeys.lastHeartbeatTimestampPrefix + cameraName);
-    await prefs.remove(PrefKeys.firmwareVersionPrefix + cameraName);
-
-    await deregisterCamera(cameraName: cameraName);
-    invalidateCameraInit(cameraName);
-    HttpClientService.instance.clearGroupNameCache(cameraName);
-
-    final cameraBox = AppStores.instance.cameraStore.box<Camera>();
-    final videoBox = AppStores.instance.videoStore.box<Video>();
-
-    await prefs.remove("first_time_" + cameraName);
-
-    var existingCameraSet = prefs.getStringList(PrefKeys.cameraSet) ?? [];
-    existingCameraSet.remove(cameraName);
-    await prefs.setStringList(PrefKeys.cameraSet, existingCameraSet);
-
-    // Remove camera from DB
-    final query = cameraBox.query(Camera_.name.equals(cameraName)).build();
-    final cams = query.find();
-    query.close();
-    for (final cam in cams) {
-      cameraBox.remove(cam.id);
-    }
-
-    // Remove videos from DB
-    final videoQuery = videoBox.query(Video_.camera.equals(cameraName)).build();
-    final videos = videoQuery.find();
-    videoQuery.close();
-    videoBox.removeMany(videos.map((v) => v.id).toList());
-
-    // Delete camera directory
-    final docsDir = await getApplicationDocumentsDirectory();
-    final camDir = Directory(p.join(docsDir.path, 'camera_dir_$cameraName'));
-    if (await camDir.exists()) {
-      try {
-        await camDir.delete(recursive: true);
-        Log.d('Deleted camera folder: ${camDir.path}');
-      } catch (e) {
-        Log.e('Error deleting folder: $e');
-      }
-    }
-
-    // Delete the thumbnail lock, if it exists.
-    final lock = File(
-      p.join(docsDir.path, 'locks', 'thumbnail$cameraName.lock'),
-    );
-    if (await lock.exists()) lock.delete();
-
-    final camDirPending = Directory(
-      p.join(docsDir.path, 'waiting', 'camera_$cameraName'),
-    );
-    if (await camDirPending.exists()) {
-      try {
-        await camDirPending.delete(recursive: true);
-        Log.d('Deleted camera waiting folder: ${camDirPending.path}');
-      } catch (e) {
-        Log.e('Error deleting folder: $e');
-      }
-    }
-
-    // Clear any thumbnail cache
+    await CameraUiBridge.deleteCamera(cameraName);
     invalidateThumbnail(cameraName);
-
-    // Reload list
     await _loadCamerasFromDatabase(false);
-
-    // Feedback
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -663,6 +753,107 @@ class CamerasPageState extends State<CamerasPage>
 
   final _deepEq = const DeepCollectionEquality.unordered();
 
+  DateTime? _timestampFromVideoName(String videoName) {
+    if (videoName.startsWith('video_') && videoName.endsWith('.mp4')) {
+      final value = int.tryParse(
+        videoName.replaceFirst('video_', '').replaceFirst('.mp4', ''),
+      );
+      if (value != null) {
+        return DateTime.fromMillisecondsSinceEpoch(
+          value * 1000,
+          isUtc: true,
+        ).toLocal();
+      }
+    }
+    return null;
+  }
+
+  String _compactAgeLabel(DateTime timestamp) {
+    final delta = DateTime.now().difference(timestamp);
+    if (delta.inMinutes < 1) {
+      return 'Now';
+    }
+    if (delta.inHours < 1) {
+      return '${delta.inMinutes}m';
+    }
+    if (delta.inDays < 1) {
+      return '${delta.inHours}h';
+    }
+    return '${delta.inDays}d';
+  }
+
+  String _agoAgeLabel(DateTime timestamp) {
+    final compact = _compactAgeLabel(timestamp);
+    return compact == 'Now' ? 'Just now' : '$compact ago';
+  }
+
+  Future<Set<String>> _detectionTypesForVideo(
+    Box<Detection> detectionBox,
+    String videoName,
+  ) async {
+    final query =
+        detectionBox.query(Detection_.videoFile.equals(videoName)).build();
+    final rows = query.find();
+    query.close();
+    return rows.map((row) => row.type.toLowerCase()).toSet();
+  }
+
+  bool _hasPersonDetection(Set<String> detections) {
+    return detections.contains('human') || detections.contains('person');
+  }
+
+  String _activityTitleForVideo(bool motion, Set<String> detections) {
+    if (!motion) {
+      return 'Livestream Clip';
+    }
+    if (_hasPersonDetection(detections)) {
+      return 'Person Detected';
+    }
+    if (detections.contains('vehicle') || detections.contains('car')) {
+      return 'Vehicle Detected';
+    }
+    if (detections.contains('pet') || detections.contains('pets')) {
+      return 'Pet Detected';
+    }
+    return 'Motion';
+  }
+
+  Color _accentColorForVideo(Set<String> detections) {
+    return _hasPersonDetection(detections)
+        ? const Color(0xFF8BB3EE)
+        : const Color(0xFF60A5FA);
+  }
+
+  bool _isOfflineStatus(int statusCode) {
+    return statusCode == CameraStatus.offline ||
+        statusCode == CameraStatus.corrupted ||
+        statusCode == CameraStatus.possiblyCorrupted;
+  }
+
+  String _statusLabelForCamera({
+    required bool isOffline,
+    required Video? latestVideo,
+    required Set<String> detections,
+  }) {
+    if (isOffline) {
+      return 'Offline';
+    }
+    if (latestVideo == null) {
+      return 'Quiet';
+    }
+
+    final timestamp = _timestampFromVideoName(latestVideo.video);
+    final timePart = timestamp == null ? null : _compactAgeLabel(timestamp);
+
+    if (_hasPersonDetection(detections)) {
+      return timePart == null ? 'Person' : 'Person · $timePart';
+    }
+    if (latestVideo.motion) {
+      return timePart == null ? 'Motion' : 'Motion · $timePart';
+    }
+    return 'Quiet';
+  }
+
   Future<void> _loadCamerasFromDatabase([bool forceRun = false]) async {
     if (!AppStores.isInitialized) {
       try {
@@ -672,68 +863,168 @@ class CamerasPageState extends State<CamerasPage>
         return;
       }
     }
-    final box = AppStores.instance.cameraStore.box<Camera>();
-    final all =
-        (await box.getAllAsync())
-            .map(
-              (c) => {
-                "name": c.name,
-                "icon": Icons.videocam,
-                "unreadMessages": c.unreadMessages,
-              },
-            )
-            .toList();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
 
-    // Deep compare
-    if (!forceRun && _deepEq.equals(all, cameras)) return;
+    final cameraBox = AppStores.instance.cameraStore.box<Camera>();
+    final videoBox = AppStores.instance.videoStore.box<Video>();
+    final detectionBox = AppStores.instance.detectionStore.box<Detection>();
+
+    final storedCameras = await cameraBox.getAllAsync();
+    final videoQuery =
+        videoBox.query().order(Video_.id, flags: Order.descending).build()
+          ..limit = 80;
+    final videos = videoQuery.find();
+    videoQuery.close();
+
+    final latestVideoByCamera = <String, Video>{};
+    for (final video in videos) {
+      latestVideoByCamera.putIfAbsent(video.camera, () => video);
+    }
+
+    final detectionCache = <String, Set<String>>{};
+    Future<Set<String>> detectionsForVideo(String videoName) async {
+      final cached = detectionCache[videoName];
+      if (cached != null) {
+        return cached;
+      }
+      final detections = await _detectionTypesForVideo(detectionBox, videoName);
+      detectionCache[videoName] = detections;
+      return detections;
+    }
+
+    final latestDisplayableEventByCamera = <String, Video>{};
+    for (final video in videos) {
+      if (latestDisplayableEventByCamera.containsKey(video.camera)) {
+        continue;
+      }
+      if (!await _videoFileExists(video.camera, video.video)) {
+        continue;
+      }
+      final detections = await detectionsForVideo(video.video);
+      if (!video.motion && detections.isEmpty) {
+        continue;
+      }
+      latestDisplayableEventByCamera[video.camera] = video;
+    }
+
+    final all = <Map<String, dynamic>>[];
+    for (final camera in storedCameras) {
+      final latestVideo = latestVideoByCamera[camera.name];
+      final latestDisplayableEvent = latestDisplayableEventByCamera[camera.name];
+      final detections =
+          latestVideo == null
+              ? const <String>{}
+              : await detectionsForVideo(latestVideo.video);
+      final latestTimestamp =
+          latestVideo == null
+              ? null
+              : _timestampFromVideoName(latestVideo.video);
+      final statusCode =
+          prefs.getInt(PrefKeys.cameraStatusPrefix + camera.name) ??
+          CameraStatus.online;
+      final isOffline = _isOfflineStatus(statusCode);
+      final thumbnailBytes =
+          latestDisplayableEvent == null
+              ? null
+              : await _eventThumbnailBytes(
+                camera.name,
+                latestDisplayableEvent.video,
+              );
+      if (thumbnailBytes != null) {
+        _thumbFallback[camera.name] = thumbnailBytes;
+      }
+      _thumbCache[camera.name] = thumbnailBytes ?? _thumbFallback[camera.name];
+
+      all.add({
+        "name": camera.name,
+        "icon": Icons.videocam,
+        "unreadMessages": camera.unreadMessages,
+        "statusLabel": _statusLabelForCamera(
+          isOffline: isOffline,
+          latestVideo: latestVideo,
+          detections: detections,
+        ),
+        "recentActivityTitle":
+            latestVideo == null
+                ? null
+                : _activityTitleForVideo(latestVideo.motion, detections),
+        "recentActivityTimeLabel":
+            latestTimestamp == null ? null : _agoAgeLabel(latestTimestamp),
+        "isLive": !isOffline,
+        "isOffline": isOffline,
+        "thumbnailBytes": _thumbCache[camera.name],
+        "latestTimestamp": latestTimestamp?.millisecondsSinceEpoch,
+      });
+    }
+
+    final recentEvents = <Map<String, dynamic>>[];
+    final seenRecentKeys = <String>{};
+    for (final video in videos) {
+      final eventKey = '${video.camera}\n${video.video}';
+      if (!seenRecentKeys.add(eventKey)) {
+        continue;
+      }
+      if (!await _videoFileExists(video.camera, video.video)) {
+        continue;
+      }
+      final detections = await detectionsForVideo(video.video);
+      if (!video.motion && detections.isEmpty) {
+        continue;
+      }
+      final timestamp = _timestampFromVideoName(video.video);
+      recentEvents.add({
+        "title": _activityTitleForVideo(video.motion, detections),
+        "subtitle": video.camera,
+        "timeLabel": timestamp == null ? video.video : _agoAgeLabel(timestamp),
+        "videoName": video.video,
+        "detections": detections,
+        "motion": video.motion,
+        "canDownload": video.received,
+        "thumbnailBytes": await _eventThumbnailBytes(video.camera, video.video),
+        "accentColor": _accentColorForVideo(detections),
+      });
+      if (recentEvents.length == 2) {
+        break;
+      }
+    }
+
+    if (!forceRun &&
+        _deepEq.equals(all, cameras) &&
+        _deepEq.equals(recentEvents, _liveRecentEvents)) {
+      _hasCompletedCameraLoad = true;
+      return;
+    }
     Log.d("Refreshing cameras from database");
 
-    _thumbCache.clear();
-    _thumbFutures.clear();
     setState(() {
+      _hasCompletedCameraLoad = true;
       cameras
         ..clear()
         ..addAll(all);
-    });
-  }
-
-  Future<String?> _latestVideoPath(String cameraName) async {
-    if (!AppStores.isInitialized) {
-      try {
-        await AppStores.init();
-      } catch (e, st) {
-        Log.e("Failed to init AppStores: $e\n$st");
-        return null;
+      _liveRecentEvents
+        ..clear()
+        ..addAll(recentEvents);
+      if (all.isNotEmpty) {
+        _lastNonEmptyShellCameras
+          ..clear()
+          ..addAll(all.map((camera) => Map<String, dynamic>.from(camera)));
       }
-    }
-    final videoBox = AppStores.instance.videoStore.box<Video>();
-
-    final query =
-        videoBox
-            .query(
-              Video_.camera.equals(cameraName) & Video_.received.equals(true),
-            )
-            .order(Video_.id, flags: Order.descending)
-            .build()
-          ..limit = 1;
-
-    final vids = query.find();
-    query.close();
-
-    if (vids.isEmpty) return null;
-
-    final docsDir = await getApplicationDocumentsDirectory();
-    return p.join(
-      docsDir.path,
-      'camera_dir_$cameraName',
-      'videos',
-      vids.first.video,
-    );
+      if (recentEvents.isNotEmpty) {
+        _lastNonEmptyShellRecentEvents
+          ..clear()
+          ..addAll(
+            recentEvents.map((event) => Map<String, dynamic>.from(event)),
+          );
+      }
+    });
   }
 
   Future<Uint8List?> _generateThumb(String cameraName) {
     if (_thumbCache.containsKey(cameraName)) {
-      return Future.value(_thumbCache[cameraName] ?? _thumbFallback[cameraName]);
+      return Future.value(
+        _thumbCache[cameraName] ?? _thumbFallback[cameraName],
+      );
     }
     if (_thumbFutures.containsKey(cameraName)) {
       return _thumbFutures[cameraName]!;
@@ -742,7 +1033,7 @@ class CamerasPageState extends State<CamerasPage>
     final future = () async {
       final fallback = _thumbFallback[cameraName];
       try {
-        final bytes = await _latestThumbnailBytes(cameraName);
+        final bytes = await _latestDisplayableThumbnailBytes(cameraName);
         if (bytes == null) {
           _thumbCache[cameraName] = fallback;
           return fallback;
@@ -771,136 +1062,564 @@ class CamerasPageState extends State<CamerasPage>
     }
   }
 
-  Future<Uint8List?> _latestThumbnailBytes(String cameraName) async {
-    final docsDir = await getApplicationDocumentsDirectory();
-    final dir = Directory(
-      p.join(docsDir.path, 'camera_dir_$cameraName', 'videos'),
-    );
-
-    if (!await dir.exists()) return null;
-
-    final entries = await dir.list(followLinks: false).toList();
-    final candidates = <MapEntry<int, File>>[];
-
-    for (final ent in entries) {
-      if (ent is! File) continue;
-      if (!ent.path.toLowerCase().endsWith('.png')) continue;
-
-      final base = p
-          .basenameWithoutExtension(ent.path)
-          .replaceAll("thumbnail_", "");
-
-      final ts = int.tryParse(base);
-      if (ts == null) continue;
-      candidates.add(MapEntry(ts, ent));
+  Future<Uint8List?> _latestDisplayableThumbnailBytes(String cameraName) async {
+    if (!AppStores.isInitialized) {
+      try {
+        await AppStores.init();
+      } catch (e, st) {
+        Log.e("Failed to init AppStores for thumb lookup [$cameraName]: $e\n$st");
+        return null;
+      }
     }
 
-    candidates.sort((a, b) => b.key.compareTo(a.key));
+    final videoBox = AppStores.instance.videoStore.box<Video>();
+    final detectionBox = AppStores.instance.detectionStore.box<Detection>();
+    final query =
+        videoBox
+            .query(Video_.camera.equals(cameraName))
+            .order(Video_.id, flags: Order.descending)
+            .build()
+          ..limit = 40;
+    final videos = query.find();
+    query.close();
 
-    for (final candidate in candidates) {
-      try {
-        final bytes = await candidate.value.readAsBytes();
-        if (await _isValidImageBytes(bytes)) {
-          return bytes;
-        }
-      } catch (e) {
-        Log.e("Thumbnail read error [$cameraName]: $e");
+    for (final video in videos) {
+      if (!await _videoFileExists(video.camera, video.video)) {
+        continue;
       }
+      final detections = await _detectionTypesForVideo(detectionBox, video.video);
+      if (!video.motion && detections.isEmpty) {
+        continue;
+      }
+      return _eventThumbnailBytes(video.camera, video.video);
+    }
+
+    Log.d(
+      'Home thumb miss [$cameraName]: no displayable event found for thumbnail lookup',
+    );
+    return null;
+  }
+
+  Future<bool> _videoFileExists(String cameraName, String videoFile) async {
+    final docsDir = await getApplicationDocumentsDirectory();
+    final file = File(
+      p.join(docsDir.path, 'camera_dir_$cameraName', 'videos', videoFile),
+    );
+    return file.exists();
+  }
+
+  Future<Uint8List?> _eventThumbnailBytes(
+    String cameraName,
+    String videoFile,
+  ) async {
+    final cacheKey = '$cameraName\n$videoFile';
+    final cached = _eventThumbCache[cacheKey];
+    if (cached != null) {
+      return cached;
+    }
+    final inFlight = _eventThumbFutures[cacheKey];
+    if (inFlight != null) {
+      return inFlight;
+    }
+
+    final future = _readEventThumbnailBytes(cameraName, videoFile, cacheKey);
+    _eventThumbFutures[cacheKey] = future;
+    try {
+      return await future;
+    } finally {
+      _eventThumbFutures.remove(cacheKey);
+    }
+  }
+
+  Future<Uint8List?> _readEventThumbnailBytes(
+    String cameraName,
+    String videoFile,
+    String cacheKey,
+  ) async {
+    final timestamp = _videoTimestampToken(videoFile);
+    if (timestamp == null) {
+      Log.d(
+        'Recent event thumb miss [$cameraName/$videoFile]: could not derive timestamp token',
+      );
+      return null;
+    }
+
+    final docsDir = await getApplicationDocumentsDirectory();
+    final thumbPath = p.join(
+      docsDir.path,
+      'camera_dir_$cameraName',
+      'videos',
+      'thumbnail_$timestamp.png',
+    );
+    final thumbFile = File(thumbPath);
+    if (!await thumbFile.exists()) {
+      Log.d(
+        'Recent event thumb miss [$cameraName/$videoFile]: file missing at $thumbPath',
+      );
+      return null;
+    }
+
+    try {
+      final bytes = await thumbFile.readAsBytes();
+      if (await _isValidImageBytes(bytes)) {
+        _eventThumbCache[cacheKey] = bytes;
+        Log.d(
+          'Recent event thumb hit [$cameraName/$videoFile]: loaded $thumbPath (${bytes.length} bytes)',
+        );
+        return bytes;
+      }
+      Log.w(
+        'Recent event thumb invalid [$cameraName/$videoFile]: decode failed for $thumbPath',
+      );
+    } catch (e) {
+      Log.e("Event thumbnail read error [$cameraName/$videoFile]: $e");
     }
 
     return null;
   }
 
-  // TODO: Would a database read be faster?
-  Future<String?> _latestThumbnailPath(String cameraName) async {
-    final docsDir = await getApplicationDocumentsDirectory();
-    final dir = Directory(
-      p.join(docsDir.path, 'camera_dir_$cameraName', 'videos'),
-    );
+  String? _videoTimestampToken(String videoFile) {
+    if (!videoFile.startsWith('video_') || !videoFile.endsWith('.mp4')) {
+      return null;
+    }
+    return videoFile.substring(6, videoFile.length - 4);
+  }
 
-    if (!await dir.exists()) return null;
-
-    File? best;
-    var bestTs = -1;
-
-    // Scan all .png files, choose the largest numeric basename
-    final entries = await dir.list(followLinks: false).toList();
-    for (final ent in entries) {
-      if (ent is! File) continue;
-      if (!ent.path.toLowerCase().endsWith('.png')) continue;
-
-      final base = p
-          .basenameWithoutExtension(ent.path)
-          .replaceAll("thumbnail_", "");
-
-      final ts = int.tryParse(base);
-      if (ts == null) continue;
-
-      if (ts > bestTs) {
-        bestTs = ts;
-        best = ent;
-      }
+  Future<void> _openPrimaryFlow(
+    BuildContext context,
+    bool serverHasSynced,
+  ) async {
+    if (serverHasSynced) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const ShowNewCameraOptions()),
+      );
+      return;
     }
 
-    return best?.path;
-  }
+    if (widget.shellMode) {
+      CameraUiBridge.switchShellTabCallback?.call(2);
+      return;
+    }
 
-  void _showHelpSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _buildHelpSheet(context),
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder:
+            (context) => ServerPage(
+              showBackButton: !widget.shellMode,
+              showShellChrome: widget.shellMode,
+              previewHasSynced: _isPreviewMode ? false : null,
+            ),
+      ),
     );
   }
 
-  /// Builds the actual widget that appears in the bottom sheet
-  Widget _buildHelpSheet(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+  Widget _noticeCard({
+    required IconData icon,
+    required Color color,
+    required String message,
+    required String actionLabel,
+    required VoidCallback onPressed,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: SeclusoGlassCard(
+        borderRadius: 24,
+        tint: color.withValues(alpha: 0.08),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[400],
-                borderRadius: BorderRadius.circular(2),
+            Icon(icon, color: color, size: 18),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
-            const SizedBox(height: 16),
-            Row(
-              children: const [
-                Icon(Icons.help_outline, size: 24),
-                SizedBox(width: 8),
-                Text(
-                  'Need Help?',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            TextButton(onPressed: onPressed, child: Text(actionLabel)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _notificationWarningCard() {
+    return _noticeCard(
+      icon: Icons.notifications_off_outlined,
+      color: SeclusoColors.warning,
+      message:
+          'Notifications are disabled. Turn them back on if you want motion and camera health alerts.',
+      actionLabel: 'Fix',
+      onPressed: openAppSettings,
+    );
+  }
+
+  Widget _primaryHeroBackground(String? cameraName) {
+    if (cameraName == null) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              SeclusoColors.nightRaised,
+              SeclusoColors.nightSoft,
+              SeclusoColors.ink,
+            ],
+          ),
+        ),
+      );
+    }
+
+    final previewAsset =
+        cameras.firstWhereOrNull(
+              (camera) => camera['name'] == cameraName,
+            )?['previewAsset']
+            as String?;
+    if (previewAsset != null) {
+      return Image.asset(previewAsset, fit: BoxFit.cover);
+    }
+
+    final initial = _thumbCache[cameraName];
+    return FutureBuilder<Uint8List?>(
+      future: _generateThumb(cameraName),
+      initialData: initial,
+      builder: (context, snapshot) {
+        final bytes = snapshot.data ?? initial;
+        if (bytes == null) {
+          return const Image(
+            image: AssetImage('assets/android_thumbnail_placeholder.jpeg'),
+            fit: BoxFit.cover,
+          );
+        }
+        return Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true);
+      },
+    );
+  }
+
+  Widget _overviewCard(bool serverHasSynced) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final unreadCount =
+        cameras.where((camera) => camera['unreadMessages'] == true).length;
+    final primaryCameraName =
+        cameras.isEmpty ? null : cameras.first['name'] as String;
+    final subtitle =
+        serverHasSynced
+            ? 'Open the main room. Review saved moments.'
+            : 'Connect the relay first, then bring the first feed into a system that actually belongs to you.';
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 20),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color:
+              dark
+                  ? const Color(0xFF0C0D10)
+                  : Colors.white.withValues(alpha: 0.96),
+          borderRadius: BorderRadius.circular(34),
+          border:
+              dark ? null : Border.all(color: theme.colorScheme.outlineVariant),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(34),
+          child: SizedBox(
+            height: 356,
+            child: Column(
+              children: [
+                Expanded(
+                  flex: 7,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Positioned.fill(
+                        child: _primaryHeroBackground(primaryCameraName),
+                      ),
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withValues(alpha: 0.02),
+                                Colors.black.withValues(alpha: 0.12),
+                                Colors.black.withValues(
+                                  alpha: dark ? 0.46 : 0.26,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 18,
+                        top: 18,
+                        child: SeclusoStatusChip(
+                          label: unreadCount > 0 ? 'Primary room' : 'Ready now',
+                          color:
+                              unreadCount > 0
+                                  ? SeclusoColors.warning
+                                  : SeclusoColors.success,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  flex: 6,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 12, 22, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          primaryCameraName ?? 'Your private camera network',
+                          style: theme.editorialHero(fontSize: 24),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.72,
+                            ),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '${cameras.length} cameras · ${serverHasSynced ? 'relay linked' : 'relay needed'} · ${unreadCount > 0 ? '$unreadCount waiting' : 'quiet'}',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.onSurface.withValues(
+                              alpha: 0.72,
+                            ),
+                            fontSize: 12,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (primaryCameraName == null)
+                          FilledButton(
+                            onPressed:
+                                () =>
+                                    _openPrimaryFlow(context, serverHasSynced),
+                            child: Text(
+                              serverHasSynced ? 'Add camera' : 'Connect server',
+                            ),
+                          )
+                        else
+                          Row(
+                            children: [
+                              Expanded(
+                                child: FilledButton(
+                                  onPressed:
+                                      () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder:
+                                              (_) => CameraViewPage(
+                                                cameraName: primaryCameraName,
+                                              ),
+                                        ),
+                                      ),
+                                  child: const Text('Open feed'),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              OutlinedButton(
+                                onPressed:
+                                    () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder:
+                                            (_) => const ShowNewCameraOptions(),
+                                      ),
+                                    ),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size(0, 48),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 14,
+                                  ),
+                                ),
+                                child: const Text('Add'),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            const Text(
-              "• Tap a camera card to see its list of videos.\n"
-              "• Long press a camera card to remove it and all of its videos.\n"
-              "• Use the + button to pair a new camera.",
-              style: TextStyle(fontSize: 16, height: 1.4),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyStateCard(bool serverHasSynced) {
+    final headline =
+        serverHasSynced ? 'Start with one feed.' : 'Link the relay first.';
+    final subtitle =
+        serverHasSynced
+            ? 'Your relay is ready. Add the first camera and keep every clip on your side.'
+            : 'Connect the private relay first, then bring cameras into a system that belongs to you.';
+    final action =
+        serverHasSynced ? 'Add your first camera' : 'Connect your server';
+    final imagePath =
+        serverHasSynced
+            ? SeclusoPreviewAssets.tabletopCamera
+            : SeclusoPreviewAssets.relayDevice;
+    final imageAlignment =
+        serverHasSynced ? Alignment.centerRight : Alignment.centerRight;
+    final imageScale = serverHasSynced ? 1.02 : 1.08;
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color:
+              dark
+                  ? const Color(0xFF0C0D0F)
+                  : Colors.white.withValues(alpha: 0.96),
+          borderRadius: BorderRadius.circular(34),
+          border:
+              dark ? null : Border.all(color: theme.colorScheme.outlineVariant),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(34),
+          child: SizedBox(
+            height: 428,
+            child: Column(
+              children: [
+                Expanded(
+                  flex: 10,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Positioned.fill(
+                        child: Transform.scale(
+                          scale: imageScale,
+                          alignment: imageAlignment,
+                          child: Image.asset(
+                            imagePath,
+                            fit: BoxFit.cover,
+                            alignment: imageAlignment,
+                          ),
+                        ),
+                      ),
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withValues(alpha: 0.02),
+                                Colors.black.withValues(alpha: 0.08),
+                                Colors.black.withValues(alpha: 0.36),
+                                Colors.black.withValues(alpha: 0.72),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                              colors: [
+                                Colors.black.withValues(alpha: 0.26),
+                                Colors.transparent,
+                                Colors.transparent,
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+                        child: Align(
+                          alignment: Alignment.topLeft,
+                          child: SeclusoStatusChip(
+                            label:
+                                serverHasSynced
+                                    ? 'Server linked'
+                                    : 'Private relay',
+                            color:
+                                serverHasSynced
+                                    ? SeclusoColors.success
+                                    : SeclusoColors.blue,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  flex: 11,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors:
+                            dark
+                                ? const [Color(0xFF101114), Color(0xFF09090A)]
+                                : const [Color(0xFFF7F4EE), Color(0xFFF1ECE2)],
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 272),
+                            child: Text(
+                              headline,
+                              style: theme.editorialHero(fontSize: 31),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 284),
+                            child: Text(
+                              subtitle,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.72,
+                                ),
+                                fontSize: 15,
+                                height: 1.42,
+                              ),
+                            ),
+                          ),
+                          const Spacer(),
+                          FilledButton(
+                            onPressed:
+                                () =>
+                                    _openPrimaryFlow(context, serverHasSynced),
+                            child: Text(action),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text("OK, GOT IT"),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -908,11 +1627,15 @@ class CamerasPageState extends State<CamerasPage>
 
   @override
   Widget build(BuildContext context) {
+    if (_isPreviewMode) {
+      return _buildPage(widget.previewServerHasSynced ?? false);
+    }
+
     return FutureBuilder<SharedPreferences>(
       future: _prefsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(
+          return const SeclusoScaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
@@ -920,298 +1643,291 @@ class CamerasPageState extends State<CamerasPage>
         final prefs = snapshot.data!;
         final serverHasSynced = prefs.containsKey(PrefKeys.serverUsername);
 
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('Cameras', style: TextStyle(color: Colors.white)),
-            backgroundColor: const Color.fromARGB(255, 139, 179, 238),
-            leading: IconButton(
-              icon: const Icon(Icons.menu, color: Colors.white),
-              onPressed: () {
-                scaffoldKey.currentState?.openDrawer();
-              },
-            ),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.help_outline, color: Colors.white),
-                tooltip: "Need Help?",
-                onPressed: () => _showHelpSheet(context),
-              ),
-              IconButton(
-                icon: const Icon(Icons.copy, color: Colors.white),
-                tooltip: "Copy logs",
-                onPressed: () => _copyLogs(context),
-              ),
-            ],
-          ),
-          body:
-              cameras.isEmpty
-                  ? Column(
-                    children: [
-                      if (_showRecentError) _recentErrorBanner(),
-                      Expanded(
-                        child: Center(
-                          child: Container(
-                            margin: const EdgeInsets.all(24),
-                            padding: const EdgeInsets.all(24),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: Colors.black26,
-                                  offset: Offset(0, 4),
-                                  blurRadius: 6,
-                                ),
-                              ],
-                              gradient: const LinearGradient(
-                                colors: [
-                                  Color.fromARGB(255, 139, 179, 238),
-                                  Color.fromARGB(255, 113, 160, 231),
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: BackdropFilter(
-                                filter: ImageFilter.blur(
-                                  sigmaX: 12,
-                                  sigmaY: 12,
-                                ),
-                                child: Container(
-                                  padding: const EdgeInsets.all(24),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: Colors.white.withOpacity(0.2),
-                                    ),
-                                  ),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Lottie.asset(
-                                        'assets/animations/lock_animation.json',
-                                        width: 180,
-                                        controller: _controller,
-                                        onLoaded: (composition) {
-                                          _controller.duration =
-                                              composition.duration;
+        return _buildPage(serverHasSynced);
+      },
+    );
+  }
 
-                                          if (!_hasPlayedLockAnimation) {
-                                            _controller.forward();
-                                            _hasPlayedLockAnimation = true;
-                                          }
-                                        },
-                                      ),
-
-                                      const Text(
-                                        'Private. Secure. Yours.',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      const Text(
-                                        'End-to-end encrypted access. Always.',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontStyle: FontStyle.italic,
-                                          color: Colors.white60,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      const Text(
-                                        'You’re in control.',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: Colors.white54,
-                                        ),
-                                      ),
-
-                                      const SizedBox(height: 16),
-                                      ElevatedButton(
-                                        onPressed: () async {
-                                          if (serverHasSynced) {
-                                            await Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder:
-                                                    (context) =>
-                                                        const ShowNewCameraOptions(),
-                                              ),
-                                            );
-                                          } else {
-                                            await Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder:
-                                                    (context) => ServerPage(
-                                                      showBackButton: true,
-                                                    ),
-                                              ),
-                                            );
-                                          }
-                                        },
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.white,
-                                          foregroundColor: const Color.fromARGB(
-                                            255,
-                                            139,
-                                            179,
-                                            238,
-                                          ),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(12),
-                                          ),
-                                        ),
-                                        child:
-                                            !serverHasSynced
-                                                ? const Text(
-                                                  "Connect to Your Server",
-                                                )
-                                                : const Text(
-                                                  "Add Your First Camera",
-                                                ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  )
-                  : Column(
-                    children: [
-                      if (_showRecentError) _recentErrorBanner(),
-                      if (_showNotificationWarning)
-                        Container(
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.shade100,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.orange),
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Icon(
-                                Icons.notifications_off,
-                                color: Colors.orange,
-                              ),
-                              const SizedBox(width: 12),
-                              const Expanded(
-                                child: Text(
-                                  'Notifications are disabled.\nPlease enable them in Settings to receive alerts.',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                              ),
-                              TextButton(
-                                onPressed: openAppSettings,
-                                child: const Text(
-                                  'Fix',
-                                  style: TextStyle(
-                                    color: Colors.orange,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                      // The camera list fills the rest
-                      Expanded(
-                        child: ListView.builder(
-                          padding: const EdgeInsets.symmetric(vertical: 5),
-                          itemCount: cameras.length,
-                          itemBuilder: (context, index) {
-                            final camera = cameras[index];
-
-                            return CameraCard(
-                              key: ValueKey(camera["name"]),
-                              cameraName: camera["name"],
-                              icon: camera["icon"],
-                              unreadMessages: camera["unreadMessages"],
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-
-          // Floating Action Button for pairing a new camera via QR
-          floatingActionButton:
-              cameras.isNotEmpty
-                  ? Padding(
-                    padding: const EdgeInsets.only(right: 16.0, bottom: 16.0),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // The text box
-                        if (!serverHasSynced)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Text(
-                              'No server connection!',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 14,
-                                height: 1.4,
-                                color: Colors.red,
-                              ),
-                            ),
-                          ),
-                        if (!serverHasSynced) const SizedBox(width: 12),
-
-                        // The floating action button
-                        FloatingActionButton(
-                          onPressed: () async {
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder:
-                                    (context) => const ShowNewCameraOptions(),
-                              ),
-                            );
-                          },
-                          backgroundColor: const Color.fromARGB(
-                            255,
-                            139,
-                            179,
-                            238,
-                          ),
-                          tooltip: "Pair New Camera",
-                          child: const Icon(Icons.add, color: Colors.white),
-                        ),
-                      ],
+  Widget _buildPage(bool serverHasSynced) {
+    if (widget.shellMode) {
+      final shellCameraSource =
+          cameras.isNotEmpty || _hasCompletedCameraLoad
+              ? cameras
+              : _lastNonEmptyShellCameras;
+      final shellRecentEventSource =
+          _liveRecentEvents.isNotEmpty || _hasCompletedCameraLoad
+              ? _liveRecentEvents
+              : _lastNonEmptyShellRecentEvents;
+      final homeCameras =
+          shellCameraSource
+              .map(
+                (camera) => ShellHomeCamera(
+                  name: camera['name'] as String,
+                  previewAssetPath: camera['previewAsset'] as String?,
+                  thumbnailBytes: camera['thumbnailBytes'] as Uint8List?,
+                  hasUnreadActivity: camera['unreadMessages'] as bool? ?? false,
+                  statusLabel: camera['statusLabel'] as String?,
+                  recentActivityTitle: camera['recentActivityTitle'] as String?,
+                  recentActivityTimeLabel:
+                      camera['recentActivityTimeLabel'] as String?,
+                  isLive: camera['isLive'] as bool? ?? true,
+                  isOffline: camera['isOffline'] as bool? ?? false,
+                ),
+              )
+              .toList();
+      final recentEvents =
+          widget.previewRecentEvents != null
+              ? widget.previewRecentEvents!
+                  .map(
+                    (event) => ShellHomeEvent(
+                      title: event.title,
+                      subtitle: event.subtitle,
+                      timeLabel: event.timeLabel,
+                      previewAssetPath: event.previewAssetPath,
+                      accentColor: event.accentColor,
+                      videoName: event.videoName,
+                      detections: event.detections,
+                      motion: event.motion,
+                      canDownload: event.canDownload,
                     ),
                   )
-                  : null,
-        );
-      },
+                  .toList()
+              : shellRecentEventSource
+                  .map(
+                    (event) => ShellHomeEvent(
+                      title: event['title'] as String,
+                      subtitle: event['subtitle'] as String,
+                      timeLabel: event['timeLabel'] as String,
+                      previewAssetPath: null,
+                      thumbnailBytes: event['thumbnailBytes'] as Uint8List?,
+                      accentColor: event['accentColor'] as Color,
+                      videoName: event['videoName'] as String?,
+                      detections:
+                          (event['detections'] as Set<String>?) ??
+                          const <String>{},
+                      motion: event['motion'] as bool? ?? true,
+                      canDownload: event['canDownload'] as bool? ?? false,
+                    ),
+                  )
+                  .toList();
+      return ShellHomePage(
+        relayConnected: serverHasSynced,
+        cameras: homeCameras,
+        recentEvents: recentEvents,
+        unreadCount:
+            widget.previewUnreadCount ??
+            cameras.where((camera) => camera["unreadMessages"] == true).length,
+        showErrorCard: _isPreviewMode ? _showRecentError : false,
+        showOfflineExample: widget.previewShowNotificationWarning,
+        onOpenRelaySetup: () => _openPrimaryFlow(context, false),
+      );
+    }
+
+    final secondaryCameras = cameras.skip(1).toList();
+    return SeclusoScaffold(
+      appBar:
+          widget.shellMode
+              ? null
+              : seclusoAppBar(
+                context,
+                title: 'Cameras',
+                leading:
+                    _isPreviewMode && Navigator.of(context).canPop()
+                        ? IconButton(
+                          icon: const Icon(Icons.arrow_back),
+                          onPressed: () => Navigator.of(context).maybePop(),
+                        )
+                        : IconButton(
+                          icon: const Icon(Icons.menu),
+                          onPressed: () {
+                            scaffoldKey.currentState?.openDrawer();
+                          },
+                        ),
+                actions: [
+                  if (_showRecentError)
+                    IconButton(
+                      icon: const Icon(Icons.copy_all_outlined),
+                      tooltip: "Copy logs",
+                      onPressed: () => _copyLogs(context),
+                    ),
+                ],
+              ),
+      body: SafeArea(
+        top: true,
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            widget.shellMode ? 22 : 16,
+            20,
+            widget.shellMode ? 132 : 36,
+          ),
+          children: [
+            if (widget.shellMode)
+              _ShellControlHeader(
+                hasCameras: cameras.isNotEmpty,
+                unreadCount:
+                    cameras
+                        .where((camera) => camera["unreadMessages"] == true)
+                        .length,
+              )
+            else
+              SeclusoSectionIntro(
+                eyebrow: 'Control room',
+                title:
+                    cameras.isEmpty
+                        ? 'See everything. Share nothing.'
+                        : 'Run the private camera network.',
+                subtitle:
+                    cameras.isEmpty
+                        ? 'A premium overview of feeds, relay state, and the first steps into your encrypted camera system.'
+                        : 'Lead with the primary room, surface activity faster, and keep the system status legible above the fold.',
+                editorial: true,
+              ),
+            const SizedBox(height: 14),
+            SeclusoSystemStrip(
+              items: [
+                SeclusoSystemStripItem(
+                  label: 'Relay',
+                  value: serverHasSynced ? 'Linked' : 'Waiting',
+                  color:
+                      serverHasSynced
+                          ? SeclusoColors.success
+                          : SeclusoColors.blue,
+                ),
+                SeclusoSystemStripItem(
+                  label: 'Cameras',
+                  value: '${cameras.length}',
+                  color: SeclusoColors.blueSoft,
+                ),
+                SeclusoSystemStripItem(
+                  label: 'Unread',
+                  value:
+                      '${cameras.where((camera) => camera["unreadMessages"] == true).length}',
+                  color: SeclusoColors.warning,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (cameras.isEmpty)
+              _emptyStateCard(serverHasSynced)
+            else
+              _overviewCard(serverHasSynced),
+            if (_showRecentError) _recentErrorBanner(),
+            if (_showNotificationWarning) _notificationWarningCard(),
+            if (cameras.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              SeclusoUtilityCard(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                child: SeclusoFlatRow(
+                  leading: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: SeclusoColors.blue.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(Icons.motion_photos_on_outlined),
+                  ),
+                  eyebrow: 'Fast review',
+                  title: 'Recent activity',
+                  subtitle: 'Review the latest saved moments from here.',
+                  onTap:
+                      () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AppShell(initialIndex: 1),
+                        ),
+                      ),
+                ),
+              ),
+            ],
+            if (secondaryCameras.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(0, 18, 0, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Camera rail'.toUpperCase(),
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: SeclusoColors.blue,
+                          letterSpacing: 2.2,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${secondaryCameras.length}',
+                      style: Theme.of(context).textTheme.labelMedium,
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(
+                height: 268,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.only(right: 4),
+                  itemCount: secondaryCameras.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 12),
+                  itemBuilder: (context, index) {
+                    final camera = secondaryCameras[index];
+                    return CameraCard(
+                      key: ValueKey(camera["name"]),
+                      cameraName: camera["name"],
+                      icon: camera["icon"],
+                      unreadMessages: camera["unreadMessages"],
+                      previewAssetPath: camera["previewAsset"] as String?,
+                      enableInteractions: !_isPreviewMode,
+                    );
+                  },
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ShellControlHeader extends StatelessWidget {
+  const _ShellControlHeader({
+    required this.hasCameras,
+    required this.unreadCount,
+  });
+
+  final bool hasCameras;
+  final int unreadCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'PRIVATE CONTROL ROOM',
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: SeclusoColors.blue,
+            letterSpacing: 2.1,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          hasCameras ? 'Private overview' : 'Ready for first setup',
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontSize: 28,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          unreadCount > 0
+              ? 'Check camera state, unread activity, and the next action.'
+              : 'A quieter overview of the camera network.',
+          style: theme.textTheme.bodySmall,
+        ),
+      ],
     );
   }
 }

@@ -274,24 +274,29 @@ class PushNotificationService {
         return;
       }
 
-      if (!FirebaseInit.isInitialized) {
-        Log.d("Skipping FCM token upload; Firebase not initialized");
-        return;
-      }
-      final messaging = FirebaseMessaging.instance;
       final prefs = await SharedPreferences.getInstance();
+      final hasServerCredentials = _hasServerCredentials(prefs);
+      final firebaseReady = FirebaseInit.isInitialized;
+      FirebaseMessaging? messaging;
+      if (!firebaseReady) {
+        Log.d(
+          "Firebase not initialized; skipping Android FCM token work but still allowing notification target upload",
+        );
+      } else {
+        messaging = FirebaseMessaging.instance;
+      }
+
       var needUpdate = prefs.getBool(PrefKeys.needUpdateFcmToken) ?? false;
       var token = prefs.getString(PrefKeys.fcmToken) ?? '';
-      final credentials = prefs.getString(PrefKeys.serverUsername) ?? '';
 
-      if (token.isEmpty) {
+      if (firebaseReady && token.isEmpty) {
         var android = Platform.isAndroid;
         Log.d("Attempting to capture token $android");
         if (Platform.isAndroid ||
-            (Platform.isIOS && await messaging.getAPNSToken() != null)) {
+            (Platform.isIOS && await messaging!.getAPNSToken() != null)) {
           Log.d("Entered capturing area");
 
-          final tok = await messaging.getToken();
+          final tok = await messaging!.getToken();
           Log.d("Set FCM token to $tok");
           if (tok != null) {
             final prefs = await SharedPreferences.getInstance();
@@ -302,18 +307,34 @@ class PushNotificationService {
         }
       }
 
-      if (credentials.isEmpty || token.isEmpty || (!force && !needUpdate)) {
-        Log.d("Skipping update");
+      if (!hasServerCredentials) {
+        Log.d("Skipping Android push upload; server credentials unavailable");
         return;
       }
 
-      final result = await HttpClientService.instance.uploadFcmToken(token);
-      if (result.isSuccess) {
-        prefs.setBool(PrefKeys.needUpdateFcmToken, false);
-        Log.d('[FCM] token re‑uploaded');
+      final shouldUploadFcmToken =
+          firebaseReady && token.isNotEmpty && (force || needUpdate);
+      if (shouldUploadFcmToken) {
+        final result = await HttpClientService.instance.uploadFcmToken(token);
+        if (result.isSuccess) {
+          prefs.setBool(PrefKeys.needUpdateFcmToken, false);
+          Log.d('[FCM] token re-uploaded');
+        } else {
+          prefs.setBool(PrefKeys.needUpdateFcmToken, true);
+          Log.d('[FCM] token upload failed');
+        }
       } else {
-        prefs.setBool(PrefKeys.needUpdateFcmToken, true);
-        Log.d('[FCM] token upload failed');
+        Log.d("Skipping FCM token upload");
+      }
+
+      if (force || token.isNotEmpty) {
+        final targetResult =
+            await HttpClientService.instance.uploadNotificationTarget();
+        if (targetResult.isSuccess) {
+          Log.d('[FCM] Android notification target uploaded');
+        } else {
+          Log.d('[FCM] Android notification target upload failed');
+        }
       }
     } finally {
       _uploadFuture = null;
@@ -687,7 +708,18 @@ class PushNotificationService {
   ) async {
     final box = AppStores.instance.videoStore.box<Video>();
 
-    var videoName = "video_" + timestamp + ".mp4";
+    final videoName = 'video_$timestamp.mp4';
+    final existing =
+        box
+            .query()
+            .build()
+            .find()
+            .any((video) => video.camera == cameraName && video.video == videoName);
+
+    if (existing) {
+      return;
+    }
+
     var video = Video(cameraName, videoName, false, true);
     box.put(video);
   }

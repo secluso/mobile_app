@@ -123,7 +123,14 @@ import workmanager
                     gen.maximumSize = CGSize(width: 80, height: 80)
                 }
 
-                let time = CMTime(seconds: 7, preferredTimescale: 600)
+                let durationSeconds = CMTimeGetSeconds(asset.duration)
+                let targetSeconds: Double
+                if durationSeconds.isFinite && durationSeconds > 0 {
+                    targetSeconds = min(max(durationSeconds * 0.25, 0.25), 1.0)
+                } else {
+                    targetSeconds = 0.5
+                }
+                let time = CMTime(seconds: targetSeconds, preferredTimescale: 600)
 
                 do {
                     let cgImg = try gen.copyCGImage(at: time, actualTime: nil)

@@ -1,6 +1,5 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
-import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 
@@ -24,6 +23,9 @@ class ByteStreamPlayer {
 
   static Future<void> finish(int id) =>
       _ch.invokeMethod('finishStream', {'id': id});
+
+  static Future<void> disposeView(int id) =>
+      _ch.invokeMethod('disposeStreamView', {'id': id});
 
   static Future<int> queueLength(int id) async =>
       await _ch.invokeMethod<int>('qLen', {'id': id}) ?? 0;

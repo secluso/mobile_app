@@ -16,7 +16,8 @@ import 'package:secluso_flutter/src/rust/api/logger.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/notifications/thumbnails.dart';
 import 'package:secluso_flutter/notifications/notifications.dart';
-import 'routes/home_page.dart';
+import 'routes/app_shell.dart';
+import 'routes/design_lab_page.dart';
 import "routes/theme_provider.dart";
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -33,7 +34,8 @@ import 'package:secluso_flutter/utilities/version_gate.dart';
 import 'package:secluso_flutter/utilities/ui_state.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/constants.dart';
-import 'routes/server_page.dart';
+import 'package:secluso_flutter/ui/secluso_surfaces.dart';
+import 'package:secluso_flutter/ui/secluso_theme.dart';
 import 'dart:isolate';
 
 final ReceivePort _mainReceivePort = ReceivePort();
@@ -44,6 +46,22 @@ const _startupPhasePostFirebase = 'post_firebase';
 const _versionCheckRetryDelay = Duration(seconds: 30);
 Timer? _versionCheckRetryTimer;
 bool _versionCheckInFlight = false;
+const bool _launchDesignLab = bool.fromEnvironment(
+  'SECLUSO_DESIGN_LAB',
+  defaultValue: false,
+);
+const bool _launchDesignController = bool.fromEnvironment(
+  'SECLUSO_DESIGN_CONTROLLER',
+  defaultValue: false,
+);
+const String _launchDesignTarget = String.fromEnvironment(
+  'SECLUSO_DESIGN_TARGET',
+  defaultValue: '',
+);
+const String _designCommandFile = String.fromEnvironment(
+  'SECLUSO_DESIGN_COMMAND_FILE',
+  defaultValue: '/tmp/secluso_design_command.txt',
+);
 
 void main() {
   // Wrap main() with a zone so if something throws during init, we still attempt to close the DB.
@@ -56,6 +74,7 @@ void main() {
         Log.i('UI context started (id=$traceId)');
         Log.i('main() started');
         WidgetsFlutterBinding.ensureInitialized();
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
         UiState.markBindingReady();
         FlutterError.onError = (details) {
           Log.e('FlutterError: ${details.exceptionAsString()}');
@@ -327,14 +346,23 @@ class AppBootstrap extends StatefulWidget {
 }
 
 class _AppBootstrapState extends State<AppBootstrap> {
-  final ThemeProvider _themeProvider = ThemeProvider(false);
-  bool _isReady = false;
+  static const bool _designPreviewBoot =
+      kDebugMode &&
+      (_launchDesignLab ||
+          _launchDesignTarget != '' ||
+          _launchDesignController);
+
+  final ThemeProvider _themeProvider = ThemeProvider(_designPreviewBoot);
+  bool _isReady = _designPreviewBoot;
   bool _initStarted = false;
   String? _initError;
 
   @override
   void initState() {
     super.initState();
+    if (_designPreviewBoot) {
+      return;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startInitialization();
     });
@@ -376,47 +404,88 @@ class SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF8BB3EE), Color(0xFF71A0E7)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Image.asset('assets/icon_centered.png', width: 96, height: 96),
-                const SizedBox(height: 16),
-                Text(
-                  'Secluso',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
+    return SeclusoScaffold(
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: SeclusoGlassCard(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 32,
                 ),
-                const SizedBox(height: 8),
-                if (errorMessage == null) ...[
-                  const SizedBox(height: 8),
-                  const CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                ] else
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Text(
-                      errorMessage!,
-                      textAlign: TextAlign.center,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: Colors.white),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SeclusoStatusChip(
+                      label:
+                          errorMessage == null
+                              ? 'Secure startup'
+                              : 'Startup interrupted',
+                      icon:
+                          errorMessage == null
+                              ? Icons.lock_outline
+                              : Icons.report_problem_outlined,
+                      color:
+                          errorMessage == null
+                              ? SeclusoColors.success
+                              : SeclusoColors.warning,
                     ),
-                  ),
-              ],
+                    const SizedBox(height: 24),
+                    Image.asset(
+                      'assets/icon_centered.png',
+                      width: 68,
+                      height: 68,
+                    ),
+                    const SizedBox(height: 18),
+                    RichText(
+                      textAlign: TextAlign.center,
+                      text: TextSpan(
+                        style: Theme.of(context).textTheme.headlineMedium,
+                        children: [
+                          const TextSpan(text: 'Secluso\n'),
+                          TextSpan(
+                            text: 'Share nothing.',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.titleMedium?.copyWith(
+                              color: SeclusoColors.blueSoft,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      errorMessage == null
+                          ? 'Preparing your private camera network and decrypting local state.'
+                          : errorMessage!,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 24),
+                    if (errorMessage == null)
+                      Column(
+                        children: [
+                          const SizedBox(
+                            width: 28,
+                            height: 28,
+                            child: CircularProgressIndicator(strokeWidth: 2.4),
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            'Checking cameras, sync state, and notifications.',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -433,33 +502,29 @@ class VersionBlockScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-
     return Material(
       color: Colors.transparent,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [colors.surface, colors.surfaceVariant],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
+      child: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: SeclusoGlassCard(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    const SeclusoStatusChip(
+                      label: 'Version check required',
+                      color: SeclusoColors.warning,
+                    ),
+                    const SizedBox(height: 20),
                     Image.asset(
                       'assets/icon_centered.png',
-                      width: 96,
-                      height: 96,
+                      width: 68,
+                      height: 68,
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 18),
                     Text(
                       info.title,
                       style: theme.textTheme.headlineSmall,
@@ -471,31 +536,23 @@ class VersionBlockScreen extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodyMedium,
                     ),
-                    const SizedBox(height: 16),
-                    Card(
-                      elevation: 0,
-                      color: colors.surface.withOpacity(0.7),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(
-                          color: colors.outline.withOpacity(0.4),
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          children: [
-                            _VersionRow(
-                              label: 'Server version',
-                              value: info.serverVersion,
-                            ),
-                            const SizedBox(height: 8),
-                            _VersionRow(
-                              label: 'App version',
-                              value: info.clientVersion,
-                            ),
-                          ],
-                        ),
+                    const SizedBox(height: 22),
+                    SeclusoGlassCard(
+                      borderRadius: 22,
+                      padding: const EdgeInsets.all(14),
+                      tint: theme.colorScheme.surface.withValues(alpha: 0.46),
+                      child: Column(
+                        children: [
+                          _VersionRow(
+                            label: 'Server version',
+                            value: info.serverVersion,
+                          ),
+                          const SizedBox(height: 10),
+                          _VersionRow(
+                            label: 'App version',
+                            value: info.clientVersion,
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 18),
@@ -504,12 +561,12 @@ class VersionBlockScreen extends StatelessWidget {
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodySmall,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 18),
                     FilledButton(
                       onPressed: _handleChangeServer,
                       child: const Text('Change server'),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     OutlinedButton(
                       onPressed: _checkServerVersion,
                       child: const Text('Retry version check'),
@@ -576,7 +633,7 @@ Future<void> _handleChangeServer() async {
   }
   await nav.push(
     MaterialPageRoute(
-      builder: (context) => const ServerPage(showBackButton: true),
+      builder: (context) => const AppShell(initialIndex: 2),
     ),
   );
 }
@@ -813,15 +870,32 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   SystemNavigator.pop();
                 }
               },
-              child: HomePage(),
+              child:
+                  kDebugMode
+                      ? (_launchDesignController
+                          ? DesignCommandPage(
+                            commandFilePath: _designCommandFile,
+                          )
+                          : designLabTargetPage(
+                                _launchDesignTarget,
+                                themeName:
+                                    themeProvider.isDarkMode ? 'dark' : 'light',
+                              ) ??
+                              (_launchDesignLab
+                                  ? const DesignLabPage()
+                                  : const AppShell()))
+                      : const AppShell(),
             )
             : SplashScreen(errorMessage: widget.initError);
 
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Secluso Camera',
+      debugShowCheckedModeBanner: false,
       navigatorKey: navigatorKey,
       navigatorObservers: [routeObserver],
-      theme: themeProvider.isDarkMode ? ThemeData.dark() : ThemeData.light(),
+      theme: SeclusoTheme.light(),
+      darkTheme: SeclusoTheme.dark(),
+      themeMode: themeProvider.isDarkMode ? ThemeMode.dark : ThemeMode.light,
       home: home,
       builder: (context, child) {
         final base = child ?? const SizedBox.shrink();

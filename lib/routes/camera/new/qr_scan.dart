@@ -3,17 +3,24 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'dart:async';
+import 'package:secluso_flutter/routes/camera/new/ip_camera_option.dart';
+import 'package:secluso_flutter/routes/camera/new/proprietary_camera_option.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'dart:convert';
+import 'package:secluso_flutter/ui/secluso_surfaces.dart';
+import 'package:secluso_flutter/ui/secluso_theme.dart';
 
 /// This dialog displays the camera preview and scans for a single QR code.
 /// After the first successful scan, it prompts the user for a camera name
 /// and then pops the entire flow with the final data.
 class QrScanDialog extends StatefulWidget {
-  const QrScanDialog({super.key});
+  final String? previewAssetPath;
+
+  const QrScanDialog({super.key, this.previewAssetPath});
 
   @override
   State<QrScanDialog> createState() => _QrScanDialogState();
@@ -27,12 +34,639 @@ class QrScanDialog extends StatefulWidget {
   }
 }
 
+class QrScanPage extends StatelessWidget {
+  const QrScanPage({super.key, this.previewAssetPath});
+
+  final String? previewAssetPath;
+
+  @override
+  Widget build(BuildContext context) {
+    return SeclusoQrScanScreen(
+      title: 'Scan Camera QR',
+      bottomMessage:
+          'Pairing credentials are exchanged\ndirectly between your phone and\ncamera. Nothing is sent to any server.',
+      background:
+          previewAssetPath != null
+              ? Image.asset(previewAssetPath!, fit: BoxFit.cover)
+              : const ColoredBox(color: Color(0xFF050505)),
+      onBack: () => Navigator.of(context).maybePop(),
+    );
+  }
+}
+
+class SeclusoQrScanScreen extends StatelessWidget {
+  const SeclusoQrScanScreen({
+    super.key,
+    required this.title,
+    required this.bottomMessage,
+    required this.background,
+    required this.onBack,
+    this.belowFrameText,
+    this.errorMessage,
+  });
+
+  final String title;
+  final String bottomMessage;
+  final Widget background;
+  final VoidCallback onBack;
+  final String? belowFrameText;
+  final String? errorMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final secondaryTextColor = Colors.white.withValues(alpha: 0.4);
+    final securityCardColor = Colors.black.withValues(alpha: 0.52);
+    final securityBorderColor = Colors.white.withValues(alpha: 0.12);
+    final securityIconColor = Colors.white.withValues(alpha: 0.3);
+
+    return SeclusoScaffold(
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final metrics = _QrScanMetrics.forWidth(constraints.maxWidth);
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              background,
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.24),
+                      Colors.black.withValues(alpha: 0.08),
+                      Colors.black.withValues(alpha: 0.18),
+                    ],
+                    stops: const [0.0, 0.42, 1.0],
+                  ),
+                ),
+              ),
+              SafeArea(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    metrics.sideInset,
+                    metrics.topInset,
+                    metrics.sideInset,
+                    metrics.bottomInset,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        height: metrics.headerHeight,
+                        child: Row(
+                          children: [
+                            _BackCircle(
+                              size: metrics.backButtonSize,
+                              iconSize: metrics.backIconSize,
+                              fillColor: Colors.white.withValues(alpha: 0.06),
+                              iconColor: Colors.white,
+                              onTap: onBack,
+                            ),
+                            SizedBox(width: metrics.headerGap),
+                            Text(
+                              title,
+                              style: GoogleFonts.inter(
+                                textStyle: theme.textTheme.titleLarge,
+                                color: Colors.white,
+                                fontSize: metrics.headerTitleSize,
+                                fontWeight: FontWeight.w600,
+                                height: 28 / 18,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: metrics.headerToFrameGap),
+                      const Spacer(),
+                      Center(
+                        child: SizedBox(
+                          width: metrics.frameSize,
+                          height: metrics.frameSize,
+                          child: _QrScanPageFrame(
+                            metrics: metrics,
+                            cornerColor:
+                                const Color(0xFF8BB3EE),
+                            scanLineColor: const Color(0xFF8BB3EE),
+                          ),
+                        ),
+                      ),
+                      if (belowFrameText != null) ...[
+                        SizedBox(height: metrics.frameToTitleGap),
+                        Center(
+                          child: SizedBox(
+                            width: metrics.titleBlockWidth,
+                            child: Text(
+                              belowFrameText!,
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(
+                                textStyle: theme.textTheme.titleLarge,
+                                color: Colors.white,
+                                fontSize: metrics.titleSize,
+                                fontWeight: FontWeight.w600,
+                                height: 22.5 / 15,
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: metrics.titleToBodyGap * 0.35),
+                      ] else ...[
+                        SizedBox(height: metrics.frameToTitleGap * 0.45),
+                      ],
+                      const Spacer(),
+                      Container(
+                        constraints: BoxConstraints(
+                          minHeight: metrics.securityCardHeight,
+                        ),
+                        decoration: BoxDecoration(
+                          color: securityCardColor,
+                          borderRadius: BorderRadius.circular(
+                            metrics.securityCardRadius,
+                          ),
+                          border: Border.all(color: securityBorderColor),
+                        ),
+                        padding: EdgeInsets.fromLTRB(
+                          metrics.securityCardInset,
+                          metrics.securityCardInset,
+                          metrics.securityCardInset,
+                          metrics.securityCardInset,
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: EdgeInsets.only(
+                                top: metrics.securityIconTopInset,
+                              ),
+                              child: _QrSecurityLockIcon(
+                                size: metrics.securityIconSize,
+                                color: securityIconColor,
+                              ),
+                            ),
+                            SizedBox(width: metrics.securityTextGap),
+                            Expanded(
+                              child: Text(
+                                bottomMessage,
+                                style: GoogleFonts.inter(
+                                  textStyle: theme.textTheme.bodySmall,
+                                  color: secondaryTextColor,
+                                  fontSize: metrics.securityTextSize,
+                                  fontWeight: FontWeight.w400,
+                                  height: 16.25 / 10,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (errorMessage != null) ...[
+                        SizedBox(height: 12 * metrics.scale),
+                        Center(
+                          child: Text(
+                            errorMessage!,
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              textStyle: theme.textTheme.bodySmall,
+                              color: const Color(0xFFEF4444),
+                              fontSize: metrics.bodySize,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+enum GenericCameraQrKind { proprietary, ip }
+
+class GenericCameraQrPayload {
+  const GenericCameraQrPayload._({
+    required this.kind,
+    this.rawQrBytes,
+    this.initialCameraName,
+    this.initialCameraIp,
+  });
+
+  final GenericCameraQrKind kind;
+  final Uint8List? rawQrBytes;
+  final String? initialCameraName;
+  final String? initialCameraIp;
+
+  factory GenericCameraQrPayload.proprietary(Uint8List rawQrBytes) {
+    return GenericCameraQrPayload._(
+      kind: GenericCameraQrKind.proprietary,
+      rawQrBytes: rawQrBytes,
+    );
+  }
+
+  factory GenericCameraQrPayload.ip({
+    String? initialCameraName,
+    String? initialCameraIp,
+  }) {
+    return GenericCameraQrPayload._(
+      kind: GenericCameraQrKind.ip,
+      initialCameraName: initialCameraName,
+      initialCameraIp: initialCameraIp,
+    );
+  }
+}
+
+class GenericCameraQrScanPage extends StatefulWidget {
+  const GenericCameraQrScanPage({super.key});
+
+  static Future<Map<String, Object>?> show(BuildContext context) {
+    return Navigator.of(context).push<Map<String, Object>?>(
+      MaterialPageRoute<Map<String, Object>?>(
+        fullscreenDialog: true,
+        builder: (_) => const GenericCameraQrScanPage(),
+      ),
+    );
+  }
+
+  @override
+  State<GenericCameraQrScanPage> createState() =>
+      _GenericCameraQrScanPageState();
+}
+
+class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage> {
+  final MobileScannerController _cameraController = MobileScannerController();
+  bool _handlingScan = false;
+  String? _errorMessage;
+  Timer? _errorTimer;
+
+  @override
+  void dispose() {
+    _errorTimer?.cancel();
+    _cameraController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleDetectedBarcode(BarcodeCapture capture) async {
+    if (_handlingScan) return;
+    for (final barcode in capture.barcodes) {
+      final text = barcode.rawValue?.trim();
+      if (text == null || text.isEmpty) {
+        continue;
+      }
+      final payload = _parseCameraQr(text);
+      if (payload == null) {
+        _showInvalidQrCode('Unsupported camera QR code.');
+        continue;
+      }
+
+      _handlingScan = true;
+      await _cameraController.stop();
+
+      Map<String, Object>? result;
+      switch (payload.kind) {
+        case GenericCameraQrKind.proprietary:
+          result =
+              await ProprietaryCameraConnectDialog.showProprietaryCameraSetupFlow(
+                context,
+                initialQrCode: payload.rawQrBytes,
+              );
+        case GenericCameraQrKind.ip:
+          result = await IpCameraDialog.showIpCameraPopup(
+            context,
+            initialCameraName: payload.initialCameraName,
+            initialCameraIp: payload.initialCameraIp,
+          );
+      }
+
+      if (!mounted) return;
+
+      if (result != null) {
+        Navigator.of(context).pop(result);
+        return;
+      }
+
+      _handlingScan = false;
+      await _cameraController.start();
+      break;
+    }
+  }
+
+  GenericCameraQrPayload? _parseCameraQr(String rawValue) {
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(rawValue);
+    } catch (_) {
+      decoded = null;
+    }
+
+    if (decoded is Map) {
+      final versionKey = decoded['v'];
+      final cameraSecret = decoded['cs'];
+      if (versionKey is String &&
+          cameraSecret is String &&
+          versionKey == Constants.cameraQrCodeVersion) {
+        try {
+          final rawBytes = base64Decode(cameraSecret);
+          if (rawBytes.length == Constants.numCameraSecretBytes) {
+            return GenericCameraQrPayload.proprietary(rawBytes);
+          }
+        } catch (_) {}
+
+        // Placeholder for future generic QR support:
+        // when camera QR payloads include a dedicated type/IP field,
+        // route that branch into GenericCameraQrPayload.ip(...).
+        //
+        // Example future shape:
+        // final type = decoded['type'];
+        // final cameraIp = decoded['cameraIp'];
+        // if (type == 'ip' && cameraIp is String && cameraIp.isNotEmpty) {
+        //   return GenericCameraQrPayload.ip(initialCameraIp: cameraIp);
+        // }
+      }
+    }
+
+    return null;
+  }
+
+  void _showInvalidQrCode(String message) {
+    if (_errorMessage != null) return;
+
+    setState(() {
+      _errorMessage = message;
+    });
+    _errorTimer?.cancel();
+    _errorTimer = Timer(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = null;
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SeclusoQrScanScreen(
+      title: 'Scan Camera QR',
+      bottomMessage:
+          'Supported QR types are interpreted locally on this phone. Unsupported QR codes are ignored and never sent to any server.',
+      background: MobileScanner(
+        controller: _cameraController,
+        onDetect: _handleDetectedBarcode,
+      ),
+      onBack: () => Navigator.of(context).maybePop(),
+      errorMessage: _errorMessage,
+    );
+  }
+}
+
+class _QrScanMetrics {
+  const _QrScanMetrics({
+    required this.scale,
+    required this.sideInset,
+    required this.topInset,
+    required this.bottomInset,
+    required this.headerHeight,
+    required this.backButtonSize,
+    required this.backIconSize,
+    required this.headerGap,
+    required this.headerTitleSize,
+    required this.headerToFrameGap,
+    required this.frameSize,
+    required this.cornerSize,
+    required this.cornerRadius,
+    required this.cornerStroke,
+    required this.scanLineInset,
+    required this.scanLineTopInset,
+    required this.scanLineHeight,
+    required this.frameToTitleGap,
+    required this.titleBlockWidth,
+    required this.titleSize,
+    required this.titleToBodyGap,
+    required this.bodyBlockWidth,
+    required this.bodySize,
+    required this.securityCardHeight,
+    required this.securityCardRadius,
+    required this.securityCardInset,
+    required this.securityIconSize,
+    required this.securityIconTopInset,
+    required this.securityTextGap,
+    required this.securityTextSize,
+  });
+
+  final double scale;
+  final double sideInset;
+  final double topInset;
+  final double bottomInset;
+  final double headerHeight;
+  final double backButtonSize;
+  final double backIconSize;
+  final double headerGap;
+  final double headerTitleSize;
+  final double headerToFrameGap;
+  final double frameSize;
+  final double cornerSize;
+  final double cornerRadius;
+  final double cornerStroke;
+  final double scanLineInset;
+  final double scanLineTopInset;
+  final double scanLineHeight;
+  final double frameToTitleGap;
+  final double titleBlockWidth;
+  final double titleSize;
+  final double titleToBodyGap;
+  final double bodyBlockWidth;
+  final double bodySize;
+  final double securityCardHeight;
+  final double securityCardRadius;
+  final double securityCardInset;
+  final double securityIconSize;
+  final double securityIconTopInset;
+  final double securityTextGap;
+  final double securityTextSize;
+
+  factory _QrScanMetrics.forWidth(double width) {
+    final scale = width / 290;
+    double scaled(double value) => value * scale;
+    return _QrScanMetrics(
+      scale: scale,
+      sideInset: scaled(24),
+      topInset: scaled(12),
+      bottomInset: scaled(18),
+      headerHeight: scaled(32),
+      backButtonSize: scaled(32),
+      backIconSize: scaled(16),
+      headerGap: scaled(12),
+      headerTitleSize: scaled(18),
+      headerToFrameGap: scaled(60),
+      frameSize: scaled(192),
+      cornerSize: scaled(32),
+      cornerRadius: scaled(8),
+      cornerStroke: scaled(2),
+      scanLineInset: scaled(16),
+      scanLineTopInset: scaled(95.0),
+      scanLineHeight: scaled(2),
+      frameToTitleGap: scaled(34),
+      titleBlockWidth: scaled(188),
+      titleSize: scaled(15),
+      titleToBodyGap: scaled(16),
+      bodyBlockWidth: scaled(210),
+      bodySize: scaled(11),
+      securityCardHeight: scaled(74.75),
+      securityCardRadius: scaled(12),
+      securityCardInset: scaled(12),
+      securityIconSize: scaled(14),
+      securityIconTopInset: scaled(2),
+      securityTextGap: scaled(12),
+      securityTextSize: scaled(10),
+    );
+  }
+}
+
+class _QrScanPageFrame extends StatefulWidget {
+  const _QrScanPageFrame({
+    required this.metrics,
+    required this.cornerColor,
+    required this.scanLineColor,
+  });
+
+  final _QrScanMetrics metrics;
+  final Color cornerColor;
+  final Color scanLineColor;
+
+  @override
+  State<_QrScanPageFrame> createState() => _QrScanPageFrameState();
+}
+
+class _QrScanPageFrameState extends State<_QrScanPageFrame>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final metrics = widget.metrics;
+    final cornerColor = widget.cornerColor;
+    final scanLineColor = widget.scanLineColor;
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final pulse =
+            CurvedAnimation(parent: _controller, curve: Curves.easeInOut).value;
+        return Stack(
+          children: [
+            for (final alignment in const [
+              Alignment.topLeft,
+              Alignment.topRight,
+              Alignment.bottomLeft,
+              Alignment.bottomRight,
+            ])
+              Align(
+                alignment: alignment,
+                child: Container(
+                  width: metrics.cornerSize,
+                  height: metrics.cornerSize,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.only(
+                      topLeft:
+                          alignment == Alignment.topLeft
+                              ? Radius.circular(metrics.cornerRadius)
+                              : Radius.zero,
+                      topRight:
+                          alignment == Alignment.topRight
+                              ? Radius.circular(metrics.cornerRadius)
+                              : Radius.zero,
+                      bottomLeft:
+                          alignment == Alignment.bottomLeft
+                              ? Radius.circular(metrics.cornerRadius)
+                              : Radius.zero,
+                      bottomRight:
+                          alignment == Alignment.bottomRight
+                              ? Radius.circular(metrics.cornerRadius)
+                              : Radius.zero,
+                    ),
+                    border: Border(
+                      top:
+                          alignment.y == -1
+                              ? BorderSide(
+                                color: cornerColor,
+                                width: metrics.cornerStroke,
+                              )
+                              : BorderSide.none,
+                      bottom:
+                          alignment.y == 1
+                              ? BorderSide(
+                                color: cornerColor,
+                                width: metrics.cornerStroke,
+                              )
+                              : BorderSide.none,
+                      left:
+                          alignment.x == -1
+                              ? BorderSide(
+                                color: cornerColor,
+                                width: metrics.cornerStroke,
+                              )
+                              : BorderSide.none,
+                      right:
+                          alignment.x == 1
+                              ? BorderSide(
+                                color: cornerColor,
+                                width: metrics.cornerStroke,
+                              )
+                              : BorderSide.none,
+                    ),
+                  ),
+                ),
+              ),
+            Positioned(
+              left: metrics.scanLineInset,
+              right: metrics.scanLineInset,
+              top: metrics.scanLineTopInset,
+              child: Opacity(
+                opacity: 0.35 + (0.35 * pulse),
+                child: Container(
+                  height: metrics.scanLineHeight,
+                  decoration: BoxDecoration(
+                    color: scanLineColor.withValues(alpha: 0.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: scanLineColor.withValues(
+                          alpha: 0.10 + (0.18 * pulse),
+                        ),
+                        blurRadius: 6 * metrics.scale,
+                        spreadRadius: 0.5 * metrics.scale,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _QrScanDialogState extends State<QrScanDialog> {
   bool _hasScannedCode = false; // ensure we only handle the first QR code
-  MobileScannerController _cameraController = MobileScannerController();
+  final MobileScannerController _cameraController = MobileScannerController();
 
   String? _errorMessage;
   Timer? _errorTimer;
+  bool get _isPreviewMode => widget.previewAssetPath != null;
 
   @override
   void dispose() {
@@ -112,66 +746,412 @@ class _QrScanDialogState extends State<QrScanDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: SizedBox(
-        width: MediaQuery.of(context).size.width * 0.9,
-        height: 500, // fixed height for the scanning window
-        child: Column(
-          children: [
-            // Top bar with close (X) button
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: _onCloseDialog,
-                  tooltip: 'Cancel',
-                ),
-              ],
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(30),
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            color: Color(0xFF0D0E11),
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF111216), Color(0xFF0B0B0D)],
             ),
-            Expanded(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.black54),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: MobileScanner(
-                    controller: _cameraController,
-                    onDetect: _onDetectBarcode,
+          ),
+          child: SizedBox(
+            width: MediaQuery.of(context).size.width * 0.9,
+            height: 540,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(22, 20, 22, 22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Expanded(
+                        child: SeclusoStatusChip(
+                          label: 'Camera QR',
+                          color: SeclusoColors.blueSoft,
+                          icon: Icons.qr_code_scanner_rounded,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: _onCloseDialog,
+                        tooltip: 'Cancel',
+                      ),
+                    ],
                   ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                "Align the QR code inside the frame to scan.",
-                style: TextStyle(fontSize: 16),
-                textAlign: TextAlign.center,
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (_errorMessage != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  _errorMessage!,
-                  style: const TextStyle(
-                    color: Colors.red,
-                    fontWeight: FontWeight.bold,
+                  const SizedBox(height: 8),
+                  Text(
+                    'Scan the camera code.',
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      color: Colors.white,
+                      fontSize: 28,
+                    ),
                   ),
-                  textAlign: TextAlign.center,
-                ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Hold the QR code inside the frame and keep the phone steady until the app confirms a valid scan.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.white.withValues(alpha: 0.74),
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Expanded(
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(24),
+                          child:
+                              _isPreviewMode
+                                  ? Image.asset(
+                                    widget.previewAssetPath!,
+                                    fit: BoxFit.cover,
+                                  )
+                                  : MobileScanner(
+                                    controller: _cameraController,
+                                    onDetect: _onDetectBarcode,
+                                  ),
+                        ),
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(24),
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.black.withValues(alpha: 0.24),
+                                    Colors.transparent,
+                                    Colors.black.withValues(alpha: 0.42),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Center(
+                          child: IgnorePointer(
+                            child: _ScannerFrame(showScanLine: true),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (_errorMessage != null)
+                    Text(
+                      _errorMessage!,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: SeclusoColors.danger,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    )
+                  else
+                    Text(
+                      'Only Secluso camera QR codes are accepted here.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.white.withValues(alpha: 0.58),
+                      ),
+                    ),
+                ],
               ),
-            const SizedBox(height: 16),
-          ],
+            ),
+          ),
         ),
       ),
     );
   }
+}
+
+class _ScannerFrame extends StatefulWidget {
+  const _ScannerFrame({required this.showScanLine});
+
+  final bool showScanLine;
+
+  @override
+  State<_ScannerFrame> createState() => _ScannerFrameState();
+}
+
+class _ScannerFrameState extends State<_ScannerFrame>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 3),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 220,
+      height: 220,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final y = 18 + (_controller.value * 184);
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.22),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: SeclusoColors.blue.withValues(alpha: 0.12),
+                        blurRadius: 26,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              for (final alignment in const [
+                Alignment.topLeft,
+                Alignment.topRight,
+                Alignment.bottomLeft,
+                Alignment.bottomRight,
+              ])
+                Align(
+                  alignment: alignment,
+                  child: Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.only(
+                        topLeft:
+                            alignment == Alignment.topLeft
+                                ? const Radius.circular(22)
+                                : Radius.zero,
+                        topRight:
+                            alignment == Alignment.topRight
+                                ? const Radius.circular(22)
+                                : Radius.zero,
+                        bottomLeft:
+                            alignment == Alignment.bottomLeft
+                                ? const Radius.circular(22)
+                                : Radius.zero,
+                        bottomRight:
+                            alignment == Alignment.bottomRight
+                                ? const Radius.circular(22)
+                                : Radius.zero,
+                      ),
+                      border: Border(
+                        top:
+                            alignment.y == -1
+                                ? const BorderSide(
+                                  color: SeclusoColors.blueSoft,
+                                  width: 3,
+                                )
+                                : BorderSide.none,
+                        bottom:
+                            alignment.y == 1
+                                ? const BorderSide(
+                                  color: SeclusoColors.blueSoft,
+                                  width: 3,
+                                )
+                                : BorderSide.none,
+                        left:
+                            alignment.x == -1
+                                ? const BorderSide(
+                                  color: SeclusoColors.blueSoft,
+                                  width: 3,
+                                )
+                                : BorderSide.none,
+                        right:
+                            alignment.x == 1
+                                ? const BorderSide(
+                                  color: SeclusoColors.blueSoft,
+                                  width: 3,
+                                )
+                                : BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+              if (widget.showScanLine)
+                Positioned(
+                  left: 14,
+                  right: 14,
+                  top: y,
+                  child: Container(
+                    height: 2,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.transparent,
+                          SeclusoColors.blueSoft,
+                          Colors.transparent,
+                        ],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: SeclusoColors.blue.withValues(alpha: 0.48),
+                          blurRadius: 12,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _BackCircle extends StatelessWidget {
+  const _BackCircle({
+    required this.onTap,
+    required this.size,
+    required this.iconSize,
+    required this.fillColor,
+    required this.iconColor,
+  });
+
+  final VoidCallback onTap;
+  final double size;
+  final double iconSize;
+  final Color fillColor;
+  final Color iconColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: fillColor,
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Center(child: _QrBackIcon(size: iconSize, color: iconColor)),
+        ),
+      ),
+    );
+  }
+}
+
+class _QrBackIcon extends StatelessWidget {
+  const _QrBackIcon({required this.size, required this.color});
+
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(painter: _QrBackIconPainter(color)),
+    );
+  }
+}
+
+class _QrSecurityLockIcon extends StatelessWidget {
+  const _QrSecurityLockIcon({required this.size, required this.color});
+
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(painter: _QrSecurityLockPainter(color)),
+    );
+  }
+}
+
+class _QrBackIconPainter extends CustomPainter {
+  const _QrBackIconPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = size.width * (1.5 / 16)
+          ..color = color
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..isAntiAlias = true;
+    final path =
+        Path()
+          ..moveTo(size.width * (10 / 16), size.height * (3 / 16))
+          ..lineTo(size.width * (5 / 16), size.height * (8 / 16))
+          ..lineTo(size.width * (10 / 16), size.height * (13 / 16));
+    canvas.drawPath(path, stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _QrBackIconPainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+
+class _QrSecurityLockPainter extends CustomPainter {
+  const _QrSecurityLockPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final strokeWidth = size.width * (0.833333 / 10);
+    final stroke =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeWidth
+          ..color = color
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..isAntiAlias = true;
+
+    final body = RRect.fromRectAndRadius(
+      Rect.fromLTWH(
+        size.width * (1.25 / 10),
+        size.height * (4.58333 / 10),
+        size.width * (7.5 / 10),
+        size.height * (4.58334 / 10),
+      ),
+      Radius.circular(size.width * (0.83333 / 10)),
+    );
+    canvas.drawRRect(body, stroke);
+
+    final shackle =
+        Path()
+          ..moveTo(size.width * (2.91667 / 10), size.height * (4.58333 / 10))
+          ..lineTo(size.width * (2.91667 / 10), size.height * (2.91667 / 10))
+          ..arcToPoint(
+            Offset(size.width * (7.08333 / 10), size.height * (2.91667 / 10)),
+            radius: Radius.circular(size.width * (2.08333 / 10)),
+            clockwise: true,
+          )
+          ..lineTo(size.width * (7.08333 / 10), size.height * (4.58333 / 10));
+    canvas.drawPath(shackle, stroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _QrSecurityLockPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

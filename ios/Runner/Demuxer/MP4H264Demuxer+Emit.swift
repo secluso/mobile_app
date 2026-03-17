@@ -332,6 +332,7 @@ extension MP4H264Demuxer {
 
     private func postToUI(_ sb: CMSampleBuffer, isIDR: Bool, isFirst: Bool) {
         Task { @MainActor in
+            guard !view.isShuttingDown else { return }
             view.enqueue(sb, isIDR: isIDR, isFirst: isFirst)
         }
     }
