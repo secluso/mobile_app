@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/notifications/epoch.dart';
+import 'package:secluso_flutter/notifications/ios_notification_relay.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/http_entities.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
@@ -225,7 +226,12 @@ class HttpClientService {
       jsonContent: true,
     );
 
-    final request = PairingRequest(pairingToken, 'phone');
+    final notificationTarget = await _buildNotificationTargetPayload();
+    final request = PairingRequest(
+      pairingToken,
+      'phone',
+      notificationTarget: notificationTarget,
+    );
     final body = jsonEncode(request);
 
     Log.d("Pairing body: $body");
@@ -248,6 +254,31 @@ class HttpClientService {
 
     return status;
   });
+
+  Future<NotificationTarget> _buildNotificationTargetPayload() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    if (Platform.isIOS) {
+      final binding = loadStoredIosRelayBinding(prefs);
+      if (!isStoredIosRelayBindingUsable(prefs: prefs, binding: binding)) {
+        return NotificationTarget(platform: 'ios');
+      }
+      return NotificationTarget(
+        platform: 'ios',
+        iosRelayBinding: IosRelayBindingPayload(
+          relayBaseUrl: binding!.relayBaseUrl,
+          hubToken: binding.hubToken,
+          appInstallId: binding.appInstallId,
+          hubId: binding.hubId,
+          deviceToken: binding.deviceToken,
+          expiresAtEpochMs: binding.expiresAtEpochMs,
+          refreshedAtEpochMs: binding.refreshedAtEpochMs,
+        ),
+      );
+    }
+
+    return NotificationTarget(platform: 'android');
+  }
 
   Future<void> uploadSettings(
     String cameraName,
@@ -409,6 +440,38 @@ class HttpClientService {
       );
     } else {
       Log.d("Successfully sent data");
+    }
+  });
+
+  /// POST /notification_target
+  Future<Result<void>> uploadNotificationTarget() => _wrap(() async {
+    final creds = await _getValidatedCredentials();
+    final target = await _buildNotificationTargetPayload();
+
+    final url = _buildUrl(creds.serverAddr, ['notification_target']);
+    final headers = await _basicAuthHeaders(
+      creds.username,
+      creds.password,
+      jsonContent: true,
+    );
+    Log.d(
+      'Uploading notification target '
+      '(url=$url, platform=${target.platform}, '
+      'hasIosRelayBinding=${target.iosRelayBinding != null})',
+    );
+
+    final response = await http.post(
+      url,
+      headers: headers,
+      body: jsonEncode(target),
+    );
+    await _handleServerVersionHeader(response);
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Failed to upload notification target: '
+        '${response.statusCode} ${response.reasonPhrase} ${response.body}',
+      );
     }
   });
 
@@ -655,8 +718,14 @@ class HttpClientService {
   }
 
   Uri _buildUrl(String serverAddr, List<dynamic> segments) {
-    final path = segments.join('/');
-    return Uri.parse('$serverAddr/$path');
+    final base = Uri.parse(serverAddr);
+    final pathSegments = [
+      ...base.pathSegments.where((segment) => segment.isNotEmpty),
+      ...segments
+          .map((segment) => segment.toString())
+          .where((segment) => segment.isNotEmpty),
+    ];
+    return base.replace(pathSegments: pathSegments);
   }
 
   Future<Map<String, String>> _basicAuthHeaders(
@@ -715,9 +784,7 @@ class HttpClientService {
     }
 
     if (groupName.startsWith("Error: Busy")) {
-      throw _SilentException(
-        'Group name busy for $cameraName ($clientTag)',
-      );
+      throw _SilentException('Group name busy for $cameraName ($clientTag)');
     }
 
     Log.w(

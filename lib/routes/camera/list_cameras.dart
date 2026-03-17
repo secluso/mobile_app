@@ -546,14 +546,18 @@ class CamerasPageState extends State<CamerasPage>
             setState(() => _showNotificationWarning = false);
 
             //TODO: This might be necessary to work on iOS. Not 100% sure.
-            if (!FirebaseInit.isInitialized) {
-              Log.d("Skipping FCM permission request; Firebase not initialized");
+            if (Platform.isAndroid) {
+              if (!FirebaseInit.isInitialized) {
+                Log.d("Skipping FCM permission request; Firebase not initialized");
+              } else {
+                await FirebaseMessaging.instance.requestPermission(
+                  alert: true,
+                  badge: true,
+                  sound: true,
+                );
+              }
             } else {
-              await FirebaseMessaging.instance.requestPermission(
-                alert: true,
-                badge: true,
-                sound: true,
-              );
+              await PushNotificationService.instance.init();
             }
 
             // This may be the first time we have access to this after adding a camera.

@@ -1,5 +1,7 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
+import 'dart:io' show Platform;
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -24,14 +26,18 @@ Future<void> requestNotificationsAfterFirstCameraAdd() async {
     await prefs.setInt(PrefKeys.lastNotificationCheck, now);
     final result = await Permission.notification.request();
     if (result.isGranted) {
-      if (!FirebaseInit.isInitialized) {
-        Log.d("Skipping FCM permission request; Firebase not initialized");
+      if (Platform.isAndroid) {
+        if (!FirebaseInit.isInitialized) {
+          Log.d("Skipping FCM permission request; Firebase not initialized");
+        } else {
+          await FirebaseMessaging.instance.requestPermission(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
+        }
       } else {
-        await FirebaseMessaging.instance.requestPermission(
-          alert: true,
-          badge: true,
-          sound: true,
-        );
+        await PushNotificationService.instance.init();
       }
       PushNotificationService.tryUploadIfNeeded(true);
     }

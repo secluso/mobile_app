@@ -4,6 +4,7 @@ import Flutter
 import NetworkExtension
 import SystemConfiguration.CaptiveNetwork
 import UIKit
+import UserNotifications
 import workmanager
 
 @main
@@ -30,6 +31,7 @@ import workmanager
         }
 
         let controller: FlutterViewController = window?.rootViewController as! FlutterViewController
+        IosPushRelayBridge.shared.register(with: controller)
         let wifi = FlutterMethodChannel(
             name: "secluso.com/wifi",
             binaryMessenger: controller.binaryMessenger)
@@ -54,6 +56,13 @@ import workmanager
 
                 NEHotspotConfigurationManager.shared.apply(config) { error in
                     if let error = error {
+                        let nsError = error as NSError
+                        if nsError.domain == NEHotspotConfigurationErrorDomain,
+                            nsError.code == NEHotspotConfigurationError.alreadyAssociated.rawValue
+                        {
+                            result("connected")
+                            return
+                        }
                         result(
                             FlutterError(
                                 code: "FAILED", message: error.localizedDescription, details: nil))
@@ -139,6 +148,64 @@ import workmanager
         }
 
         GeneratedPluginRegistrant.register(with: self)
+        UNUserNotificationCenter.current().delegate = self
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    }
+
+    override func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        IosPushRelayBridge.shared.setApnsToken(deviceToken)
+        super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
+    }
+
+    override func application(
+        _ application: UIApplication,
+        didFailToRegisterForRemoteNotificationsWithError error: Error
+    ) {
+        print("[IOS PUSH] Failed to register for remote notifications: \(error.localizedDescription)")
+        super.application(application, didFailToRegisterForRemoteNotificationsWithError: error)
+    }
+
+    override func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        IosPushRelayBridge.shared.recordIncomingRemoteNotification(userInfo)
+        completionHandler(.newData)
+    }
+
+    override func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        let userInfo = notification.request.content.userInfo
+        IosPushRelayBridge.shared.recordIncomingRemoteNotification(userInfo)
+
+        if userInfo["body"] != nil {
+            completionHandler([])
+        } else {
+            super.userNotificationCenter(
+                center,
+                willPresent: notification,
+                withCompletionHandler: completionHandler
+            )
+        }
+    }
+
+    override func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        IosPushRelayBridge.shared.recordIncomingRemoteNotification(response.notification.request.content.userInfo)
+        super.userNotificationCenter(
+            center,
+            didReceive: response,
+            withCompletionHandler: completionHandler
+        )
     }
 }

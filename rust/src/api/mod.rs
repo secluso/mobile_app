@@ -1,22 +1,21 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
-pub mod logger;
 pub mod lock_manager;
+pub mod logger;
 
 use secluso_app_native::{self, Clients};
 
-use std::collections::HashMap;
-use parking_lot::{Mutex, MutexGuard};
-use log::{debug, info, error, warn};
+use log::{debug, error, info, warn};
 use once_cell::sync::Lazy;
+use parking_lot::{Mutex, MutexGuard};
+use std::collections::HashMap;
 
-use std::net::SocketAddr;
-use std::net::TcpStream;
+use std::net::{Shutdown, SocketAddr, TcpStream};
+use std::ops::{Deref, DerefMut};
+use std::panic;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::ops::{Deref, DerefMut};
-use std::panic;
 use std::time::{Duration, Instant};
 
 #[derive(Hash, Eq, PartialEq, Clone)]
@@ -121,7 +120,11 @@ impl<'a> Drop for TracedClientGuard<'a> {
         owners.remove(&self.key);
         debug!(
             "MLS lock released for {} on camera {} channel {} (owner={}, held={:?})",
-            self.op, self.key.camera, self.key.channel, self.owner, self.acquired_at.elapsed()
+            self.op,
+            self.key.camera,
+            self.key.channel,
+            self.owner,
+            self.acquired_at.elapsed()
         );
     }
 }
@@ -171,7 +174,10 @@ fn lock_client_with_owner<'a>(
         None => {
             let owner_label = {
                 let owners = CLIENT_LOCK_OWNERS.lock();
-                owners.get(&key).cloned().unwrap_or_else(|| "unknown".to_string())
+                owners
+                    .get(&key)
+                    .cloned()
+                    .unwrap_or_else(|| "unknown".to_string())
             };
             warn!(
                 "MLS lock busy after {:?} for {} on camera {} channel {} (owner={})",
@@ -204,11 +210,7 @@ fn ensure_client_initialized(
         return false;
     };
 
-    match secluso_app_native::initialize(
-        client_guard,
-        params.file_dir,
-        params.first_time,
-    ) {
+    match secluso_app_native::initialize(client_guard, params.file_dir, params.first_time) {
         Ok(_) => true,
         Err(e) => {
             info!(
@@ -261,22 +263,17 @@ pub fn deregister_camera(camera_name: String) {
     let mut did_deregister = false;
     for (key, client_arc) in &entries {
         let op = format!("deregister_camera({})", key.channel);
-        let mut client_guard = match lock_client_with_owner(
-            client_arc,
-            &camera_name,
-            &key.channel,
-            &op,
-            trace_id,
-        ) {
-            Some(guard) => guard,
-            None => {
-                warn!(
-                    "Deregister skipped for camera {} channel {} due to lock timeout",
-                    camera_name, key.channel
-                );
-                continue;
-            }
-        };
+        let mut client_guard =
+            match lock_client_with_owner(client_arc, &camera_name, &key.channel, &op, trace_id) {
+                Some(guard) => guard,
+                None => {
+                    warn!(
+                        "Deregister skipped for camera {} channel {} due to lock timeout",
+                        camera_name, key.channel
+                    );
+                    continue;
+                }
+            };
 
         let res = panic::catch_unwind(panic::AssertUnwindSafe(|| {
             secluso_app_native::deregister(&mut *client_guard);
@@ -308,11 +305,7 @@ pub fn deregister_camera(camera_name: String) {
 }
 
 #[flutter_rust_bridge::frb]
-pub fn decrypt_video(
-    camera_name: String,
-    enc_filename: String,
-    _assumed_epoch: u64,
-) -> String {
+pub fn decrypt_video(camera_name: String, enc_filename: String, _assumed_epoch: u64) -> String {
     let (camera_name, trace_id) = split_trace_camera(&camera_name);
     let _trace_guard = logger::set_log_trace(trace_id);
     let channel = CHANNEL_FIXED;
@@ -330,10 +323,7 @@ pub fn decrypt_video(
         return "Error".to_string();
     }
 
-    match secluso_app_native::decrypt_video(
-        &mut *client_guard,
-        enc_filename,
-    ) {
+    match secluso_app_native::decrypt_video(&mut *client_guard, enc_filename) {
         Ok(decrypted_filename) => {
             return decrypted_filename;
         }
@@ -342,7 +332,6 @@ pub fn decrypt_video(
         }
     }
 }
-
 
 #[flutter_rust_bridge::frb]
 pub fn decrypt_thumbnail(
@@ -437,9 +426,7 @@ pub fn flutter_add_camera(
             let guard = CLIENTS.lock();
             guard
                 .iter()
-                .filter(|(key, _)| {
-                    key.camera == camera_name && key.channel != CHANNEL_SETUP
-                })
+                .filter(|(key, _)| key.camera == camera_name && key.channel != CHANNEL_SETUP)
                 .map(|(_, arc)| arc.clone())
                 .collect()
         };
@@ -485,22 +472,24 @@ pub fn shutdown_app() {
     info!("shutdown_app(): done");
 }
 
-
 #[flutter_rust_bridge::frb]
 pub fn ping_proprietary_device(camera_ip: String) -> bool {
-    info!("Pinging proprietary device");
+    debug!("Pinging proprietary device at {}", camera_ip);
     let addr = match SocketAddr::from_str(&(camera_ip + ":12348")) {
         Ok(a) => a,
         Err(e) => {
-            info!("Error: invalid IP address: {e}");
+            debug!("Invalid proprietary camera IP address: {e}");
             return false;
         }
     };
 
-    match TcpStream::connect(&addr) {
-        Ok(_) => true,
+    match TcpStream::connect_timeout(&addr, Duration::from_secs(1)) {
+        Ok(stream) => {
+            let _ = stream.shutdown(Shutdown::Both);
+            true
+        }
         Err(e) => {
-            info!("Error: {e}");
+            debug!("Proprietary device probe failed: {e}");
             false
         }
     }
@@ -603,14 +592,8 @@ pub fn livestream_update(camera_name: String, msg: Vec<u8>) -> bool {
     let channel = CHANNEL_FIXED;
     let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
     let op = "livestream_update(livestream)".to_string();
-    let mut client_guard = lock_client_or_return!(
-        client_mutex,
-        &camera_name,
-        channel,
-        &op,
-        trace_id,
-        false
-    );
+    let mut client_guard =
+        lock_client_or_return!(client_mutex, &camera_name, channel, &op, trace_id, false);
     if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
         return false;
     }
@@ -627,25 +610,27 @@ pub fn livestream_update(camera_name: String, msg: Vec<u8>) -> bool {
 }
 
 #[flutter_rust_bridge::frb]
-pub fn livestream_decrypt(camera_name: String, data: Vec<u8>, expected_chunk_number: u64) -> Vec<u8> {
+pub fn livestream_decrypt(
+    camera_name: String,
+    data: Vec<u8>,
+    expected_chunk_number: u64,
+) -> Vec<u8> {
     let (camera_name, trace_id) = split_trace_camera(&camera_name);
     let _trace_guard = logger::set_log_trace(trace_id);
     let channel = CHANNEL_FIXED;
     let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
     let op = "livestream_decrypt(livestream)".to_string();
-    let mut client_guard = lock_client_or_return!(
-        client_mutex,
-        &camera_name,
-        channel,
-        &op,
-        trace_id,
-        vec![]
-    );
+    let mut client_guard =
+        lock_client_or_return!(client_mutex, &camera_name, channel, &op, trace_id, vec![]);
     if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
         return vec![];
     }
 
-    let ret = match secluso_app_native::livestream_decrypt(&mut *client_guard, data, expected_chunk_number) {
+    let ret = match secluso_app_native::livestream_decrypt(
+        &mut *client_guard,
+        data,
+        expected_chunk_number,
+    ) {
         Ok(dec_data) => dec_data,
         Err(e) => {
             info!("Error: {}", e);
@@ -658,7 +643,7 @@ pub fn livestream_decrypt(camera_name: String, data: Vec<u8>, expected_chunk_num
 
 #[flutter_rust_bridge::frb]
 pub fn rust_lib_version() -> String {
-    return env!("CARGO_PKG_VERSION").to_string()
+    return env!("CARGO_PKG_VERSION").to_string();
 }
 
 #[flutter_rust_bridge::frb]
@@ -668,19 +653,16 @@ pub fn generate_heartbeat_request_config_command(camera_name: String, timestamp:
     let channel = CHANNEL_FIXED;
     let client_mutex = get_or_create_channel_mutex(&camera_name, channel);
     let op = "generate_heartbeat_request_config_command(config)".to_string();
-    let mut client_guard = lock_client_or_return!(
-        client_mutex,
-        &camera_name,
-        channel,
-        &op,
-        trace_id,
-        vec![]
-    );
+    let mut client_guard =
+        lock_client_or_return!(client_mutex, &camera_name, channel, &op, trace_id, vec![]);
     if !ensure_client_initialized(&mut *client_guard, &camera_name, channel) {
         return vec![];
     }
 
-    let ret = match secluso_app_native::generate_heartbeat_request_config_command(&mut *client_guard, timestamp) {
+    let ret = match secluso_app_native::generate_heartbeat_request_config_command(
+        &mut *client_guard,
+        timestamp,
+    ) {
         Ok(config_msg_enc) => config_msg_enc,
         Err(e) => {
             info!("Error: {}", e);
@@ -692,7 +674,11 @@ pub fn generate_heartbeat_request_config_command(camera_name: String, timestamp:
 }
 
 #[flutter_rust_bridge::frb]
-pub fn process_heartbeat_config_response(camera_name: String, config_response: Vec<u8>, expected_timestamp: u64) -> String {
+pub fn process_heartbeat_config_response(
+    camera_name: String,
+    config_response: Vec<u8>,
+    expected_timestamp: u64,
+) -> String {
     let (camera_name, trace_id) = split_trace_camera(&camera_name);
     let _trace_guard = logger::set_log_trace(trace_id);
     let channel = CHANNEL_FIXED;
@@ -710,7 +696,11 @@ pub fn process_heartbeat_config_response(camera_name: String, config_response: V
         return "Error".to_string();
     }
 
-    match secluso_app_native::process_heartbeat_config_response(&mut *client_guard, config_response, expected_timestamp) {
+    match secluso_app_native::process_heartbeat_config_response(
+        &mut *client_guard,
+        config_response,
+        expected_timestamp,
+    ) {
         Ok(heartbeat_response) => {
             return heartbeat_response;
         }

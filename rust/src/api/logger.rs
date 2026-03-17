@@ -1,15 +1,16 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
+use once_cell::sync::Lazy;
 use std::cell::RefCell;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Once;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use std::sync::atomic::{AtomicBool, Ordering};
-use once_cell::sync::Lazy;
 
 use crate::frb_generated::StreamSink;
 use lazy_static::lazy_static;
 use log::LevelFilter;
 use log::{error, info, warn, Level, Log, Metadata, Record};
+use parking_lot::RwLock;
 use simplelog::format_description;
 use simplelog::ColorChoice;
 use simplelog::CombinedLogger;
@@ -18,7 +19,6 @@ use simplelog::ConfigBuilder;
 use simplelog::SharedLogger;
 use simplelog::TermLogger;
 use simplelog::TerminalMode;
-use parking_lot::RwLock;
 
 #[flutter_rust_bridge::frb]
 pub struct LogEntry {
@@ -85,7 +85,6 @@ pub fn init_logger() {
         ])
         .unwrap_or_else(|e| {
             error!("init_logger (inside 'once') has error: {:?}", e);
-            
         });
         info!("init_logger (inside 'once') finished");
 

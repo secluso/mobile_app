@@ -2,6 +2,7 @@
 
 class Constants {
   static const proprietaryCameraIp = "10.42.0.1";
+  static const iosNotificationRelayBaseUrl = "https://relay.secluso.com";
   static const cameraWaitingLock =
       "camera_waiting_lock.lock"; // A lock on the queues containing information about cameras waiting to be downloaded
   static const genericDownloadTaskLock =

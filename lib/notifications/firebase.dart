@@ -7,6 +7,7 @@ import 'dart:ui';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:secluso_flutter/notifications/ios_notification_relay.dart';
 import 'package:secluso_flutter/utilities/firebase_init.dart';
 import 'package:secluso_flutter/notifications/heartbeat_task.dart';
 import 'package:secluso_flutter/notifications/notifications.dart';
@@ -17,6 +18,7 @@ import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../keys.dart';
+import '../utilities/hub_identity.dart';
 //TODO: import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
@@ -108,12 +110,14 @@ class PushNotificationService {
   static const Duration _decryptRetryDelay = Duration(milliseconds: 200);
   static const Duration _forceInitCooldown = Duration(seconds: 30);
   static const Duration _dedupeTtl = Duration(seconds: 60);
+  static const Duration _iosSkipCooldown = Duration(seconds: 30);
   Future<void> _processTail = Future.value();
   int _processSeq = 0;
   int _processPending = 0;
   final Map<String, DateTime> _forceInitLast = {};
   final Map<String, DateTime> _recentBodies = {};
-
+  static DateTime? _iosSkipRetryUntil;
+  static String? _iosSkipReason;
 
   Future<void> init() async {
     if (_initialized) {
@@ -130,6 +134,16 @@ class PushNotificationService {
     try {
       Log.d("Initializing PushNotificationService");
 
+      if (Platform.isIOS) {
+        await initLocalNotifications();
+        await IosNotificationRelay.instance.init(
+          onPayload: (data, source) => processMessageData(data, source: source),
+        );
+        await IosNotificationRelay.instance.tryAuthorizeIfNeeded(false);
+        _initialized = true;
+        return;
+      }
+
       if (!FirebaseInit.isInitialized) {
         Log.d("Skipping push setup; Firebase not initialized");
         return;
@@ -138,7 +152,7 @@ class PushNotificationService {
 
       try {
         await messaging.setAutoInitEnabled(true);
-        final autoInit = await messaging.isAutoInitEnabled;
+        final autoInit = messaging.isAutoInitEnabled;
         Log.d("[FCM] auto-init enabled: $autoInit");
       } catch (e, st) {
         Log.e("[FCM] auto-init toggle failed: $e\n$st");
@@ -184,6 +198,82 @@ class PushNotificationService {
 
   static Future<void> _doUploadIfNeeded(bool force) async {
     try {
+      if (Platform.isIOS) {
+        final prefs = await SharedPreferences.getInstance();
+        final hubId = _iosHubId(prefs);
+        if (hubId == null) {
+          if (_shouldLogIosSkip(force: force, reason: 'missing_hub_id')) {
+            Log.d(
+              'Skipping iOS notification target upload; '
+              'hub id is unavailable '
+              '(cooldownMs=${_iosSkipCooldown.inMilliseconds})',
+            );
+          }
+          return;
+        }
+
+        await IosNotificationRelay.instance.tryAuthorizeIfNeeded(force);
+        final needUpload =
+            prefs.getBool(PrefKeys.needUploadIosNotificationTarget) ?? true;
+        final needRelayBindingUpdate =
+            prefs.getBool(PrefKeys.needUpdateIosRelayBinding) ?? true;
+        final relayBinding = loadStoredIosRelayBinding(prefs);
+        final hasUsableRelayBinding = isStoredIosRelayBindingUsable(
+          prefs: prefs,
+          binding: relayBinding,
+        );
+        final hasServerCredentials = _hasServerCredentials(prefs);
+
+        if (!hasServerCredentials) {
+          if (_shouldLogIosSkip(
+            force: force,
+            reason: 'missing_server_credentials',
+          )) {
+            Log.d(
+              'Skipping iOS notification target upload; '
+              'server credentials are unavailable '
+              '(cooldownMs=${_iosSkipCooldown.inMilliseconds})',
+            );
+          }
+          return;
+        }
+
+        if (!force && !needUpload) {
+          _clearIosSkipCooldown();
+          return;
+        }
+
+        if (!hasUsableRelayBinding) {
+          await prefs.setBool(PrefKeys.needUploadIosNotificationTarget, true);
+          if (_shouldLogIosSkip(
+            force: force,
+            reason: 'missing_relay_binding',
+          )) {
+            Log.d(
+              'Skipping iOS notification target upload; '
+              'relay binding is unavailable '
+              '(needRelayBindingUpdate=$needRelayBindingUpdate, '
+              'hasBinding=${relayBinding != null}, '
+              'bindingUsable=$hasUsableRelayBinding, '
+              'cooldownMs=${_iosSkipCooldown.inMilliseconds})',
+            );
+          }
+          return;
+        }
+
+        _clearIosSkipCooldown();
+        final result =
+            await HttpClientService.instance.uploadNotificationTarget();
+        if (result.isSuccess) {
+          await prefs.setBool(PrefKeys.needUploadIosNotificationTarget, false);
+          Log.d('[IOS RELAY] notification target uploaded');
+        } else {
+          await prefs.setBool(PrefKeys.needUploadIosNotificationTarget, true);
+          Log.d('[IOS RELAY] notification target upload failed');
+        }
+        return;
+      }
+
       if (!FirebaseInit.isInitialized) {
         Log.d("Skipping FCM token upload; Firebase not initialized");
         return;
@@ -230,6 +320,42 @@ class PushNotificationService {
     }
   }
 
+  static String? _iosHubId(SharedPreferences prefs) {
+    return deriveHubIdFromServerUsername(
+      prefs.getString(PrefKeys.serverUsername),
+    );
+  }
+
+  static bool _hasServerCredentials(SharedPreferences prefs) {
+    final serverAddr = prefs.getString(PrefKeys.serverAddr);
+    final username = prefs.getString(PrefKeys.serverUsername);
+    final password = prefs.getString(PrefKeys.serverPassword);
+    return [
+      serverAddr,
+      username,
+      password,
+    ].every((value) => value != null && value.trim().isNotEmpty);
+  }
+
+  static bool _shouldLogIosSkip({required bool force, required String reason}) {
+    final now = DateTime.now();
+    final retryUntil = _iosSkipRetryUntil;
+    if (!force &&
+        reason == _iosSkipReason &&
+        retryUntil != null &&
+        now.isBefore(retryUntil)) {
+      return false;
+    }
+    _iosSkipReason = reason;
+    _iosSkipRetryUntil = now.add(_iosSkipCooldown);
+    return true;
+  }
+
+  static void _clearIosSkipCooldown() {
+    _iosSkipRetryUntil = null;
+    _iosSkipReason = null;
+  }
+
   Future<void> _handleMessage(RemoteMessage msg) =>
       processMessageData(msg.data, source: 'foreground');
 
@@ -238,13 +364,10 @@ class PushNotificationService {
     required String source,
   }) {
     final traceId = Log.deriveContext('fcm');
-    return Log.runWithContext(
-      traceId,
-      () async {
-        Log.d("FCM context started (source=$source, id=$traceId)");
-        await _enqueueProcess(data, source: source);
-      },
-    );
+    return Log.runWithContext(traceId, () async {
+      Log.d("FCM context started (source=$source, id=$traceId)");
+      await _enqueueProcess(data, source: source);
+    });
   }
 
   Future<void> _enqueueProcess(
@@ -327,8 +450,7 @@ class PushNotificationService {
       // TODO: what happens if we have an invalid name?
       for (final cameraName in cameraSet) {
         // This code might be called after the app is killed/terminated. We need to initialize the cameras again.
-        final initOutcome =
-            await initialize(cameraName, timeout: _initTimeout);
+        final initOutcome = await initialize(cameraName, timeout: _initTimeout);
         if (!initOutcome.isOk) {
           // Avoid error-level logs for expected init timeouts when background
           // work is already holding the MLS locks; only true failures should
@@ -338,9 +460,7 @@ class PushNotificationService {
               "Init timeout for $cameraName; skipping message #$seq (${Log.ownerTag()})",
             );
           } else {
-            Log.e(
-              "Init failed for $cameraName; skipping message #$seq",
-            );
+            Log.e("Init failed for $cameraName; skipping message #$seq");
           }
           continue;
         }
@@ -481,6 +601,7 @@ class PushNotificationService {
             // TODO: I removed the pending to repository addition for Android because it's not possible to init ObjectBox in the background handler (as Android requires). Find alternate solution maybe. Not sure this is needed anymore (as we don't want to show users pending videos in cases of failure)
             if (Platform.isIOS) {
               await addPendingToRepository(cameraName, response);
+              DownloadScheduler.scheduleVideoDownload(cameraName);
             }
 
             // Prevent back-to-back notifications

@@ -1,6 +1,7 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -17,7 +18,6 @@ import 'package:secluso_flutter/notifications/thumbnails.dart';
 import 'package:secluso_flutter/notifications/notifications.dart';
 import 'routes/home_page.dart';
 import "routes/theme_provider.dart";
-import "package:path_provider/path_provider.dart";
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/notifications/firebase.dart';
@@ -96,9 +96,11 @@ void main() {
           return true;
         };
         unawaited(Log.ensureStorageReady());
-        FirebaseMessaging.onBackgroundMessage(
-          firebaseMessagingBackgroundHandler,
-        );
+        if (Platform.isAndroid) {
+          FirebaseMessaging.onBackgroundMessage(
+            firebaseMessagingBackgroundHandler,
+          );
+        }
         runApp(const AppBootstrap());
       });
     },
@@ -273,15 +275,17 @@ Future<void> _initializeApp(ThemeProvider themeProvider) async {
   var prefs = await SharedPreferences.getInstance();
 
   if (prefs.containsKey(PrefKeys.serverAddr)) {
-    final fcmConfig = FcmConfig.fromPrefs(prefs);
-    if (fcmConfig == null) {
-      Log.e("Missing cached FCM config; clearing server credentials");
-      await _invalidateServerCredentials(prefs);
-    } else {
-      try {
-        await FirebaseInit.ensure(fcmConfig);
-      } catch (e, st) {
-        Log.e("Firebase init failed: $e\n$st");
+    if (Platform.isAndroid) {
+      final fcmConfig = FcmConfig.fromPrefs(prefs);
+      if (fcmConfig == null) {
+        Log.e("Missing cached FCM config; clearing server credentials");
+        await _invalidateServerCredentials(prefs);
+      } else {
+        try {
+          await FirebaseInit.ensure(fcmConfig);
+        } catch (e, st) {
+          Log.e("Firebase init failed: $e\n$st");
+        }
       }
     }
   }
@@ -303,7 +307,7 @@ Future<void> _initializeApp(ThemeProvider themeProvider) async {
     queueProcessorPortName,
   );
 
-  if (FirebaseInit.isInitialized) {
+  if (Platform.isIOS || FirebaseInit.isInitialized) {
     await PushNotificationService.instance.init();
   } else {
     Log.d("Skipping PushNotificationService.init; Firebase not initialized");

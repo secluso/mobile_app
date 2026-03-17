@@ -1,6 +1,7 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -105,54 +106,66 @@ class _ServerPageState extends State<ServerPage> {
       await prefs.setString(PrefKeys.serverAddr, newServerAddr);
       await prefs.setString(PrefKeys.serverUsername, serverUsername);
       await prefs.setString(PrefKeys.serverPassword, serverPassword);
+      await prefs.setBool(PrefKeys.needUpdateFcmToken, true);
+      await prefs.setBool(PrefKeys.needUpdateIosRelayBinding, true);
+      await prefs.remove(PrefKeys.needUploadIosNotificationTarget);
+      await prefs.remove(PrefKeys.iosRelayHubToken);
+      await prefs.remove(PrefKeys.iosRelayHubTokenExpiryMs);
+      await prefs.remove(PrefKeys.iosRelayBindingJson);
       HttpClientService.instance.resetVersionGateState();
 
-      final fetched = await HttpClientService.instance.fetchFcmConfig();
-      if (fetched.isFailure || fetched.value == null) {
-        if (prevServerAddr == null) {
-          await prefs.remove(PrefKeys.serverAddr);
-        } else {
-          await prefs.setString(PrefKeys.serverAddr, prevServerAddr);
-        }
-        if (prevUsername == null) {
-          await prefs.remove(PrefKeys.serverUsername);
-        } else {
-          await prefs.setString(PrefKeys.serverUsername, prevUsername);
-        }
-        if (prevPassword == null) {
-          await prefs.remove(PrefKeys.serverPassword);
-        } else {
-          await prefs.setString(PrefKeys.serverPassword, prevPassword);
-        }
-        if (prevCredentialsFull == null) {
-          await prefs.remove(PrefKeys.credentialsFull);
-        } else {
-          await prefs.setString(PrefKeys.credentialsFull, prevCredentialsFull);
-        }
-        HttpClientService.instance.resetVersionGateState();
+      FcmConfig? fetchedFcmConfig;
+      if (Platform.isAndroid) {
+        final fetched = await HttpClientService.instance.fetchFcmConfig();
+        if (fetched.isFailure || fetched.value == null) {
+          if (prevServerAddr == null) {
+            await prefs.remove(PrefKeys.serverAddr);
+          } else {
+            await prefs.setString(PrefKeys.serverAddr, prevServerAddr);
+          }
+          if (prevUsername == null) {
+            await prefs.remove(PrefKeys.serverUsername);
+          } else {
+            await prefs.setString(PrefKeys.serverUsername, prevUsername);
+          }
+          if (prevPassword == null) {
+            await prefs.remove(PrefKeys.serverPassword);
+          } else {
+            await prefs.setString(PrefKeys.serverPassword, prevPassword);
+          }
+          if (prevCredentialsFull == null) {
+            await prefs.remove(PrefKeys.credentialsFull);
+          } else {
+            await prefs.setString(PrefKeys.credentialsFull, prevCredentialsFull);
+          }
+          HttpClientService.instance.resetVersionGateState();
 
-        setState(() {
-          serverAddr = prevServerAddr;
-          hasSynced = prevHasSynced;
-          _ipController.text = prevServerAddr ?? '';
-        });
+          setState(() {
+            serverAddr = prevServerAddr;
+            hasSynced = prevHasSynced;
+            _ipController.text = prevServerAddr ?? '';
+          });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: Colors.red,
-            content: Text(
-              "Failed to fetch FCM config. Server settings not saved.",
-              style: TextStyle(color: Colors.white),
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: Colors.red,
+              content: Text(
+                "Failed to fetch FCM config. Server settings not saved.",
+                style: TextStyle(color: Colors.white),
+              ),
             ),
-          ),
-        );
-        return;
-      }
+          );
+          return;
+        }
 
-      await prefs.setString(
-        PrefKeys.fcmConfigJson,
-        jsonEncode(fetched.value!.toJson()),
-      );
+        fetchedFcmConfig = fetched.value;
+        await prefs.setString(
+          PrefKeys.fcmConfigJson,
+          jsonEncode(fetchedFcmConfig!.toJson()),
+        );
+      } else {
+        await prefs.remove(PrefKeys.fcmConfigJson);
+      }
       await prefs.setString(PrefKeys.credentialsFull, credentialsFullString);
 
       setState(() {
@@ -169,21 +182,26 @@ class _ServerPageState extends State<ServerPage> {
         await initialize(camera.name);
       }
 
-      bool firebaseReady = false;
-      try {
-        await FirebaseInit.ensure(fetched.value!);
-        firebaseReady = true;
-      } catch (e, st) {
-        Log.e("Firebase init failed: $e\n$st");
-      }
+      if (Platform.isAndroid) {
+        bool firebaseReady = false;
+        try {
+          await FirebaseInit.ensure(fetchedFcmConfig!);
+          firebaseReady = true;
+        } catch (e, st) {
+          Log.e("Firebase init failed: $e\n$st");
+        }
 
-      if (firebaseReady) {
-        await PushNotificationService.instance.init();
-        Log.d("Before try upload");
-        await PushNotificationService.tryUploadIfNeeded(true);
-        Log.d("After try upload");
+        if (firebaseReady) {
+          await PushNotificationService.instance.init();
+          Log.d("Before try upload");
+          await PushNotificationService.tryUploadIfNeeded(true);
+          Log.d("After try upload");
+        } else {
+          Log.d("Skipping push setup; Firebase not initialized");
+        }
       } else {
-        Log.d("Skipping push setup; Firebase not initialized");
+        await PushNotificationService.instance.init();
+        await PushNotificationService.tryUploadIfNeeded(true);
       }
 
       ScaffoldMessenger.of(
@@ -210,6 +228,13 @@ class _ServerPageState extends State<ServerPage> {
     await prefs.remove(PrefKeys.serverPassword);
     await prefs.remove(PrefKeys.credentialsFull);
     await prefs.remove(PrefKeys.fcmConfigJson);
+    await prefs.remove(PrefKeys.needUpdateFcmToken);
+    await prefs.remove(PrefKeys.needUpdateIosRelayBinding);
+    await prefs.remove(PrefKeys.needUploadIosNotificationTarget);
+    await prefs.remove(PrefKeys.iosApnsToken);
+    await prefs.remove(PrefKeys.iosRelayHubToken);
+    await prefs.remove(PrefKeys.iosRelayHubTokenExpiryMs);
+    await prefs.remove(PrefKeys.iosRelayBindingJson);
     HttpClientService.instance.resetVersionGateState();
     _isDialogOpen.value = false;
     setState(() {

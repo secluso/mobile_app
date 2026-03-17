@@ -31,6 +31,7 @@
 		E323D9EE2E895714003F6F7F /* BytePlayerPlatformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9DF2E895704003F6F7F /* BytePlayerPlatformView.swift */; };
 		E323D9EF2E895714003F6F7F /* BytePlayerViewFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9E02E895704003F6F7F /* BytePlayerViewFactory.swift */; };
 		E323D9F02E895714003F6F7F /* ByteSampleBufferView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E323D9E12E895704003F6F7F /* ByteSampleBufferView.swift */; };
+		E3CF4BE02F01AA9900C3A301 /* IosPushRelayBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3CF4BDF2F01AA9900C3A301 /* IosPushRelayBridge.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -140,6 +141,7 @@
 		E3BA66D32E85B3AB009683F9 /* ByteLowLevelViewFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ByteLowLevelViewFactory.swift; path = Runner/ByteLowLevelViewFactory.swift; sourceTree = "<group>"; };
 		E3BA66D42E85B3AB009683F9 /* BytePlayerChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BytePlayerChannel.swift; path = Runner/BytePlayerChannel.swift; sourceTree = "<group>"; };
 		E3BA66D52E85B3AB009683F9 /* ByteLowLevelPlatformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ByteLowLevelPlatformView.swift; path = Runner/ByteLowLevelPlatformView.swift; sourceTree = "<group>"; };
+		E3CF4BDF2F01AA9900C3A301 /* IosPushRelayBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IosPushRelayBridge.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -309,6 +311,7 @@
 				E323D9DA2E895704003F6F7F /* BitReader.swift */,
 				E323D9DB2E895704003F6F7F /* ByteQueueManager.swift */,
 				E323D9DC2E895704003F6F7F /* Data+MP4.swift */,
+				E3CF4BDF2F01AA9900C3A301 /* IosPushRelayBridge.swift */,
 			);
 			name = Core;
 			path = Runner/Core;
@@ -574,6 +577,7 @@
 				E323D9E32E89570A003F6F7F /* BitReader.swift in Sources */,
 				E323D9E42E89570A003F6F7F /* ByteQueueManager.swift in Sources */,
 				E323D9E52E89570A003F6F7F /* Data+MP4.swift in Sources */,
+				E3CF4BE02F01AA9900C3A301 /* IosPushRelayBridge.swift in Sources */,
 				74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 			);

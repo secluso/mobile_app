@@ -16,10 +16,14 @@ import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/notifications/firebase.dart';
+import 'package:secluso_flutter/notifications/ios_notification_relay.dart';
 import 'package:secluso_flutter/routes/camera/list_cameras.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
+import 'package:secluso_flutter/utilities/proprietary_camera_hotspot.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
+import 'package:secluso_flutter/utilities/result.dart';
 import 'package:secluso_flutter/notifications/notification_permissions.dart';
 import 'proprietary_camera_option.dart';
 import 'package:path/path.dart' as p;
@@ -45,6 +49,13 @@ class ProprietaryCameraWaitingDialog extends StatefulWidget {
 
 class _ProprietaryCameraWaitingDialogState
     extends State<ProprietaryCameraWaitingDialog> {
+  static const MethodChannel _wifiChannel = MethodChannel("secluso.com/wifi");
+  static const String _cameraHotspotSsid = 'Secluso';
+  static const Duration _cameraReadGracePeriod = Duration(seconds: 3);
+  static const Duration _networkPollInterval = Duration(seconds: 1);
+  static const Duration _networkReconnectTimeout = Duration(seconds: 20);
+  static const Duration _pairingRetryTimeout = Duration(seconds: 20);
+
   bool _timedOut = false;
   bool _pairingCompleted = false;
   String? _errorMessage;
@@ -58,7 +69,7 @@ class _ProprietaryCameraWaitingDialogState
 
   @override
   void dispose() {
-    _disconnectWifiOnce();
+    unawaited(_disconnectWifiOnce());
     super.dispose();
   }
 
@@ -66,14 +77,207 @@ class _ProprietaryCameraWaitingDialogState
     if (_wifiDisconnected) return;
 
     try {
-      const platform = MethodChannel("secluso.com/wifi");
-      await platform.invokeMethod<String>(
+      final result = await _wifiChannel.invokeMethod<String>(
         'disconnectFromWifi',
-        <String, dynamic>{'ssid': "Secluso"},
+        <String, dynamic>{'ssid': _cameraHotspotSsid},
       );
+      Log.d("WiFi disconnect result: ${result ?? '<null>'}");
       _wifiDisconnected = true;
     } catch (e) {
       Log.w("WiFi disconnect failed: $e");
+    }
+  }
+
+  Future<String> _currentSsid() async {
+    if (!Platform.isIOS) {
+      return '';
+    }
+
+    try {
+      final response = await _wifiChannel.invokeMethod<String>(
+        'getCurrentSSID',
+        <String, dynamic>{'ssid': _cameraHotspotSsid},
+      );
+      return response?.trim() ?? '';
+    } catch (e) {
+      Log.w("WiFi fetch SSID failed: $e");
+      return '';
+    }
+  }
+
+  Future<Uri?> _configuredServerUri() async {
+    final prefs = await SharedPreferences.getInstance();
+    final rawServerAddr = prefs.getString(PrefKeys.serverAddr);
+    if (rawServerAddr == null || rawServerAddr.isEmpty) {
+      Log.w('Server address is unavailable for reachability probe');
+      return null;
+    }
+
+    try {
+      return Uri.parse(rawServerAddr);
+    } catch (e) {
+      Log.w(
+        'Invalid server address for reachability probe: $rawServerAddr ($e)',
+      );
+      return null;
+    }
+  }
+
+  Uri _relayReachabilityUri() =>
+      Uri.parse(Constants.iosNotificationRelayBaseUrl);
+
+  String _summarizeUri(Uri uri) {
+    final buffer =
+        StringBuffer()
+          ..write(uri.scheme)
+          ..write('://')
+          ..write(uri.host);
+    if (uri.hasPort) {
+      buffer.write(':${uri.port}');
+    }
+    return buffer.toString();
+  }
+
+  Future<bool> _probeTcpReachability(Uri uri) async {
+    final port =
+        uri.hasPort
+            ? uri.port
+            : (uri.scheme.toLowerCase() == 'https' ? 443 : 80);
+    Socket? socket;
+    try {
+      socket = await Socket.connect(
+        uri.host,
+        port,
+        timeout: const Duration(seconds: 3),
+      );
+      return true;
+    } catch (e) {
+      Log.d(
+        'Reachability probe failed '
+        '(target=${_summarizeUri(uri)}, error=$e)',
+      );
+      return false;
+    } finally {
+      socket?.destroy();
+    }
+  }
+
+  Future<({bool serverReachable, bool relayReachable})>
+  _probeRequiredNetworkTargets() async {
+    final serverUri = await _configuredServerUri();
+    final relayUri = Platform.isIOS ? _relayReachabilityUri() : null;
+    final results = await Future.wait<bool>([
+      serverUri == null
+          ? Future<bool>.value(false)
+          : _probeTcpReachability(serverUri),
+      relayUri == null
+          ? Future<bool>.value(true)
+          : _probeTcpReachability(relayUri),
+    ]);
+    return (serverReachable: results[0], relayReachable: results[1]);
+  }
+
+  bool _shouldRetryNetworkRequest(Object? error) {
+    if (error == null) {
+      return false;
+    }
+
+    final message = error.toString();
+    return message.contains('SocketException') ||
+        message.contains('Network is unreachable') ||
+        message.contains('Failed host lookup') ||
+        message.contains('Connection refused') ||
+        message.contains('timed out');
+  }
+
+  Future<String?> _iosRelayPairingBlocker() async {
+    if (!Platform.isIOS) {
+      return null;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final binding = loadStoredIosRelayBinding(prefs);
+    if (!isStoredIosRelayBindingUsable(prefs: prefs, binding: binding)) {
+      return 'iOS notification relay is not ready yet. Wait a few minutes and try pairing again.';
+    }
+    return null;
+  }
+
+  Future<void> _waitForPostPairConnectivity() async {
+    final deadline = DateTime.now().add(_networkReconnectTimeout);
+    var stablePolls = 0;
+
+    while (DateTime.now().isBefore(deadline)) {
+      final ssid = await _currentSsid();
+      final probes = await _probeRequiredNetworkTargets();
+      final onCameraHotspot = ssid == _cameraHotspotSsid;
+      final hasReachability = probes.serverReachable && probes.relayReachable;
+
+      if (!onCameraHotspot && hasReachability) {
+        stablePolls += 1;
+        if (stablePolls >= 2) {
+          Log.d(
+            'Network handoff completed after pairing '
+            '(ssid=${ssid.isEmpty ? '<empty>' : ssid}, '
+            'serverReachable=${probes.serverReachable}, '
+            'relayReachable=${probes.relayReachable})',
+          );
+          return;
+        }
+      } else {
+        stablePolls = 0;
+      }
+
+      Log.d(
+        'Waiting for post-pair connectivity '
+        '(ssid=${ssid.isEmpty ? '<empty>' : ssid}, '
+        'onCameraHotspot=$onCameraHotspot, '
+        'serverReachable=${probes.serverReachable}, '
+        'relayReachable=${probes.relayReachable}, '
+        'stablePolls=$stablePolls)',
+      );
+      await Future.delayed(_networkPollInterval);
+    }
+
+    final ssid = await _currentSsid();
+    final probes = await _probeRequiredNetworkTargets();
+    Log.w(
+      'Timed out waiting for post-pair connectivity '
+      '(ssid=${ssid.isEmpty ? '<empty>' : ssid}, '
+      'serverReachable=${probes.serverReachable}, '
+      'relayReachable=${probes.relayReachable})',
+    );
+  }
+
+  Future<Result<String>> _waitForPairingStatusWithRetries({
+    required String pairingToken,
+  }) async {
+    final deadline = DateTime.now().add(_pairingRetryTimeout);
+    Result<String>? lastResult;
+    var attempt = 0;
+
+    while (true) {
+      attempt += 1;
+      lastResult = await HttpClientService.instance.waitForPairingStatus(
+        pairingToken: pairingToken,
+      );
+      if (lastResult.isSuccess ||
+          !_shouldRetryNetworkRequest(lastResult.error) ||
+          DateTime.now().isAfter(deadline)) {
+        return lastResult;
+      }
+
+      final probes = await _probeRequiredNetworkTargets();
+      final ssid = await _currentSsid();
+      Log.w(
+        'Pairing status request failed during network handoff; retrying '
+        '(attempt=$attempt, '
+        'ssid=${ssid.isEmpty ? '<empty>' : ssid}, '
+        'serverReachable=${probes.serverReachable}, '
+        'relayReachable=${probes.relayReachable}, '
+        'error=${lastResult.error})',
+      );
+      await Future.delayed(_networkPollInterval);
     }
   }
 
@@ -86,6 +290,21 @@ class _ProprietaryCameraWaitingDialogState
 
     try {
       var pairingToken = Uuid().v4(config: V4Options(null, CryptoRNG()));
+
+      final hotspotReady = await ProprietaryCameraHotspot.waitUntilReady(
+        cameraIp: Constants.proprietaryCameraIp,
+        timeout: const Duration(seconds: 12),
+        reconnectIfNeeded: Platform.isIOS,
+      );
+      if (!hotspotReady) {
+        if (!mounted) return;
+        setState(
+          () =>
+              _errorMessage =
+                  "Lost connection to the camera hotspot. Reconnect to the camera and try again.",
+        );
+        return;
+      }
 
       final firmwareVersion = await addCamera(
         widget.cameraName,
@@ -104,43 +323,28 @@ class _ProprietaryCameraWaitingDialogState
         return;
       }
 
-      await Future<void>.delayed(
-        const Duration(seconds: 3),
-      ); // Make sure we have enough time for the other side to read before disconnecting the WiFi.
+      // Give the camera time to read the encrypted Wi-Fi payload before
+      // tearing down the phone-side hotspot association.
+      await Future.delayed(_cameraReadGracePeriod);
 
       await _disconnectWifiOnce();
-
-      if (Platform.isIOS) {
-        for (var i = 0; i < 15; i++) {
-          try {
-            const platform = MethodChannel("secluso.com/wifi");
-            var response = await platform.invokeMethod<String>(
-              'getCurrentSSID',
-              <String, dynamic>{'ssid': "Secluso"},
-            );
-
-            if (response == null || response.isEmpty) {
-              break;
-            }
-          } catch (e) {
-            Log.w("WiFi fetch SSID failed: $e");
-          }
-
-          await Future<void>.delayed(const Duration(seconds: 1));
-        }
-      }
+      await _waitForPostPairConnectivity();
 
       if (!mounted) return;
 
-      await Future<void>.delayed(
-        const Duration(seconds: 3),
-      ); // wait 3 seconds to let phone reconnect to wifi / disassociate from private WiFi network
+      await PushNotificationService.tryUploadIfNeeded(true);
+      final iosRelayBlocker = await _iosRelayPairingBlocker();
+      if (iosRelayBlocker != null) {
+        if (!mounted) return;
+        setState(() => _errorMessage = iosRelayBlocker);
+        return;
+      }
 
       if (!mounted) return;
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(PrefKeys.lastCameraAdd, widget.cameraName);
-      final status = await HttpClientService.instance.waitForPairingStatus(
+      final status = await _waitForPairingStatusWithRetries(
         pairingToken: pairingToken,
       );
 
@@ -219,6 +423,7 @@ class _ProprietaryCameraWaitingDialogState
       await requestNotificationsAfterFirstCameraAdd();
     }
 
+    if (!mounted) return;
     Navigator.popUntil(context, (route) => route.isFirst);
   }
 
@@ -245,6 +450,7 @@ class _ProprietaryCameraWaitingDialogState
       }
     }
 
+    if (!mounted) return;
     int count = 0;
     Navigator.popUntil(context, (route) {
       count++;

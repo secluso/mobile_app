@@ -2,10 +2,21 @@
 
 class PrefKeys {
   static const needUpdateFcmToken = 'need_update_fcm_token';
+  static const needUpdateIosRelayBinding = 'need_update_ios_relay_binding';
+  static const needUploadIosNotificationTarget =
+      'need_upload_ios_notification_target';
   static const cameraSet = 'camera_set';
   static const needNotification = 'saved_need_notification_state';
   static const fcmToken = 'fcm_token';
   static const fcmConfigJson = 'fcm_config_json';
+  static const iosApnsToken = 'ios_apns_token';
+  static const iosAppInstallId = 'ios_app_install_id';
+  static const iosAppAttestKeyId = 'ios_app_attest_key_id';
+  static const iosRelayAttested = 'ios_relay_attested';
+  static const iosRelayAttestedKeyId = 'ios_relay_attested_key_id';
+  static const iosRelayHubToken = 'ios_relay_hub_token';
+  static const iosRelayHubTokenExpiryMs = 'ios_relay_hub_token_expiry_ms';
+  static const iosRelayBindingJson = 'ios_relay_binding_json';
   static const serverAddr = "server_addr";
   static const serverUsername = "server_username";
   static const serverPassword = "server_password";

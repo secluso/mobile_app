@@ -33,7 +33,7 @@ pub fn try_acquire_lock(path: String) -> Result<bool, String> {
     }
 }
 
-/// Release a previously acquired lock 
+/// Release a previously acquired lock
 #[flutter_rust_bridge::frb]
 pub fn release_lock(path: String) -> Result<(), String> {
     let mut map = LOCK_MAP.lock().unwrap();

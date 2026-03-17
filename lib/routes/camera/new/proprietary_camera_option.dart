@@ -7,6 +7,7 @@ import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
+import 'package:secluso_flutter/utilities/proprietary_camera_hotspot.dart';
 import 'proprietary_camera_waiting.dart';
 import 'package:secluso_flutter/keys.dart';
 
@@ -45,10 +46,18 @@ class ProprietaryCameraConnectDialog extends StatefulWidget {
     final dialogContext = Navigator.of(context, rootNavigator: true).context;
 
     try {
-      final flowResult = await showDialog<Map<String, Object>?>(
+      final connectResult = await _showSetupDialog<bool>(
         context: dialogContext,
-        barrierDismissible: false,
         builder: (ctx) => const ProprietaryCameraConnectDialog(),
+      );
+
+      if (connectResult == null || connectResult == false) {
+        return null;
+      }
+
+      final infoResult = await _showSetupDialog<Map<String, Object>>(
+        context: dialogContext,
+        builder: (ctx) => const ProprietaryCameraInfoDialog(),
       );
 
       ProprietaryCameraConnectDialog.pairingCompleted = true;
@@ -56,11 +65,30 @@ class ProprietaryCameraConnectDialog extends StatefulWidget {
       ProprietaryCameraConnectDialog.pairingInProgress = false;
 
       // Returns null if user canceled or final data if user tapped "Add Camera"
-      return flowResult;
+      return infoResult;
     } finally {
       // Reset regardless of outcome
       pairingInProgress = false;
     }
+  }
+
+  static Future<T?> _showSetupDialog<T>({
+    required BuildContext context,
+    required WidgetBuilder builder,
+  }) {
+    return showGeneralDialog<T>(
+      context: context,
+      barrierDismissible: false,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.black54,
+      transitionDuration: Duration.zero,
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return Builder(builder: builder);
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        return child;
+      },
+    );
   }
 }
 
@@ -81,17 +109,45 @@ class _ProprietaryCameraConnectDialogState
     localSessionId = ProprietaryCameraConnectDialog.currentSessionId;
   }
 
+  Future<void> _verifyCameraHotspotReadiness() async {
+    try {
+      final connected = await ProprietaryCameraHotspot.waitUntilReady(
+        cameraIp: Constants.proprietaryCameraIp,
+        timeout: const Duration(seconds: 20),
+        reconnectIfNeeded: Platform.isIOS,
+      );
+      if (!mounted) return;
+
+      if (!connected) {
+        Log.w("Camera hotspot never became reachable after connect");
+        setState(() {
+          _connectivityError = true;
+          _isConnected = false;
+          _isConnecting = false;
+        });
+      } else {
+        Log.d("Camera hotspot connectivity confirmed");
+      }
+    } catch (e) {
+      Log.e(e);
+      if (!mounted) return;
+      setState(() {
+        _connectivityError = true;
+        _isConnected = false;
+        _isConnecting = false;
+      });
+    }
+  }
+
   Future<void> _connectToCamera() async {
     Log.d("Entered method");
     setState(() {
       _connectivityError = false;
       _isConnecting = true;
     });
+    await WidgetsBinding.instance.endOfFrame;
     try {
-      final result = await platform.invokeMethod<String>(
-        'connectToWifi',
-        <String, dynamic>{'ssid': "Secluso", 'password': '12345678'},
-      );
+      final result = await ProprietaryCameraHotspot.connect();
       Log.d("First result from Wifi Connect Attempt: $result");
 
       if (result == "connected" &&
@@ -110,49 +166,18 @@ class _ProprietaryCameraConnectDialogState
       }
 
       if (result == "connected") {
-        if (Platform.isIOS) {
-          var duration = const Duration(seconds: 3);
-          await Future<void>.delayed(duration);
+        if (localSessionId ==
+            ProprietaryCameraConnectDialog.currentSessionId) {
+          ProprietaryCameraConnectDialog.boundSessionId = localSessionId;
           if (!mounted) return;
-
-          //Connect again to ensure no awkward errors (not sure why this occurs sometimes), should be instant
-          final result = await platform.invokeMethod<String>(
-            'connectToWifi',
-            <String, dynamic>{'ssid': "Secluso", 'password': '12345678'},
-          );
-          Log.d("iOS secondary result from Wifi Connect Attempt: $result");
-        }
-
-        // Do an additional ping to the camera to ensure connectivity.
-        // We expect the same IP for all Raspberry Pi Cameras
-        try {
-          var duration = const Duration(seconds: 3);
-          await Future<void>.delayed(duration);
+          setState(() {
+            _connectivityError = false;
+            _isConnected = true;
+            _isConnecting = false;
+          });
+          unawaited(_verifyCameraHotspotReadiness());
+        } else {
           if (!mounted) return;
-          Log.d("Starting to ping");
-          bool connected = await pingProprietaryDevice(
-            cameraIp: Constants.proprietaryCameraIp,
-          );
-          if (!mounted) return;
-
-          if (!connected) {
-            setState(() {
-              _connectivityError = true;
-              _isConnecting = false;
-            });
-          } else {
-            if (localSessionId ==
-                ProprietaryCameraConnectDialog.currentSessionId) {
-              ProprietaryCameraConnectDialog.boundSessionId = localSessionId;
-              setState(() {
-                _connectivityError = false;
-                _isConnected = true;
-                _isConnecting = false;
-              });
-            }
-          }
-        } catch (e) {
-          Log.e(e);
           if (!_isConnected) {
             setState(() {
               _connectivityError = true;
@@ -203,20 +228,13 @@ class _ProprietaryCameraConnectDialogState
 
   Future<void> _onNext() async {
     _exitingToNext = true;
-    final infoResult = await showDialog<Map<String, Object>>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => const ProprietaryCameraInfoDialog(),
-    );
-    if (!mounted) return;
-
-    Navigator.of(context).pop(infoResult);
+    Navigator.of(context).pop(true);
   }
 
   void _onCancel() async {
-    _maybeDisconnect();
+    await _maybeDisconnect();
     ProprietaryCameraConnectDialog.pairingInProgress = false;
-    Navigator.of(context).pop();
+    Navigator.of(context).pop(false);
   }
 
   @override
@@ -357,7 +375,6 @@ class _ProprietaryCameraInfoDialogState
   final _cameraNameController = TextEditingController();
   final _wifiSsidController = TextEditingController();
   final _wifiPasswordController = TextEditingController();
-  final _cameraNameFocusNode = FocusNode();
 
   Uint8List? _qrCode;
 
@@ -365,10 +382,6 @@ class _ProprietaryCameraInfoDialogState
   void initState() {
     super.initState();
     ProprietaryCameraConnectDialog.pairingCompleted = false;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _cameraNameFocusNode.requestFocus();
-    });
   }
 
   @override
@@ -376,7 +389,6 @@ class _ProprietaryCameraInfoDialogState
     _cameraNameController.dispose();
     _wifiSsidController.dispose();
     _wifiPasswordController.dispose();
-    _cameraNameFocusNode.dispose();
     super.dispose();
   }
 
@@ -513,7 +525,6 @@ class _ProprietaryCameraInfoDialogState
               const SizedBox(height: 20),
               TextField(
                 controller: _cameraNameController,
-                focusNode: _cameraNameFocusNode,
                 decoration: const InputDecoration(
                   labelText: 'Camera Name',
                   hintText: 'e.g. Front Door',
