@@ -406,6 +406,7 @@ class CamerasPageState extends State<CamerasPage>
   bool _showRecentError = false;
   bool _backgroundDialogShown = false;
   bool _hasCompletedCameraLoad = false;
+  bool? _serverHasSyncedState;
 
   /// cache: cam-name to thumbnail bytes (null = tried but failed)
   final Map<String, Uint8List?> _thumbCache = {};
@@ -435,11 +436,32 @@ class CamerasPageState extends State<CamerasPage>
     return prefs;
   }
 
+  Future<void> _reloadServerSyncState() async {
+    if (_isPreviewMode) {
+      _serverHasSyncedState = widget.previewServerHasSynced ?? false;
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final serverAddr = prefs.getString(PrefKeys.serverAddr);
+    final credentialsFull = prefs.getString(PrefKeys.credentialsFull);
+    final synced =
+        serverAddr != null &&
+        serverAddr.isNotEmpty &&
+        credentialsFull != null &&
+        prefs.containsKey(PrefKeys.serverUsername);
+    if (!mounted) return;
+    setState(() {
+      _serverHasSyncedState = synced;
+    });
+  }
+
   void _refreshHomeState() {
     if (!mounted) return;
     setState(() {
       _prefsFuture = _loadPrefsFresh();
     });
+    unawaited(_reloadServerSyncState());
     unawaited(_loadCamerasFromDatabase(true));
   }
 
@@ -564,6 +586,7 @@ class CamerasPageState extends State<CamerasPage>
 
     _prefsFuture = _loadPrefsFresh();
     if (_isPreviewMode) {
+      _serverHasSyncedState = widget.previewServerHasSynced ?? false;
       cameras.addAll(
         (widget.previewCameras ?? const <CameraPreviewData>[]).map(
           (camera) => {
@@ -585,6 +608,7 @@ class CamerasPageState extends State<CamerasPage>
       return;
     }
 
+    unawaited(_reloadServerSyncState());
     _prefsFuture.then((_) => _checkNotificationStatus());
     _loadRecentError();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1630,26 +1654,20 @@ class CamerasPageState extends State<CamerasPage>
     if (_isPreviewMode) {
       return _buildPage(widget.previewServerHasSynced ?? false);
     }
-
-    return FutureBuilder<SharedPreferences>(
-      future: _prefsFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const SeclusoScaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        final prefs = snapshot.data!;
-        final serverHasSynced = prefs.containsKey(PrefKeys.serverUsername);
-
-        return _buildPage(serverHasSynced);
-      },
-    );
+    final serverHasSynced = _serverHasSyncedState;
+    if (serverHasSynced == null) {
+      return _startupHoldingScreen(context);
+    }
+    return _buildPage(serverHasSynced);
   }
 
   Widget _buildPage(bool serverHasSynced) {
     if (widget.shellMode) {
+      if (!_hasCompletedCameraLoad &&
+          cameras.isEmpty &&
+          _lastNonEmptyShellCameras.isEmpty) {
+        return _startupHoldingScreen(context, shellMode: true);
+      }
       final shellCameraSource =
           cameras.isNotEmpty || _hasCompletedCameraLoad
               ? cameras
@@ -1883,6 +1901,39 @@ class CamerasPageState extends State<CamerasPage>
                 ),
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _startupHoldingScreen(BuildContext context, {bool shellMode = false}) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor =
+        dark ? const Color(0xFF050505) : const Color(0xFFF2F2F7);
+    final spinnerColor =
+        dark ? Colors.white.withValues(alpha: 0.72) : const Color(0xFF111827);
+
+    return ColoredBox(
+      color: backgroundColor,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset(
+              'assets/icon_centered.png',
+              width: shellMode ? 72 : 68,
+              height: shellMode ? 72 : 68,
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.2,
+                color: spinnerColor,
+              ),
+            ),
           ],
         ),
       ),

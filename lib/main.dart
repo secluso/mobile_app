@@ -404,6 +404,24 @@ class SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (errorMessage == null) {
+      return const SeclusoScaffold(
+        body: ColoredBox(
+          color: Color(0xFF050505),
+          child: Center(
+            child: SizedBox(
+              width: 88,
+              height: 88,
+              child: Image(
+                image: AssetImage('assets/icon_centered.png'),
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return SeclusoScaffold(
       body: SafeArea(
         child: Center(
@@ -419,19 +437,10 @@ class SplashScreen extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    SeclusoStatusChip(
-                      label:
-                          errorMessage == null
-                              ? 'Secure startup'
-                              : 'Startup interrupted',
-                      icon:
-                          errorMessage == null
-                              ? Icons.lock_outline
-                              : Icons.report_problem_outlined,
-                      color:
-                          errorMessage == null
-                              ? SeclusoColors.success
-                              : SeclusoColors.warning,
+                    const SeclusoStatusChip(
+                      label: 'Startup interrupted',
+                      icon: Icons.report_problem_outlined,
+                      color: SeclusoColors.warning,
                     ),
                     const SizedBox(height: 24),
                     Image.asset(
@@ -460,29 +469,10 @@ class SplashScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      errorMessage == null
-                          ? 'Preparing your private camera network and decrypting local state.'
-                          : errorMessage!,
+                      errorMessage!,
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
-                    const SizedBox(height: 24),
-                    if (errorMessage == null)
-                      Column(
-                        children: [
-                          const SizedBox(
-                            width: 28,
-                            height: 28,
-                            child: CircularProgressIndicator(strokeWidth: 2.4),
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            'Checking cameras, sync state, and notifications.',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
                   ],
                 ),
               ),
