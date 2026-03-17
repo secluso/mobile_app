@@ -91,6 +91,20 @@ class _LivestreamPageState extends State<LivestreamPage>
     _startLivestream();
   }
 
+  void _markFirstFrameReady(String source) {
+    if (_hasRenderedFirstFrame) {
+      return;
+    }
+    Log.d('Livestream first-frame gate cleared via $source');
+    if (mounted) {
+      setState(() {
+        _hasRenderedFirstFrame = true;
+      });
+    } else {
+      _hasRenderedFirstFrame = true;
+    }
+  }
+
   @override
   void dispose() {
     // Clear method channel after gone
@@ -157,15 +171,7 @@ class _LivestreamPageState extends State<LivestreamPage>
                   });
                 }
               } else if (call.method == 'onFirstFrame') {
-                if (!_hasRenderedFirstFrame) {
-                  if (mounted) {
-                    setState(() {
-                      _hasRenderedFirstFrame = true;
-                    });
-                  } else {
-                    _hasRenderedFirstFrame = true;
-                  }
-                }
+                _markFirstFrameReady('native');
               } else if (call.method == "debug") {
                 // Plain text log line from swift livestream debug code
                 final msg = call.arguments as String? ?? '';
@@ -296,6 +302,9 @@ class _LivestreamPageState extends State<LivestreamPage>
 
           await ByteStreamPlayer.push(id, dec);
           Log.d('Pushed chunk $chunk (${dec.length} B)');
+          if (defaultTargetPlatform == TargetPlatform.android && chunk == 1) {
+            _markFirstFrameReady('android-first-chunk');
+          }
 
           if (_needToCreateFile) {
             final baseDir = await getApplicationDocumentsDirectory();

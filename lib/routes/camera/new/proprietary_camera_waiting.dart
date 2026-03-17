@@ -22,7 +22,7 @@ import 'package:secluso_flutter/notifications/firebase.dart';
 import 'package:secluso_flutter/notifications/ios_notification_relay.dart';
 import 'package:secluso_flutter/routes/camera/list_cameras.dart';
 import 'package:secluso_flutter/routes/camera/new/show_new_camera_options.dart';
-import 'package:secluso_flutter/routes/camera/view_camera.dart';
+import 'package:secluso_flutter/routes/home_page.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/proprietary_camera_hotspot.dart';
@@ -1638,12 +1638,12 @@ class ProprietaryCameraPairedPage extends StatelessWidget {
   const ProprietaryCameraPairedPage({
     super.key,
     required this.cameraName,
-    this.onGoToCamera,
+    this.onGoHome,
     this.onAddAnotherCamera,
   });
 
   final String cameraName;
-  final VoidCallback? onGoToCamera;
+  final VoidCallback? onGoHome;
   final VoidCallback? onAddAnotherCamera;
 
   @override
@@ -1651,12 +1651,10 @@ class ProprietaryCameraPairedPage extends StatelessWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final rootNavigator = Navigator.of(context, rootNavigator: true);
 
-    void defaultGoToCamera() {
+    void defaultGoHome() {
       rootNavigator.pushAndRemoveUntil(
-        MaterialPageRoute<void>(
-          builder: (_) => CameraViewPage(cameraName: cameraName),
-        ),
-        (route) => route.isFirst,
+        MaterialPageRoute<void>(builder: (_) => const HomePage()),
+        (route) => false,
       );
     }
 
@@ -1866,7 +1864,7 @@ class ProprietaryCameraPairedPage extends StatelessWidget {
                       width: double.infinity,
                       height: scaled(46),
                       child: FilledButton(
-                        onPressed: onGoToCamera ?? defaultGoToCamera,
+                        onPressed: onGoHome ?? defaultGoHome,
                         style: FilledButton.styleFrom(
                           backgroundColor: primaryButtonFill,
                           foregroundColor: primaryButtonText,
@@ -1882,7 +1880,7 @@ class ProprietaryCameraPairedPage extends StatelessWidget {
                             height: 14.5 / 12,
                           ),
                         ),
-                        child: const Text('GO TO CAMERA'),
+                        child: const Text('GO TO HOME'),
                       ),
                     ),
                     SizedBox(height: scaled(12)),
