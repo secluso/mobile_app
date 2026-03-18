@@ -465,6 +465,7 @@ class CamerasPageState extends State<CamerasPage>
 
   void invalidateThumbnail(String cameraName) {
     _thumbCache.remove(cameraName);
+    _thumbFallback.remove(cameraName);
     _thumbFutures.remove(cameraName);
     _eventThumbCache.removeWhere((key, _) => key.startsWith('$cameraName\n'));
     _eventThumbFutures.removeWhere((key, _) => key.startsWith('$cameraName\n'));
@@ -903,6 +904,25 @@ class CamerasPageState extends State<CamerasPage>
     for (final video in videos) {
       latestVideoByCamera.putIfAbsent(video.camera, () => video);
     }
+
+    final activeCameraNames = storedCameras.map((camera) => camera.name).toSet();
+    _thumbCache.removeWhere((cameraName, _) => !activeCameraNames.contains(cameraName));
+    _thumbFallback.removeWhere(
+      (cameraName, _) => !activeCameraNames.contains(cameraName),
+    );
+    _thumbFutures.removeWhere(
+      (cameraName, _) => !activeCameraNames.contains(cameraName),
+    );
+    _eventThumbCache.removeWhere((key, _) {
+      final separator = key.indexOf('\n');
+      final cameraName = separator == -1 ? key : key.substring(0, separator);
+      return !activeCameraNames.contains(cameraName);
+    });
+    _eventThumbFutures.removeWhere((key, _) {
+      final separator = key.indexOf('\n');
+      final cameraName = separator == -1 ? key : key.substring(0, separator);
+      return !activeCameraNames.contains(cameraName);
+    });
 
     final detectionCache = <String, Set<String>>{};
     Future<Set<String>> detectionsForVideo(String videoName) async {
