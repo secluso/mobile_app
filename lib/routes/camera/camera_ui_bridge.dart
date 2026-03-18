@@ -48,6 +48,27 @@ class CameraUiBridge {
     existingCameraSet.remove(cameraName);
     await prefs.setStringList(PrefKeys.cameraSet, existingCameraSet);
 
+    for (final queueKey in [
+      PrefKeys.downloadCameraQueue,
+      PrefKeys.backupDownloadCameraQueue,
+    ]) {
+      final existingQueue = prefs.getStringList(queueKey);
+      if (existingQueue == null) {
+        continue;
+      }
+      final filteredQueue =
+          existingQueue
+              .where((queuedCamera) => queuedCamera != cameraName)
+              .toList();
+      if (filteredQueue.length != existingQueue.length) {
+        if (filteredQueue.isEmpty) {
+          await prefs.remove(queueKey);
+        } else {
+          await prefs.setStringList(queueKey, filteredQueue);
+        }
+      }
+    }
+
     final query = cameraBox.query(Camera_.name.equals(cameraName)).build();
     final cams = query.find();
     query.close();

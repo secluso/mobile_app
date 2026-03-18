@@ -118,6 +118,11 @@ class PushNotificationService {
   static DateTime? _iosSkipRetryUntil;
   static String? _iosSkipReason;
 
+  bool _cameraStillExists(SharedPreferences prefs, String cameraName) {
+    final cameraSet = prefs.getStringList(PrefKeys.cameraSet) ?? const [];
+    return cameraSet.contains(cameraName);
+  }
+
   Future<void> init() async {
     if (_initialized) {
       return;
@@ -469,6 +474,12 @@ class PushNotificationService {
       }
       // TODO: what happens if we have an invalid name?
       for (final cameraName in cameraSet) {
+        if (!_cameraStillExists(prefs, cameraName)) {
+          Log.d(
+            "[FCM] Camera deleted before processing $cameraName; skipping.",
+          );
+          continue;
+        }
         // This code might be called after the app is killed/terminated. We need to initialize the cameras again.
         final initOutcome = await initialize(cameraName, timeout: _initTimeout);
         if (!initOutcome.isOk) {
@@ -532,6 +543,12 @@ class PushNotificationService {
           if (allowForce) {
             _forceInitLast[cameraName] = now;
             Log.w("[FCM] Decrypt error; forcing init for $cameraName");
+            if (!_cameraStillExists(prefs, cameraName)) {
+              Log.d(
+                "[FCM] Camera deleted before forced init for $cameraName; skipping.",
+              );
+              continue;
+            }
             final forceOutcome = await initialize(
               cameraName,
               timeout: _initTimeout,
@@ -568,17 +585,23 @@ class PushNotificationService {
           }
         } catch (_) {
           // TODO: What if logic from above failed for reasons other than jsonDecode?
+          if (!_cameraStillExists(prefs, cameraName)) {
+            Log.d(
+              "[FCM] Camera deleted before handling response for $cameraName; skipping.",
+            );
+            continue;
+          }
           if (response == 'Download') {
             Log.d("Downloading video");
             final bool useMobile = prefs.getBool('use_mobile_state') ?? false;
 
-            final status = await Connectivity().checkConnectivity();
-            final bool isMetered = status == ConnectivityResult.mobile;
+            final statuses = await Connectivity().checkConnectivity();
+            final bool isMetered = statuses.contains(ConnectivityResult.mobile);
             final bool isRestricted = false;
 
             if (!isMetered || (useMobile && !isRestricted)) {
-              DownloadScheduler.scheduleVideoDownload(
-                cameraName,
+              unawaited(
+                DownloadScheduler.scheduleVideoDownload(cameraName),
               ); // Don't await, as the lock may freeze this up
             }
 
@@ -593,7 +616,8 @@ class PushNotificationService {
           } else if (!response.startsWith('Error') && response != 'None') {
             var sendNotificationGlobal =
                 prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
-            if (sendNotificationGlobal) {
+            if (sendNotificationGlobal &&
+                _cameraStillExists(prefs, cameraName)) {
               final notifId = _motionNotifId(cameraName, response);
 
               showMotionNotification(
@@ -604,8 +628,12 @@ class PushNotificationService {
               );
 
               unawaited(_tryAttachThumbLater(cameraName, response, notifId));
-            } else {
+            } else if (!sendNotificationGlobal) {
               Log.d("Not showing motion notification due to preference");
+            } else {
+              Log.d(
+                "[FCM] Camera deleted before motion notification for $cameraName; skipping.",
+              );
             }
 
             final nowTimestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
@@ -620,12 +648,24 @@ class PushNotificationService {
 
             // TODO: I removed the pending to repository addition for Android because it's not possible to init ObjectBox in the background handler (as Android requires). Find alternate solution maybe. Not sure this is needed anymore (as we don't want to show users pending videos in cases of failure)
             if (Platform.isIOS) {
+              if (!_cameraStillExists(prefs, cameraName)) {
+                Log.d(
+                  "[FCM] Camera deleted before iOS pending add for $cameraName; skipping.",
+                );
+                continue;
+              }
               await addPendingToRepository(cameraName, response);
-              DownloadScheduler.scheduleVideoDownload(cameraName);
+              unawaited(DownloadScheduler.scheduleVideoDownload(cameraName));
             }
 
             // Prevent back-to-back notifications
             await Future.delayed(const Duration(seconds: 10));
+            if (!_cameraStillExists(prefs, cameraName)) {
+              Log.d(
+                "[FCM] Camera deleted before status refresh for $cameraName; skipping.",
+              );
+              continue;
+            }
             updateCameraStatusFcmNotification(response, cameraName);
           } else {
             Log.d("[FCM] No-op response for $cameraName: $response");
@@ -658,8 +698,15 @@ class PushNotificationService {
     Duration pollEvery = const Duration(milliseconds: 300),
   }) async {
     final deadline = DateTime.now().add(timeout);
+    final prefs = await SharedPreferences.getInstance();
 
     while (DateTime.now().isBefore(deadline)) {
+      if (!_cameraStillExists(prefs, cameraName)) {
+        Log.d(
+          "[FCM] Camera deleted before thumbnail attachment for $cameraName; aborting.",
+        );
+        return;
+      }
       final hasThumb = await ThumbnailManager.checkThumbnailsForCamera(
         cameraName,
         timestamp,

@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:secluso_flutter/notifications/epoch.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/constants.dart';
+import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/routes/camera/list_cameras.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
@@ -12,7 +13,6 @@ import 'package:secluso_flutter/utilities/lock.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/notifications/epoch_markers.dart';
@@ -49,6 +49,12 @@ class ThumbnailManager {
 
   static bool _isThumbnailFilename(String name) {
     return name.startsWith("thumbnail_") && name.endsWith(".png");
+  }
+
+  static Future<bool> _cameraStillExists(String camera) async {
+    final prefs = await SharedPreferences.getInstance();
+    final cameraSet = prefs.getStringList(PrefKeys.cameraSet) ?? <String>[];
+    return cameraSet.contains(camera);
   }
 
   static Future<bool> _maybeForceInit(String camera, String reason) async {
@@ -88,9 +94,7 @@ class ThumbnailManager {
       if (!await file.exists()) return false;
       final stat = await file.stat();
       final size = stat.size;
-      if (size >= _minPngSizeBytes &&
-          lastSize != null &&
-          size == lastSize) {
+      if (size >= _minPngSizeBytes && lastSize != null && size == lastSize) {
         RandomAccessFile? raf;
         try {
           raf = await file.open(mode: FileMode.read);
@@ -229,9 +233,21 @@ class ThumbnailManager {
   }) async {
     return Log.runWithDerivedContext('thumb', () async {
       Log.d("Entered thumbnail session");
+      if (!await _cameraStillExists(camera)) {
+        Log.d(
+          "$camera: Camera deleted before thumbnail session started; skipping.",
+        );
+        return;
+      }
       // There's a chance a thumbnail could be requested multiple times at once for a given camera. So we need to lock this function per-camera to ensure that doesn't occur.
       if (await lock("thumbnail$camera.lock")) {
         try {
+          if (!await _cameraStillExists(camera)) {
+            Log.d(
+              "$camera: Camera deleted after thumbnail session lock acquired; skipping.",
+            );
+            return;
+          }
           final initOutcome = await initialize(camera);
           if (!initOutcome.isOk) {
             if (initOutcome == InitOutcome.timeout) {
@@ -247,6 +263,12 @@ class ThumbnailManager {
           final sw = Stopwatch()..start();
 
           while (sw.elapsed <= timeBudget) {
+            if (!await _cameraStillExists(camera)) {
+              Log.d(
+                "$camera: Camera deleted during thumbnail session loop; aborting.",
+              );
+              return;
+            }
             // Epoch for this starts at 2 when not set from before.
             final epoch = await readEpoch(camera, "thumbnail");
             final assumedEpoch = epoch > 0 ? epoch - 1 : 0;
@@ -286,20 +308,28 @@ class ThumbnailManager {
 
             // Decode the thumbnail
             var file = downloadValue.file!;
+            if (!await _cameraStillExists(camera)) {
+              Log.d(
+                "$camera: Camera deleted after encrypted thumbnail session download; discarding work.",
+              );
+              if (await file.exists()) {
+                await file.delete();
+              }
+              return;
+            }
             String decFileName;
             final decryptSw = Stopwatch()..start();
             try {
-              decFileName =
-                  await decryptThumbnail(
-                    cameraName: camera,
-                    encFilename: fileName,
-                    pendingMetaDirectory: metaDir.path,
-                    assumedEpoch: BigInt.from(assumedEpoch),
-                  ).timeout(_decryptTimeout);
+              decFileName = await decryptThumbnail(
+                cameraName: camera,
+                encFilename: fileName,
+                pendingMetaDirectory: metaDir.path,
+                assumedEpoch: BigInt.from(assumedEpoch),
+              ).timeout(_decryptTimeout);
             } on TimeoutException {
-                Log.e(
-                  "Thumbnail decrypt timeout for $camera after ${_decryptTimeout.inSeconds}s (${Log.ownerTag()})",
-                );
+              Log.e(
+                "Thumbnail decrypt timeout for $camera after ${_decryptTimeout.inSeconds}s (${Log.ownerTag()})",
+              );
               return;
             }
             decryptSw.stop();
@@ -310,7 +340,9 @@ class ThumbnailManager {
             }
 
             if (decFileName.startsWith("Error")) {
-              Log.w("Thumbnail decrypt failed for $camera epoch $epoch: $decFileName");
+              Log.w(
+                "Thumbnail decrypt failed for $camera epoch $epoch: $decFileName",
+              );
               if (_isBusyError(decFileName)) {
                 Log.w(
                   "Thumbnail decrypt busy for $camera epoch $epoch; skipping for now",
@@ -318,9 +350,13 @@ class ThumbnailManager {
                 return;
               }
               if (_isEpochMismatch(decFileName)) {
-                final markerPayload =
-                    await readEpochMarker(camera, "thumbnail", epoch);
-                if (markerPayload != null && _isThumbnailFilename(markerPayload)) {
+                final markerPayload = await readEpochMarker(
+                  camera,
+                  "thumbnail",
+                  epoch,
+                );
+                if (markerPayload != null &&
+                    _isThumbnailFilename(markerPayload)) {
                   final baseDir = await getApplicationDocumentsDirectory();
                   final decPath = p.join(
                     baseDir.path,
@@ -358,17 +394,19 @@ class ThumbnailManager {
                   );
                 }
               }
-              final forceOk = await _maybeForceInit(camera, "decrypt_thumbnail");
+              final forceOk = await _maybeForceInit(
+                camera,
+                "decrypt_thumbnail",
+              );
               if (forceOk) {
                 final retrySw = Stopwatch()..start();
                 try {
-                  decFileName =
-                      await decryptThumbnail(
-                        cameraName: camera,
-                        encFilename: fileName,
-                        pendingMetaDirectory: metaDir.path,
-                        assumedEpoch: BigInt.from(assumedEpoch),
-                      ).timeout(_decryptTimeout);
+                  decFileName = await decryptThumbnail(
+                    cameraName: camera,
+                    encFilename: fileName,
+                    pendingMetaDirectory: metaDir.path,
+                    assumedEpoch: BigInt.from(assumedEpoch),
+                  ).timeout(_decryptTimeout);
                 } on TimeoutException {
                   Log.e(
                     "Thumbnail decrypt timeout after forced init for $camera (${Log.ownerTag()})",
@@ -386,10 +424,24 @@ class ThumbnailManager {
 
             Log.d("Thumbnail dec file name = $decFileName");
 
+            if (!await _cameraStillExists(camera)) {
+              Log.d(
+                "$camera: Camera deleted after thumbnail session decrypt; skipping remaining work.",
+              );
+              if (await file.exists()) {
+                await file.delete();
+              }
+              return;
+            }
+
             if (decFileName == "Duplicate") {
-              final markerPayload =
-                  await readEpochMarker(camera, "thumbnail", epoch);
-              if (markerPayload != null && _isThumbnailFilename(markerPayload)) {
+              final markerPayload = await readEpochMarker(
+                camera,
+                "thumbnail",
+                epoch,
+              );
+              if (markerPayload != null &&
+                  _isThumbnailFilename(markerPayload)) {
                 final baseDir = await getApplicationDocumentsDirectory();
                 final decPath = p.join(
                   baseDir.path,
@@ -486,7 +538,20 @@ class ThumbnailManager {
   static Future<bool> retrieveThumbnails({required String camera}) async {
     return Log.runWithDerivedContext('thumb', () async {
       Log.d("Entered retrieveThumbnails");
+      if (!await _cameraStillExists(camera)) {
+        Log.d(
+          "$camera: Camera deleted before thumbnail retrieval started; skipping.",
+        );
+        return true;
+      }
       if (await lock("thumbnail$camera.lock")) {
+        if (!await _cameraStillExists(camera)) {
+          Log.d(
+            "$camera: Camera deleted after thumbnail lock acquired; skipping.",
+          );
+          await unlock("thumbnail$camera.lock");
+          return true;
+        }
         final initOutcome = await initialize(camera);
         if (!initOutcome.isOk) {
           if (initOutcome == InitOutcome.timeout) {
@@ -503,6 +568,10 @@ class ThumbnailManager {
         var epoch = await readEpoch(camera, "thumbnail");
         try {
           while (true) {
+            if (!await _cameraStillExists(camera)) {
+              Log.d("$camera: Camera deleted during thumbnail loop; aborting.");
+              return true;
+            }
             final assumedEpoch = epoch > 0 ? epoch - 1 : 0;
             Log.d("Thumbnail Epoch = $epoch");
             final fileName = "encThumbnail$epoch";
@@ -538,20 +607,28 @@ class ThumbnailManager {
 
             // Decode the thumbnail
             var file = result.value!.file!;
+            if (!await _cameraStillExists(camera)) {
+              Log.d(
+                "$camera: Camera deleted after encrypted thumbnail download; discarding work.",
+              );
+              if (await file.exists()) {
+                await file.delete();
+              }
+              return true;
+            }
             String decFileName;
             final decryptSw = Stopwatch()..start();
             try {
-              decFileName =
-                  await decryptThumbnail(
-                    cameraName: camera,
-                    encFilename: fileName,
-                    pendingMetaDirectory: metaDir.path,
-                    assumedEpoch: BigInt.from(assumedEpoch),
-                  ).timeout(_decryptTimeout);
+              decFileName = await decryptThumbnail(
+                cameraName: camera,
+                encFilename: fileName,
+                pendingMetaDirectory: metaDir.path,
+                assumedEpoch: BigInt.from(assumedEpoch),
+              ).timeout(_decryptTimeout);
             } on TimeoutException {
-                Log.e(
-                  "Thumbnail decrypt timeout for $camera after ${_decryptTimeout.inSeconds}s (${Log.ownerTag()})",
-                );
+              Log.e(
+                "Thumbnail decrypt timeout for $camera after ${_decryptTimeout.inSeconds}s (${Log.ownerTag()})",
+              );
               return false;
             }
             decryptSw.stop();
@@ -562,16 +639,22 @@ class ThumbnailManager {
             }
 
             if (decFileName.startsWith("Error")) {
-              Log.w("Thumbnail decrypt failed for $camera epoch $epoch: $decFileName");
+              Log.w(
+                "Thumbnail decrypt failed for $camera epoch $epoch: $decFileName",
+              );
               if (_isBusyError(decFileName)) {
                 Log.w(
                   "Thumbnail decrypt busy for $camera epoch $epoch; skipping for now",
                 );
               }
               if (_isEpochMismatch(decFileName)) {
-                final markerPayload =
-                    await readEpochMarker(camera, "thumbnail", epoch);
-                if (markerPayload != null && _isThumbnailFilename(markerPayload)) {
+                final markerPayload = await readEpochMarker(
+                  camera,
+                  "thumbnail",
+                  epoch,
+                );
+                if (markerPayload != null &&
+                    _isThumbnailFilename(markerPayload)) {
                   final baseDir = await getApplicationDocumentsDirectory();
                   final decPath = p.join(
                     baseDir.path,
@@ -602,24 +685,25 @@ class ThumbnailManager {
                     serverFile: epoch.toString(),
                     type: Group.thumbnail,
                   );
-
                 } else if (markerPayload != null) {
                   Log.w(
                     "Epoch marker exists for $camera thumbnail $epoch but payload is invalid; not skipping",
                   );
                 }
               }
-              final forceOk = await _maybeForceInit(camera, "decrypt_thumbnail");
+              final forceOk = await _maybeForceInit(
+                camera,
+                "decrypt_thumbnail",
+              );
               if (forceOk) {
                 final retrySw = Stopwatch()..start();
                 try {
-                  decFileName =
-                      await decryptThumbnail(
-                        cameraName: camera,
-                        encFilename: fileName,
-                        pendingMetaDirectory: metaDir.path,
-                        assumedEpoch: BigInt.from(assumedEpoch),
-                      ).timeout(_decryptTimeout);
+                  decFileName = await decryptThumbnail(
+                    cameraName: camera,
+                    encFilename: fileName,
+                    pendingMetaDirectory: metaDir.path,
+                    assumedEpoch: BigInt.from(assumedEpoch),
+                  ).timeout(_decryptTimeout);
                 } on TimeoutException {
                   Log.e(
                     "Thumbnail decrypt timeout after forced init for $camera (${Log.ownerTag()})",
@@ -637,10 +721,24 @@ class ThumbnailManager {
 
             Log.d("Thumbnail dec file name = $decFileName");
 
+            if (!await _cameraStillExists(camera)) {
+              Log.d(
+                "$camera: Camera deleted after thumbnail decrypt; skipping remaining work.",
+              );
+              if (await file.exists()) {
+                await file.delete();
+              }
+              return true;
+            }
+
             if (decFileName == "Duplicate") {
-              final markerPayload =
-                  await readEpochMarker(camera, "thumbnail", epoch);
-              if (markerPayload != null && _isThumbnailFilename(markerPayload)) {
+              final markerPayload = await readEpochMarker(
+                camera,
+                "thumbnail",
+                epoch,
+              );
+              if (markerPayload != null &&
+                  _isThumbnailFilename(markerPayload)) {
                 final baseDir = await getApplicationDocumentsDirectory();
                 final decPath = p.join(
                   baseDir.path,
