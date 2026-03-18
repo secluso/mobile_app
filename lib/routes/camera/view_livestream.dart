@@ -28,6 +28,8 @@ import 'package:secluso_flutter/ui/secluso_theme.dart';
 import 'dart:io';
 import '../../objectbox.g.dart';
 
+const _livestreamStaleChunkThreshold = Duration(seconds: 4);
+
 class LivestreamPage extends StatefulWidget {
   final String cameraName;
   final String? previewAssetPath;
@@ -54,6 +56,7 @@ class _LivestreamPageState extends State<LivestreamPage>
   double? _aspectRatio;
   int? _streamId;
   bool _hasRenderedFirstFrame = false;
+  bool _streamPaused = false;
   bool _isClosing = false;
   Future<void>? _shutdownFuture;
   Future<void> _archiveWriteChain = Future.value();
@@ -74,7 +77,7 @@ class _LivestreamPageState extends State<LivestreamPage>
     duration: const Duration(seconds: 4),
   )..repeat();
 
-  late final MethodChannel _methodChannel;
+  MethodChannel? _methodChannel;
   AppLifecycleState?
   _lastLifecycleState; // Store the lifecycle state that was last to ensure we don't cancel the livestream for screen rotation
 
@@ -109,13 +112,35 @@ class _LivestreamPageState extends State<LivestreamPage>
     }
   }
 
+  void _pauseLivestream(String reason) {
+    Log.w('Livestream paused - $reason');
+    if (mounted) {
+      setState(() {
+        _streamPaused = true;
+        isStreaming = false;
+      });
+    } else {
+      _streamPaused = true;
+      isStreaming = false;
+    }
+  }
+
+  void _clearMethodChannel() {
+    final channel = _methodChannel;
+    _methodChannel = null;
+    if (channel == null) {
+      return;
+    }
+    try {
+      channel.setMethodCallHandler(null);
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
     // Clear method channel after gone
     if (!_isPreviewMode) {
-      try {
-        _methodChannel.setMethodCallHandler(null);
-      } catch (_) {}
+      _clearMethodChannel();
 
       if (_streamId != null && _shutdownFuture == null) {
         unawaited(_finishNativeStream());
@@ -165,7 +190,7 @@ class _LivestreamPageState extends State<LivestreamPage>
             _streamId = await ByteStreamPlayer.createStream();
             Log.d('Native queue id = $_streamId');
             _methodChannel = MethodChannel('byte_player_view_$_streamId');
-            _methodChannel.setMethodCallHandler((call) async {
+            _methodChannel!.setMethodCallHandler((call) async {
               if (call.method == 'onAspectRatio') {
                 final ratio = call.arguments as double;
                 Log.d("Recieved aspect ratio $ratio");
@@ -191,6 +216,7 @@ class _LivestreamPageState extends State<LivestreamPage>
           if (!cmOk) return; // error handled inside
 
           setState(() => isStreaming = true);
+          _streamPaused = false;
           _startChunkPump();
           startSucceeded = true;
           return;
@@ -417,9 +443,24 @@ class _LivestreamPageState extends State<LivestreamPage>
           currentFetch = nextFetch;
         },
         (err) async {
+          final errText = err.toString();
+          final nowMs = DateTime.now().millisecondsSinceEpoch;
+          final sinceLastSuccessMs = nowMs - lastChunkTime;
           Log.d(
-            'Chunk $chunk error after fetch=${snapshot.completedAtMs - snapshot.startedAtMs} ms: $err',
+            'Chunk $chunk error after fetch=${snapshot.completedAtMs - snapshot.startedAtMs} ms '
+            '(sinceLastSuccess=$sinceLastSuccessMs ms): $errText',
           );
+          if (!_isClosing &&
+              (errText.contains('404 Not Found') ||
+                  sinceLastSuccessMs >=
+                      _livestreamStaleChunkThreshold.inMilliseconds)) {
+            final pauseReason =
+                errText.contains('404 Not Found')
+                    ? 'No new video received for chunk $chunk'
+                    : 'No successful livestream chunk for $sinceLastSuccessMs ms ($errText)';
+            _pauseLivestream(pauseReason);
+            return;
+          }
           currentFetch = _fetchChunkSnapshot(chunk);
           // TODO: At some point, we should stop trying to find more chunks... show user an error. Also, what if a user closes out of the page? This continues on.
         },
@@ -436,6 +477,7 @@ class _LivestreamPageState extends State<LivestreamPage>
     final id = _streamId;
     if (id != null) {
       _streamId = null;
+      _clearMethodChannel();
       await _archiveWriteChain;
       await ByteStreamPlayer.push(id, Uint8List(0)); // EOF
       await ByteStreamPlayer.finish(id);
@@ -480,26 +522,41 @@ class _LivestreamPageState extends State<LivestreamPage>
     Log.e('Livestream fail - $msg');
     setState(() {
       hasFailed = true;
+      _streamPaused = false;
       _errMsg = msg;
     });
   }
 
-  void _retryConnection() {
+  Future<void> _retryConnection() async {
     if (_isPreviewMode) {
       setState(() {
         hasFailed = false;
+        _streamPaused = false;
         _errMsg = '';
         isStreaming = true;
       });
       return;
     }
 
-    setState(() {
+    final existingStreamId = _streamId;
+    if (mounted) {
+      setState(() {
+        hasFailed = false;
+        _streamPaused = false;
+        _errMsg = '';
+        isStreaming = false;
+        _hasRenderedFirstFrame = false;
+      });
+    } else {
       hasFailed = false;
+      _streamPaused = false;
       _errMsg = '';
       isStreaming = false;
       _hasRenderedFirstFrame = false;
-    });
+    }
+    if (existingStreamId != null) {
+      await _finishNativeStream();
+    }
     _startLivestream();
   }
 
@@ -539,10 +596,16 @@ class _LivestreamPageState extends State<LivestreamPage>
         MediaQuery.of(context).orientation == Orientation.landscape;
     final showNativeShell = !_isPreviewMode && !hasFailed;
     final loadingLiveFrame =
-        !_isPreviewMode && (!isStreaming || !_hasRenderedFirstFrame);
+        !_isPreviewMode &&
+        !_streamPaused &&
+        (!isStreaming || !_hasRenderedFirstFrame);
     return SeclusoScaffold(
       appBar:
-          isLandscape || hasFailed || isStreaming || showNativeShell
+          isLandscape ||
+                  hasFailed ||
+                  _streamPaused ||
+                  isStreaming ||
+                  showNativeShell
               ? null
               : seclusoAppBar(
                 context,
@@ -557,8 +620,8 @@ class _LivestreamPageState extends State<LivestreamPage>
                 ),
               ),
       body:
-          hasFailed
-              ? _buildFailureState()
+          hasFailed || _streamPaused
+              ? _buildFailureState(paused: _streamPaused)
               : isLandscape
               ? (_isPreviewMode
                   ? _buildPreviewStream()
@@ -620,11 +683,18 @@ class _LivestreamPageState extends State<LivestreamPage>
               bottom: 24,
               child: SeclusoStatusChip(
                 label:
-                    loading
+                    _streamPaused
+                        ? 'Paused · end-to-end encrypted'
+                        : loading
                         ? 'Connecting · end-to-end encrypted'
                         : 'Live · end-to-end encrypted',
                 icon: Icons.lock_outline,
-                color: loading ? SeclusoColors.blue : SeclusoColors.success,
+                color:
+                    _streamPaused
+                        ? const Color(0xFFF59E0B)
+                        : loading
+                        ? SeclusoColors.blue
+                        : SeclusoColors.success,
               ),
             ),
           ],
@@ -742,9 +812,17 @@ class _LivestreamPageState extends State<LivestreamPage>
                                               0.55)
                                       : 0.85;
                               final dotColor =
-                                  loading
+                                  _streamPaused
+                                      ? const Color(0xFFF59E0B)
+                                      : loading
                                       ? const Color(0xFF8BB3EE)
                                       : const Color(0xFFEF4444);
+                              final liveLabel =
+                                  _streamPaused
+                                      ? 'PAUSED'
+                                      : loading
+                                      ? 'CONNECTING'
+                                      : 'LIVE';
                               return Opacity(
                                 opacity: opacity,
                                 child: Row(
@@ -760,7 +838,7 @@ class _LivestreamPageState extends State<LivestreamPage>
                                     ),
                                     SizedBox(width: 4 * metrics.scale),
                                     Text(
-                                      loading ? 'CONNECTING' : 'LIVE',
+                                      liveLabel,
                                       style: GoogleFonts.inter(
                                         textStyle: theme.textTheme.labelSmall,
                                         color: Colors.white,
@@ -894,7 +972,7 @@ class _LivestreamPageState extends State<LivestreamPage>
     );
   }
 
-  Widget _buildFailureState() {
+  Widget _buildFailureState({bool paused = false}) {
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
     final backgroundColor =
@@ -930,6 +1008,16 @@ class _LivestreamPageState extends State<LivestreamPage>
     final errorCardFill = const Color(0x14EF4444);
     final errorCardBorder =
         dark ? const Color(0x26EF4444) : const Color(0x4DEF4444);
+    final headerSubtitle = paused ? 'Stream paused' : 'Stream unavailable';
+    final failureTitle = paused ? 'Live feed paused' : 'Unable to connect';
+    final failureBody =
+        paused
+            ? 'No new video received from this camera.'
+            : _errMsg.isEmpty
+            ? "The peer-to-peer connection to ${widget.cameraName} couldn't be established."
+            : _errMsg;
+    final actionLabel = paused ? 'RETRY STREAM' : 'TRY AGAIN';
+    final closeLabel = paused ? 'Close' : 'Back to ${widget.cameraName}';
     return ColoredBox(
       color: backgroundColor,
       child: SafeArea(
@@ -941,6 +1029,8 @@ class _LivestreamPageState extends State<LivestreamPage>
               constraints.maxWidth,
               fullScreenHeight,
             );
+            final backLabelTop =
+                paused ? metrics.retryRowTop : metrics.backLabelTop;
             return SingleChildScrollView(
               padding: EdgeInsets.only(bottom: metrics.bottomInset),
               child: Center(
@@ -978,7 +1068,7 @@ class _LivestreamPageState extends State<LivestreamPage>
                         left: metrics.headerTextLeft,
                         top: metrics.headerSubtitleTop,
                         child: Text(
-                          'Stream unavailable',
+                          headerSubtitle,
                           style: GoogleFonts.inter(
                             textStyle: theme.textTheme.bodySmall,
                             color: const Color(0xFFEF4444),
@@ -1004,7 +1094,9 @@ class _LivestreamPageState extends State<LivestreamPage>
                             border: Border.all(color: errorCardBorder),
                           ),
                           child: Icon(
-                            Icons.videocam_off_outlined,
+                            paused
+                                ? Icons.pause_circle_outline_rounded
+                                : Icons.videocam_off_outlined,
                             color: const Color(0xFFEF4444),
                             size: metrics.errorIconSize,
                           ),
@@ -1017,7 +1109,7 @@ class _LivestreamPageState extends State<LivestreamPage>
                         top: metrics.failureTitleTop,
                         width: metrics.failureTitleWidth,
                         child: Text(
-                          'Unable to connect',
+                          failureTitle,
                           textAlign: TextAlign.center,
                           style: GoogleFonts.inter(
                             textStyle: theme.textTheme.titleLarge,
@@ -1035,9 +1127,7 @@ class _LivestreamPageState extends State<LivestreamPage>
                         top: metrics.failureBodyTop,
                         width: metrics.failureBodyWidth,
                         child: Text(
-                          _errMsg.isEmpty
-                              ? "The peer-to-peer connection to ${widget.cameraName} couldn't be established."
-                              : _errMsg,
+                          failureBody,
                           textAlign: TextAlign.center,
                           style: GoogleFonts.inter(
                             textStyle: theme.textTheme.bodyMedium,
@@ -1142,7 +1232,7 @@ class _LivestreamPageState extends State<LivestreamPage>
                             ),
                           ),
                           child: Text(
-                            'TRY AGAIN',
+                            actionLabel,
                             style: GoogleFonts.inter(
                               textStyle: theme.textTheme.labelLarge,
                               color: Colors.white,
@@ -1154,51 +1244,57 @@ class _LivestreamPageState extends State<LivestreamPage>
                           ),
                         ),
                       ),
-                      Positioned(
-                        left: (metrics.canvasWidth - metrics.retryRowWidth) / 2,
-                        top: metrics.retryRowTop,
-                        width: metrics.retryRowWidth,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            SizedBox(
-                              width: metrics.retrySpinnerSize,
-                              height: metrics.retrySpinnerSize,
-                              child: CircularProgressIndicator(
-                                strokeWidth: metrics.retrySpinnerStroke,
-                                valueColor: const AlwaysStoppedAnimation<Color>(
-                                  Color(0xFF8BB3EE),
+                      if (!paused)
+                        Positioned(
+                          left:
+                              (metrics.canvasWidth - metrics.retryRowWidth) / 2,
+                          top: metrics.retryRowTop,
+                          width: metrics.retryRowWidth,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: metrics.retrySpinnerSize,
+                                height: metrics.retrySpinnerSize,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: metrics.retrySpinnerStroke,
+                                  valueColor:
+                                      const AlwaysStoppedAnimation<Color>(
+                                        Color(0xFF8BB3EE),
+                                      ),
                                 ),
                               ),
-                            ),
-                            SizedBox(width: metrics.retrySpinnerGap),
-                            Text(
-                              'Retrying in 5s...',
-                              style: GoogleFonts.inter(
-                                textStyle: theme.textTheme.bodyMedium,
-                                color: bodyColor,
-                                fontSize: metrics.retryLabelSize,
-                                fontWeight: FontWeight.w400,
-                                height: 16.5 / 11,
+                              SizedBox(width: metrics.retrySpinnerGap),
+                              Text(
+                                'Retrying in 5s...',
+                                style: GoogleFonts.inter(
+                                  textStyle: theme.textTheme.bodyMedium,
+                                  color: bodyColor,
+                                  fontSize: metrics.retryLabelSize,
+                                  fontWeight: FontWeight.w400,
+                                  height: 16.5 / 11,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
                       Positioned(
                         left:
                             (metrics.canvasWidth - metrics.backLabelWidth) / 2,
-                        top: metrics.backLabelTop,
+                        top: backLabelTop,
                         width: metrics.backLabelWidth,
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onTap: () => Navigator.of(context).maybePop(),
+                          onTap:
+                              paused
+                                  ? () => unawaited(_closeLivestream())
+                                  : () => Navigator.of(context).maybePop(),
                           child: Padding(
                             padding: EdgeInsets.symmetric(
                               vertical: 4 * metrics.scale,
                             ),
                             child: Text(
-                              'Back to ${widget.cameraName}',
+                              closeLabel,
                               textAlign: TextAlign.center,
                               style: GoogleFonts.inter(
                                 textStyle: theme.textTheme.bodyMedium,

@@ -15,9 +15,9 @@ class SeclusoPreviewAssets {
   static const String storageFeed = 'assets/design/storage_feed.png';
   static const String corridorFeed = 'assets/design/corridor_feed.png';
   static const String loungeEvent = 'assets/design/lounge_event.png';
-  static const String relayDevice = 'assets/design/relay_device.png';
+  static const String relayDevice = pairingCard;
   static const String pairingCard = 'assets/design/pairing_card.png';
-  static const String tabletopCamera = 'assets/design/tabletop_camera.png';
+  static const String tabletopCamera = designLivingRoom;
   static const String lensMacro = 'assets/design/lens_macro.png';
   static const String darkMaterial = 'assets/design/dark_material.png';
   static const String lightArchitecture =

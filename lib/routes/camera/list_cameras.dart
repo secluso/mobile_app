@@ -588,6 +588,7 @@ class CamerasPageState extends State<CamerasPage>
     _prefsFuture = _loadPrefsFresh();
     if (_isPreviewMode) {
       _serverHasSyncedState = widget.previewServerHasSynced ?? false;
+      _hasCompletedCameraLoad = true;
       cameras.addAll(
         (widget.previewCameras ?? const <CameraPreviewData>[]).map(
           (camera) => {
