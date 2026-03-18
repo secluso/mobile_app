@@ -884,9 +884,12 @@ class _RelayQrScanPage extends StatefulWidget {
 class _RelayQrScanPageState extends State<_RelayQrScanPage> {
   final MobileScannerController _cameraController = MobileScannerController();
   bool _handlingScan = false;
+  String? _indicatorMessage;
+  Timer? _indicatorTimer;
 
   @override
   void dispose() {
+    _indicatorTimer?.cancel();
     _cameraController.dispose();
     super.dispose();
   }
@@ -929,6 +932,9 @@ class _RelayQrScanPageState extends State<_RelayQrScanPage> {
       }
 
       if (credentials == null) {
+        _showNonSeclusoQrIndicator(
+          'QR code detected, but it is not a Secluso user credentials QR code.',
+        );
         continue;
       }
 
@@ -938,6 +944,22 @@ class _RelayQrScanPageState extends State<_RelayQrScanPage> {
       Navigator.of(context).pop(credentials);
       return;
     }
+  }
+
+  void _showNonSeclusoQrIndicator(String message) {
+    if (_indicatorMessage == message) return;
+
+    setState(() {
+      _indicatorMessage = message;
+    });
+
+    _indicatorTimer?.cancel();
+    _indicatorTimer = Timer(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      setState(() {
+        _indicatorMessage = null;
+      });
+    });
   }
 
   @override
@@ -952,6 +974,7 @@ class _RelayQrScanPageState extends State<_RelayQrScanPage> {
         onDetect: _handleDetection,
       ),
       onBack: () => Navigator.of(context).maybePop(),
+      indicatorMessage: _indicatorMessage,
     );
   }
 }

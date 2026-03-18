@@ -63,6 +63,7 @@ class SeclusoQrScanScreen extends StatelessWidget {
     required this.onBack,
     this.belowFrameText,
     this.errorMessage,
+    this.indicatorMessage,
   });
 
   final String title;
@@ -71,6 +72,7 @@ class SeclusoQrScanScreen extends StatelessWidget {
   final VoidCallback onBack;
   final String? belowFrameText;
   final String? errorMessage;
+  final String? indicatorMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -219,7 +221,21 @@ class SeclusoQrScanScreen extends StatelessWidget {
                           ],
                         ),
                       ),
-                      if (errorMessage != null) ...[
+                      if (indicatorMessage != null) ...[
+                        SizedBox(height: 12 * metrics.scale),
+                        Center(
+                          child: Text(
+                            indicatorMessage!,
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.inter(
+                              textStyle: theme.textTheme.bodySmall,
+                              color: const Color(0xFFF59E0B),
+                              fontSize: metrics.bodySize,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ] else if (errorMessage != null) ...[
                         SizedBox(height: 12 * metrics.scale),
                         Center(
                           child: Text(
@@ -300,12 +316,12 @@ class GenericCameraQrScanPage extends StatefulWidget {
 class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage> {
   final MobileScannerController _cameraController = MobileScannerController();
   bool _handlingScan = false;
-  String? _errorMessage;
-  Timer? _errorTimer;
+  String? _indicatorMessage;
+  Timer? _indicatorTimer;
 
   @override
   void dispose() {
-    _errorTimer?.cancel();
+    _indicatorTimer?.cancel();
     _cameraController.dispose();
     super.dispose();
   }
@@ -319,7 +335,9 @@ class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage> {
       }
       final payload = _parseCameraQr(text);
       if (payload == null) {
-        _showInvalidQrCode('Unsupported camera QR code.');
+        _showNonSeclusoQrIndicator(
+          'QR code detected, but it is not a Secluso camera QR code.',
+        );
         continue;
       }
 
@@ -392,17 +410,17 @@ class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage> {
     return null;
   }
 
-  void _showInvalidQrCode(String message) {
-    if (_errorMessage != null) return;
+  void _showNonSeclusoQrIndicator(String message) {
+    if (_indicatorMessage == message) return;
 
     setState(() {
-      _errorMessage = message;
+      _indicatorMessage = message;
     });
-    _errorTimer?.cancel();
-    _errorTimer = Timer(const Duration(seconds: 2), () {
+    _indicatorTimer?.cancel();
+    _indicatorTimer = Timer(const Duration(seconds: 2), () {
       if (!mounted) return;
       setState(() {
-        _errorMessage = null;
+        _indicatorMessage = null;
       });
     });
   }
@@ -418,7 +436,7 @@ class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage> {
         onDetect: _handleDetectedBarcode,
       ),
       onBack: () => Navigator.of(context).maybePop(),
-      errorMessage: _errorMessage,
+      indicatorMessage: _indicatorMessage,
     );
   }
 }
