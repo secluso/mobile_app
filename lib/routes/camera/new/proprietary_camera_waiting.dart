@@ -139,10 +139,11 @@ class _ProprietaryCameraWaitingDialogState
       Uri.parse(Constants.iosNotificationRelayBaseUrl);
 
   String _summarizeUri(Uri uri) {
-    final buffer = StringBuffer()
-      ..write(uri.scheme)
-      ..write('://')
-      ..write(uri.host);
+    final buffer =
+        StringBuffer()
+          ..write(uri.scheme)
+          ..write('://')
+          ..write(uri.host);
     if (uri.hasPort) {
       buffer.write(':${uri.port}');
     }
@@ -150,9 +151,10 @@ class _ProprietaryCameraWaitingDialogState
   }
 
   Future<bool> _probeTcpReachability(Uri uri) async {
-    final port = uri.hasPort
-        ? uri.port
-        : (uri.scheme.toLowerCase() == 'https' ? 443 : 80);
+    final port =
+        uri.hasPort
+            ? uri.port
+            : (uri.scheme.toLowerCase() == 'https' ? 443 : 80);
     Socket? socket;
     try {
       socket = await Socket.connect(
@@ -309,8 +311,9 @@ class _ProprietaryCameraWaitingDialogState
       if (!hotspotReady) {
         if (!mounted) return;
         setState(
-          () => _errorMessage =
-              "Lost connection to the camera hotspot. Reconnect to the camera and try again.",
+          () =>
+              _errorMessage =
+                  "Lost connection to the camera hotspot. Reconnect to the camera and try again.",
         );
         return;
       }
@@ -329,6 +332,9 @@ class _ProprietaryCameraWaitingDialogState
         setState(
           () => _errorMessage = "Failed to send pairing data to camera.",
         );
+        return;
+      } else if (firmwareVersion == "PairVersionIncompatible") {
+        setState(() => _errorMessage = "Incompatible firmware version.");
         return;
       }
 
@@ -435,8 +441,8 @@ class _ProprietaryCameraWaitingDialogState
     if (!mounted) return;
     Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            ProprietaryCameraPairedPage(cameraName: widget.cameraName),
+        builder:
+            (_) => ProprietaryCameraPairedPage(cameraName: widget.cameraName),
       ),
       (route) => route.isFirst,
     );
@@ -527,36 +533,27 @@ class _ProprietaryCameraFailurePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final backgroundColor = dark
-        ? const Color(0xFF050505)
-        : const Color(0xFFF2F2F7);
+    final backgroundColor =
+        dark ? const Color(0xFF050505) : const Color(0xFFF2F2F7);
     final titleColor = dark ? Colors.white : const Color(0xFF111827);
-    final bodyColor = dark
-        ? Colors.white.withValues(alpha: 0.4)
-        : const Color(0xFF6B7280);
-    final cardColor = dark
-        ? Colors.white.withValues(alpha: 0.03)
-        : Colors.white;
-    final cardBorderColor = dark
-        ? Colors.white.withValues(alpha: 0.05)
-        : const Color(0x0A000000);
-    final sectionLabelColor = dark
-        ? Colors.white.withValues(alpha: 0.2)
-        : const Color(0xFF9CA3AF);
-    final bulletColor = dark
-        ? Colors.white.withValues(alpha: 0.2)
-        : const Color(0xFF9CA3AF);
-    final bulletTextColor = dark
-        ? Colors.white.withValues(alpha: 0.5)
-        : const Color(0xFF4B5563);
+    final bodyColor =
+        dark ? Colors.white.withValues(alpha: 0.4) : const Color(0xFF6B7280);
+    final cardColor =
+        dark ? Colors.white.withValues(alpha: 0.03) : Colors.white;
+    final cardBorderColor =
+        dark ? Colors.white.withValues(alpha: 0.05) : const Color(0x0A000000);
+    final sectionLabelColor =
+        dark ? Colors.white.withValues(alpha: 0.2) : const Color(0xFF9CA3AF);
+    final bulletColor =
+        dark ? Colors.white.withValues(alpha: 0.2) : const Color(0xFF9CA3AF);
+    final bulletTextColor =
+        dark ? Colors.white.withValues(alpha: 0.5) : const Color(0xFF4B5563);
     final primaryFill = dark ? Colors.white : const Color(0xFF0A0A0A);
     final primaryText = dark ? const Color(0xFF050505) : Colors.white;
-    final secondaryText = dark
-        ? Colors.white.withValues(alpha: 0.4)
-        : const Color(0xFF6B7280);
-    final footerColor = dark
-        ? Colors.white.withValues(alpha: 0.2)
-        : const Color(0xFFD1D5DB);
+    final secondaryText =
+        dark ? Colors.white.withValues(alpha: 0.4) : const Color(0xFF6B7280);
+    final footerColor =
+        dark ? Colors.white.withValues(alpha: 0.2) : const Color(0xFFD1D5DB);
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -667,15 +664,16 @@ class _ProprietaryCameraFailurePage extends StatelessWidget {
                           color: cardColor,
                           borderRadius: BorderRadius.circular(scaled(12)),
                           border: Border.all(color: cardBorderColor),
-                          boxShadow: dark
-                              ? null
-                              : const [
-                                  BoxShadow(
-                                    color: Color(0x0D000000),
-                                    blurRadius: 2,
-                                    offset: Offset(0, 1),
-                                  ),
-                                ],
+                          boxShadow:
+                              dark
+                                  ? null
+                                  : const [
+                                    BoxShadow(
+                                      color: Color(0x0D000000),
+                                      blurRadius: 2,
+                                      offset: Offset(0, 1),
+                                    ),
+                                  ],
                         ),
                         child: Stack(
                           children: [
@@ -910,23 +908,18 @@ class _ProprietaryCameraPairingPageState
   @override
   Widget build(BuildContext context) {
     final dark = widget.dark;
-    final backgroundColor = dark
-        ? const Color(0xFF050505)
-        : const Color(0xFFF2F2F7);
+    final backgroundColor =
+        dark ? const Color(0xFF050505) : const Color(0xFFF2F2F7);
     final titleColor = dark ? Colors.white : const Color(0xFF111827);
-    final subtitleColor = dark
-        ? Colors.white.withValues(alpha: 0.2)
-        : const Color(0xFF9CA3AF);
+    final subtitleColor =
+        dark ? Colors.white.withValues(alpha: 0.2) : const Color(0xFF9CA3AF);
     final primaryStepColor = dark ? Colors.white : const Color(0xFF111827);
-    final secondaryStepColor = dark
-        ? Colors.white.withValues(alpha: 0.4)
-        : const Color(0xFF4B5563);
-    final tertiaryStepColor = dark
-        ? Colors.white.withValues(alpha: 0.28)
-        : const Color(0xFF6B7280);
-    final footerColor = dark
-        ? Colors.white.withValues(alpha: 0.2)
-        : const Color(0xFFD1D5DB);
+    final secondaryStepColor =
+        dark ? Colors.white.withValues(alpha: 0.4) : const Color(0xFF4B5563);
+    final tertiaryStepColor =
+        dark ? Colors.white.withValues(alpha: 0.28) : const Color(0xFF6B7280);
+    final footerColor =
+        dark ? Colors.white.withValues(alpha: 0.2) : const Color(0xFFD1D5DB);
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -949,10 +942,11 @@ class _ProprietaryCameraPairingPageState
                   animation: _controller,
                   builder: (context, _) {
                     final overallProgress = _controller.value.clamp(0.0, 1.0);
-                    final progressLabel =
-                        '${(overallProgress * 100).round()}%';
-                    final firstStepProgress =
-                        (overallProgress / (1 / 3)).clamp(0.0, 1.0);
+                    final progressLabel = '${(overallProgress * 100).round()}%';
+                    final firstStepProgress = (overallProgress / (1 / 3)).clamp(
+                      0.0,
+                      1.0,
+                    );
                     final secondStepProgress =
                         ((overallProgress - (1 / 3)) / (1 / 3)).clamp(0.0, 1.0);
                     final haloOpacity = dark ? 1.0 : 0.85;
@@ -1095,9 +1089,12 @@ class _ProprietaryCameraPairingPageState
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     border: Border.all(
-                                      color: dark
-                                          ? Colors.white.withValues(alpha: 0.03)
-                                          : Colors.white,
+                                      color:
+                                          dark
+                                              ? Colors.white.withValues(
+                                                alpha: 0.03,
+                                              )
+                                              : Colors.white,
                                       width: scaled(1.1),
                                     ),
                                   ),
@@ -1169,11 +1166,12 @@ class _ProprietaryCameraPairingPageState
                           child: _PairingProgressStep(
                             scale: scale,
                             title: 'Encrypted channel',
-                            subtitle: firstState == _PairingStepState.complete
-                                ? 'Complete'
-                                : firstState == _PairingStepState.active
-                                ? 'Establishing secure link'
-                                : 'Waiting',
+                            subtitle:
+                                firstState == _PairingStepState.complete
+                                    ? 'Complete'
+                                    : firstState == _PairingStepState.active
+                                    ? 'Establishing secure link'
+                                    : 'Waiting',
                             state: firstState,
                             dark: dark,
                             titleColor: titleColorFor(firstState),
@@ -1187,11 +1185,12 @@ class _ProprietaryCameraPairingPageState
                           child: _PairingProgressStep(
                             scale: scale,
                             title: 'Key exchange',
-                            subtitle: secondState == _PairingStepState.complete
-                                ? 'Complete'
-                                : secondState == _PairingStepState.active
-                                ? 'Exchanging keys'
-                                : 'Waiting',
+                            subtitle:
+                                secondState == _PairingStepState.complete
+                                    ? 'Complete'
+                                    : secondState == _PairingStepState.active
+                                    ? 'Exchanging keys'
+                                    : 'Waiting',
                             state: secondState,
                             dark: dark,
                             titleColor: titleColorFor(secondState),
@@ -1205,11 +1204,12 @@ class _ProprietaryCameraPairingPageState
                           child: _PairingProgressStep(
                             scale: scale,
                             title: 'Camera config',
-                            subtitle: thirdState == _PairingStepState.complete
-                                ? 'Complete'
-                                : thirdState == _PairingStepState.active
-                                ? 'Applying your settings'
-                                : 'Waiting',
+                            subtitle:
+                                thirdState == _PairingStepState.complete
+                                    ? 'Complete'
+                                    : thirdState == _PairingStepState.active
+                                    ? 'Applying your settings'
+                                    : 'Waiting',
                             state: thirdState,
                             dark: dark,
                             titleColor: titleColorFor(thirdState),
@@ -1314,14 +1314,16 @@ class _PairingProgressStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     double scaled(double value) => value * scale;
-    final connectorTrackColor = dark
-        ? Colors.white.withValues(alpha: 0.06)
-        : Colors.black.withValues(alpha: 0.06);
-    final connectorFillColor = state == _PairingStepState.complete
-        ? const Color(0x4D10B981)
-        : state == _PairingStepState.active
-        ? const Color(0x4D8BB3EE)
-        : Colors.transparent;
+    final connectorTrackColor =
+        dark
+            ? Colors.white.withValues(alpha: 0.06)
+            : Colors.black.withValues(alpha: 0.06);
+    final connectorFillColor =
+        state == _PairingStepState.complete
+            ? const Color(0x4D10B981)
+            : state == _PairingStepState.active
+            ? const Color(0x4D8BB3EE)
+            : Colors.transparent;
 
     return SizedBox(
       width: scaled(184),
@@ -1360,9 +1362,10 @@ class _PairingProgressStep extends StatelessWidget {
               style: GoogleFonts.inter(
                 color: titleColor,
                 fontSize: scaled(12),
-                fontWeight: state == _PairingStepState.active
-                    ? FontWeight.w500
-                    : FontWeight.w500,
+                fontWeight:
+                    state == _PairingStepState.active
+                        ? FontWeight.w500
+                        : FontWeight.w500,
                 height: 15 / 12,
               ),
             ),
@@ -1425,9 +1428,10 @@ class _PairingStepBadge extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           border: Border.all(
-            color: dark
-                ? Colors.white.withValues(alpha: 0.10)
-                : Colors.black.withValues(alpha: 0.10),
+            color:
+                dark
+                    ? Colors.white.withValues(alpha: 0.10)
+                    : Colors.black.withValues(alpha: 0.10),
             width: scaled(2),
           ),
         ),
@@ -1436,9 +1440,10 @@ class _PairingStepBadge extends StatelessWidget {
             width: scaled(8),
             height: scaled(8),
             decoration: BoxDecoration(
-              color: dark
-                  ? Colors.white.withValues(alpha: 0.10)
-                  : Colors.black.withValues(alpha: 0.10),
+              color:
+                  dark
+                      ? Colors.white.withValues(alpha: 0.10)
+                      : Colors.black.withValues(alpha: 0.10),
               shape: BoxShape.circle,
             ),
           ),
@@ -1479,21 +1484,24 @@ class _PairingProgressRingPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
     final trackRadius = size.width * (62 / 160);
-    final trackStroke = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = size.width * (4 / 160)
-      ..color = dark
-          ? Colors.white.withValues(alpha: 0.06)
-          : Colors.black.withValues(alpha: 0.06);
+    final trackStroke =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = size.width * (4 / 160)
+          ..color =
+              dark
+                  ? Colors.white.withValues(alpha: 0.06)
+                  : Colors.black.withValues(alpha: 0.06);
     canvas.drawCircle(center, trackRadius, trackStroke);
 
     final progressRadius = size.width * (62 / 160);
-    final progressStroke = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = size.width * (3.5 / 160)
-      ..color = const Color(0xFFB45309);
+    final progressStroke =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = size.width * (3.5 / 160)
+          ..color = const Color(0xFFB45309);
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: progressRadius),
       -math.pi / 2,
@@ -1515,12 +1523,13 @@ class _PairingLockGlyphPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final stroke = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.width * (1.2 / 20)
-      ..color = color
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
+    final stroke =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = size.width * (1.2 / 20)
+          ..color = color
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round;
     final body = RRect.fromRectAndRadius(
       Rect.fromLTWH(
         size.width * (4.2 / 20),
@@ -1531,14 +1540,15 @@ class _PairingLockGlyphPainter extends CustomPainter {
       Radius.circular(size.width * (1.4 / 20)),
     );
     canvas.drawRRect(body, stroke);
-    final shackle = Path()
-      ..moveTo(size.width * (6.5 / 20), size.height * (8.2 / 20))
-      ..lineTo(size.width * (6.5 / 20), size.height * (5.3 / 20))
-      ..arcToPoint(
-        Offset(size.width * (13.5 / 20), size.height * (5.3 / 20)),
-        radius: Radius.circular(size.width * (3.8 / 20)),
-      )
-      ..lineTo(size.width * (13.5 / 20), size.height * (8.2 / 20));
+    final shackle =
+        Path()
+          ..moveTo(size.width * (6.5 / 20), size.height * (8.2 / 20))
+          ..lineTo(size.width * (6.5 / 20), size.height * (5.3 / 20))
+          ..arcToPoint(
+            Offset(size.width * (13.5 / 20), size.height * (5.3 / 20)),
+            radius: Radius.circular(size.width * (3.8 / 20)),
+          )
+          ..lineTo(size.width * (13.5 / 20), size.height * (8.2 / 20));
     canvas.drawPath(shackle, stroke);
   }
 
@@ -1552,16 +1562,18 @@ class _PairingStepCheckPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.width * (1.6 / 10)
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..color = const Color(0xFF10B981);
-    final path = Path()
-      ..moveTo(size.width * (2.0 / 10), size.height * (5.2 / 10))
-      ..lineTo(size.width * (4.3 / 10), size.height * (7.3 / 10))
-      ..lineTo(size.width * (8.0 / 10), size.height * (2.7 / 10));
+    final paint =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = size.width * (1.6 / 10)
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..color = const Color(0xFF10B981);
+    final path =
+        Path()
+          ..moveTo(size.width * (2.0 / 10), size.height * (5.2 / 10))
+          ..lineTo(size.width * (4.3 / 10), size.height * (7.3 / 10))
+          ..lineTo(size.width * (8.0 / 10), size.height * (2.7 / 10));
     canvas.drawPath(path, paint);
   }
 
@@ -1574,11 +1586,12 @@ class _PairingFailureCrossPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.width * (2 / 22)
-      ..strokeCap = StrokeCap.round
-      ..color = Colors.white;
+    final paint =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = size.width * (2 / 22)
+          ..strokeCap = StrokeCap.round
+          ..color = Colors.white;
     canvas.drawLine(
       Offset(size.width * (6.2 / 22), size.height * (6.2 / 22)),
       Offset(size.width * (15.8 / 22), size.height * (15.8 / 22)),
@@ -1602,12 +1615,13 @@ class _PairingFooterLockPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final stroke = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.width * (0.85 / 10)
-      ..color = color
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
+    final stroke =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = size.width * (0.85 / 10)
+          ..color = color
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round;
     final body = RRect.fromRectAndRadius(
       Rect.fromLTWH(
         size.width * (1.6 / 10),
@@ -1618,14 +1632,15 @@ class _PairingFooterLockPainter extends CustomPainter {
       Radius.circular(size.width * (0.8 / 10)),
     );
     canvas.drawRRect(body, stroke);
-    final shackle = Path()
-      ..moveTo(size.width * (3.0 / 10), size.height * (4.7 / 10))
-      ..lineTo(size.width * (3.0 / 10), size.height * (3.0 / 10))
-      ..arcToPoint(
-        Offset(size.width * (7.0 / 10), size.height * (3.0 / 10)),
-        radius: Radius.circular(size.width * (2.1 / 10)),
-      )
-      ..lineTo(size.width * (7.0 / 10), size.height * (4.7 / 10));
+    final shackle =
+        Path()
+          ..moveTo(size.width * (3.0 / 10), size.height * (4.7 / 10))
+          ..lineTo(size.width * (3.0 / 10), size.height * (3.0 / 10))
+          ..arcToPoint(
+            Offset(size.width * (7.0 / 10), size.height * (3.0 / 10)),
+            radius: Radius.circular(size.width * (2.1 / 10)),
+          )
+          ..lineTo(size.width * (7.0 / 10), size.height * (4.7 / 10));
     canvas.drawPath(shackle, stroke);
   }
 
@@ -1668,9 +1683,8 @@ class ProprietaryCameraPairedPage extends StatelessWidget {
     return PopScope(
       canPop: false,
       child: Scaffold(
-        backgroundColor: dark
-            ? const Color(0xFF050505)
-            : const Color(0xFFF2F2F7),
+        backgroundColor:
+            dark ? const Color(0xFF050505) : const Color(0xFFF2F2F7),
         body: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -1680,27 +1694,28 @@ class ProprietaryCameraPairedPage extends StatelessWidget {
               );
               double scaled(double value) => value * scale;
               final titleColor = dark ? Colors.white : const Color(0xFF111827);
-              final bodyColor = dark
-                  ? Colors.white.withValues(alpha: 0.4)
-                  : const Color(0xFF6B7280);
-              final cardColor = dark
-                  ? Colors.white.withValues(alpha: 0.03)
-                  : Colors.white;
-              final cardBorderColor = dark
-                  ? Colors.white.withValues(alpha: 0.05)
-                  : const Color(0x0A000000);
-              final rowDividerColor = dark
-                  ? Colors.white.withValues(alpha: 0.04)
-                  : const Color(0xFFE5E7EB);
-              final primaryButtonFill = dark
-                  ? Colors.white
-                  : const Color(0xFF0A0A0A);
-              final primaryButtonText = dark
-                  ? const Color(0xFF050505)
-                  : Colors.white;
-              final secondaryButtonText = dark
-                  ? Colors.white.withValues(alpha: 0.4)
-                  : const Color(0xFF6B7280);
+              final bodyColor =
+                  dark
+                      ? Colors.white.withValues(alpha: 0.4)
+                      : const Color(0xFF6B7280);
+              final cardColor =
+                  dark ? Colors.white.withValues(alpha: 0.03) : Colors.white;
+              final cardBorderColor =
+                  dark
+                      ? Colors.white.withValues(alpha: 0.05)
+                      : const Color(0x0A000000);
+              final rowDividerColor =
+                  dark
+                      ? Colors.white.withValues(alpha: 0.04)
+                      : const Color(0xFFE5E7EB);
+              final primaryButtonFill =
+                  dark ? Colors.white : const Color(0xFF0A0A0A);
+              final primaryButtonText =
+                  dark ? const Color(0xFF050505) : Colors.white;
+              final secondaryButtonText =
+                  dark
+                      ? Colors.white.withValues(alpha: 0.4)
+                      : const Color(0xFF6B7280);
 
               return Padding(
                 padding: EdgeInsets.fromLTRB(
@@ -1796,15 +1811,16 @@ class ProprietaryCameraPairedPage extends StatelessWidget {
                         color: cardColor,
                         borderRadius: BorderRadius.circular(scaled(12)),
                         border: Border.all(color: cardBorderColor),
-                        boxShadow: dark
-                            ? null
-                            : const [
-                                BoxShadow(
-                                  color: Color(0x0D000000),
-                                  blurRadius: 2,
-                                  offset: Offset(0, 1),
-                                ),
-                              ],
+                        boxShadow:
+                            dark
+                                ? null
+                                : const [
+                                  BoxShadow(
+                                    color: Color(0x0D000000),
+                                    blurRadius: 2,
+                                    offset: Offset(0, 1),
+                                  ),
+                                ],
                       ),
                       child: Column(
                         children: [
@@ -1814,9 +1830,8 @@ class ProprietaryCameraPairedPage extends StatelessWidget {
                             scale: scale,
                             dark: dark,
                             dividerColor: rowDividerColor,
-                            valueColor: dark
-                                ? Colors.white
-                                : const Color(0xFF111827),
+                            valueColor:
+                                dark ? Colors.white : const Color(0xFF111827),
                           ),
                           _PairedInfoRow(
                             label: 'Status',
@@ -1851,9 +1866,8 @@ class ProprietaryCameraPairedPage extends StatelessWidget {
                             scale: scale,
                             dark: dark,
                             dividerColor: rowDividerColor,
-                            valueColor: dark
-                                ? Colors.white
-                                : const Color(0xFF111827),
+                            valueColor:
+                                dark ? Colors.white : const Color(0xFF111827),
                             showDivider: false,
                           ),
                         ],
@@ -1936,9 +1950,10 @@ class _PairedInfoRow extends StatelessWidget {
     return Container(
       height: scaled(47),
       decoration: BoxDecoration(
-        border: showDivider
-            ? Border(bottom: BorderSide(color: dividerColor))
-            : null,
+        border:
+            showDivider
+                ? Border(bottom: BorderSide(color: dividerColor))
+                : null,
       ),
       padding: EdgeInsets.symmetric(horizontal: scaled(14)),
       child: Row(
@@ -1946,9 +1961,10 @@ class _PairedInfoRow extends StatelessWidget {
           Text(
             label,
             style: GoogleFonts.inter(
-              color: dark
-                  ? Colors.white.withValues(alpha: 0.4)
-                  : const Color(0xFF6B7280),
+              color:
+                  dark
+                      ? Colors.white.withValues(alpha: 0.4)
+                      : const Color(0xFF6B7280),
               fontSize: scaled(11),
               fontWeight: FontWeight.w400,
               height: 16.5 / 11,
@@ -1979,16 +1995,18 @@ class _PairedCheckPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.width * (2.5 / 24)
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..color = Colors.white;
-    final path = Path()
-      ..moveTo(size.width * (5.2 / 24), size.height * (12.5 / 24))
-      ..lineTo(size.width * (10.0 / 24), size.height * (17.0 / 24))
-      ..lineTo(size.width * (18.8 / 24), size.height * (7.2 / 24));
+    final paint =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = size.width * (2.5 / 24)
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..color = Colors.white;
+    final path =
+        Path()
+          ..moveTo(size.width * (5.2 / 24), size.height * (12.5 / 24))
+          ..lineTo(size.width * (10.0 / 24), size.height * (17.0 / 24))
+          ..lineTo(size.width * (18.8 / 24), size.height * (7.2 / 24));
     canvas.drawPath(path, paint);
   }
 
@@ -2003,12 +2021,13 @@ class _PairedLockPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final stroke = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.width * (0.85 / 10)
-      ..color = color
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
+    final stroke =
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = size.width * (0.85 / 10)
+          ..color = color
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round;
     final body = RRect.fromRectAndRadius(
       Rect.fromLTWH(
         size.width * (1.6 / 10),
@@ -2019,14 +2038,15 @@ class _PairedLockPainter extends CustomPainter {
       Radius.circular(size.width * (0.8 / 10)),
     );
     canvas.drawRRect(body, stroke);
-    final shackle = Path()
-      ..moveTo(size.width * (3.0 / 10), size.height * (4.7 / 10))
-      ..lineTo(size.width * (3.0 / 10), size.height * (3.0 / 10))
-      ..arcToPoint(
-        Offset(size.width * (7.0 / 10), size.height * (3.0 / 10)),
-        radius: Radius.circular(size.width * (2.1 / 10)),
-      )
-      ..lineTo(size.width * (7.0 / 10), size.height * (4.7 / 10));
+    final shackle =
+        Path()
+          ..moveTo(size.width * (3.0 / 10), size.height * (4.7 / 10))
+          ..lineTo(size.width * (3.0 / 10), size.height * (3.0 / 10))
+          ..arcToPoint(
+            Offset(size.width * (7.0 / 10), size.height * (3.0 / 10)),
+            radius: Radius.circular(size.width * (2.1 / 10)),
+          )
+          ..lineTo(size.width * (7.0 / 10), size.height * (4.7 / 10));
     canvas.drawPath(shackle, stroke);
   }
 
