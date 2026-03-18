@@ -220,12 +220,19 @@ class _ServerPageState extends State<ServerPage> {
             _ipController.text = prevServerAddr ?? '';
           });
 
+          final fetchedError = fetched.error?.toString() ?? '';
+          final failureMessage =
+              fetchedError.contains('401 Unauthorized') ||
+                  fetchedError.contains('Failed to fetch fcm config: 401')
+              ? 'This QR code is not authorized in the server.'
+              : 'Failed to fetch FCM config. Server settings not saved.';
+
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               backgroundColor: Colors.red,
               content: Text(
-                "Failed to fetch FCM config. Server settings not saved.",
+                failureMessage,
                 style: TextStyle(color: Colors.white),
               ),
             ),
