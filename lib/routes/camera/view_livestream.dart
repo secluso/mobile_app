@@ -17,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/byte_player_view.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/result.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:secluso_flutter/database/entities.dart';
@@ -53,9 +54,12 @@ class _LivestreamPageState extends State<LivestreamPage>
   double? _aspectRatio;
   int? _streamId;
   bool _hasRenderedFirstFrame = false;
-  bool _needToCreateFile = true;
   bool _isClosing = false;
   Future<void>? _shutdownFuture;
+  Future<void> _archiveWriteChain = Future.value();
+  File? _archiveVideoFile;
+  bool _archiveInitialized = false;
+  bool _archiveHasWrittenBytes = false;
   late final AnimationController _connectingPulseController =
       AnimationController(
         vsync: this,
@@ -261,37 +265,141 @@ class _LivestreamPageState extends State<LivestreamPage>
     }
   }
 
+  Future<_ChunkFetchSnapshot> _fetchChunkSnapshot(int chunkNumber) async {
+    final startedAtMs = DateTime.now().millisecondsSinceEpoch;
+    final result = await HttpClientService.instance.livestreamRetrieve(
+      cameraName: widget.cameraName,
+      chunkNumber: chunkNumber,
+    );
+    final completedAtMs = DateTime.now().millisecondsSinceEpoch;
+    return _ChunkFetchSnapshot(
+      chunkNumber: chunkNumber,
+      startedAtMs: startedAtMs,
+      completedAtMs: completedAtMs,
+      result: result,
+    );
+  }
+
+  void _enqueueArchiveWrite(Uint8List dec) {
+    final payload = Uint8List.fromList(dec);
+    _archiveWriteChain = _archiveWriteChain
+        .then((_) => _writeArchiveChunk(payload))
+        .catchError((Object e, StackTrace st) {
+          Log.e('Livestream archive write error: $e\n$st');
+        });
+  }
+
+  Future<void> _writeArchiveChunk(Uint8List dec) async {
+    if (!_archiveInitialized) {
+      final baseDir = await getApplicationDocumentsDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final videoName = 'video_$timestamp.mp4';
+      final filePath = p.join(
+        baseDir.path,
+        'camera_dir_${widget.cameraName}',
+        'videos',
+        videoName,
+      );
+
+      final parentDir = Directory(p.dirname(filePath));
+      if (!await parentDir.exists()) {
+        await parentDir.create(recursive: true);
+      }
+
+      _archiveVideoFile = File(filePath);
+      _archiveInitialized = true;
+
+      if (!AppStores.isInitialized) {
+        await AppStores.init();
+      }
+
+      final box = AppStores.instance.videoStore.box<Video>();
+      box.put(Video(widget.cameraName, videoName, true, false));
+
+      final cameraBox = AppStores.instance.cameraStore.box<Camera>();
+      final cameraQuery =
+          cameraBox.query(Camera_.name.equals(widget.cameraName)).build();
+      final foundCamera = cameraQuery.findFirst();
+      cameraQuery.close();
+
+      if (foundCamera == null) {
+        Log.e(
+          "Camera entity is null in database. This shouldn't be possible. Camera: ${widget.cameraName} Video: $videoName",
+        );
+      } else if (globalCameraViewPageState?.mounted == true &&
+          globalCameraViewPageState?.widget.cameraName == widget.cameraName) {
+        globalCameraViewPageState?.reloadVideos();
+      }
+    }
+
+    final file = _archiveVideoFile;
+    if (file == null) {
+      Log.e('Livestream archive file not initialized');
+      return;
+    }
+
+    await file.writeAsBytes(
+      dec,
+      mode:
+          _archiveHasWrittenBytes
+              ? FileMode.writeOnlyAppend
+              : FileMode.writeOnly,
+    );
+    _archiveHasWrittenBytes = true;
+  }
+
   // bytes to queue action
   Future<void> _startChunkPump() async {
     Log.d('Start chunk pump');
     int chunk = 1;
     final id = _streamId!;
-    final String cameraName = widget.cameraName;
-    File? videoFile;
-
     var lastChunkTime = DateTime.now().millisecondsSinceEpoch;
+    Future<_ChunkFetchSnapshot> currentFetch = _fetchChunkSnapshot(chunk);
 
     while (isStreaming) {
-      final startDownloading = DateTime.now().millisecondsSinceEpoch;
-      final res = await HttpClientService.instance.livestreamRetrieve(
-        cameraName: cameraName,
-        chunkNumber: chunk,
-      );
+      final snapshot = await currentFetch;
+      final chunkPipelineStartMs = DateTime.now().millisecondsSinceEpoch;
 
-      await res.fold(
+      await snapshot.result.fold(
         (enc) async {
-          final doneDownloading = DateTime.now().millisecondsSinceEpoch;
-          updateCameraStatusLivestream(cameraName);
+          final nextChunk = chunk + 1;
+          final prefetchStartMs = DateTime.now().millisecondsSinceEpoch;
+          final nextFetch = _fetchChunkSnapshot(nextChunk);
+
+          final statusStartMs = DateTime.now().millisecondsSinceEpoch;
+          updateCameraStatusLivestream(widget.cameraName);
+          final statusDoneMs = DateTime.now().millisecondsSinceEpoch;
+
+          final decryptStartMs = DateTime.now().millisecondsSinceEpoch;
           final dec = await livestreamDecrypt(
-            cameraName: cameraName,
+            cameraName: widget.cameraName,
             data: enc,
             expectedChunkNumber: BigInt.from(chunk),
           );
-          final doneDecrypting = DateTime.now().millisecondsSinceEpoch;
+          final decryptDoneMs = DateTime.now().millisecondsSinceEpoch;
+
+          final pushStartMs = DateTime.now().millisecondsSinceEpoch;
+          await ByteStreamPlayer.push(id, dec);
+          final pushDoneMs = DateTime.now().millisecondsSinceEpoch;
+
+          final archiveEnqueueStartMs = DateTime.now().millisecondsSinceEpoch;
+          _enqueueArchiveWrite(dec);
+          final archiveEnqueueDoneMs = DateTime.now().millisecondsSinceEpoch;
+
+          final chunkDoneMs = DateTime.now().millisecondsSinceEpoch;
           Log.d(
-            'Timings: chunk $chunk, curr = $doneDecrypting download ${doneDownloading - startDownloading} ms, decrypt ${doneDecrypting - doneDownloading} ms, since last chunk ${doneDecrypting - lastChunkTime} ms',
+            'Livestream timings: '
+            'chunk $chunk, '
+            'fetch=${snapshot.completedAtMs - snapshot.startedAtMs} ms, '
+            'status=${statusDoneMs - statusStartMs} ms, '
+            'decrypt=${decryptDoneMs - decryptStartMs} ms, '
+            'push=${pushDoneMs - pushStartMs} ms, '
+            'archiveEnqueue=${archiveEnqueueDoneMs - archiveEnqueueStartMs} ms, '
+            'process=${chunkDoneMs - chunkPipelineStartMs} ms, '
+            'sinceLast=${chunkDoneMs - lastChunkTime} ms, '
+            'nextPrefetchStartedIn=${prefetchStartMs - chunkPipelineStartMs} ms',
           );
-          lastChunkTime = doneDecrypting;
+          lastChunkTime = chunkDoneMs;
 
           if (chunk == 1) {
             final first16 = dec
@@ -300,81 +408,19 @@ class _LivestreamPageState extends State<LivestreamPage>
             Log.d('First 16 bytes: $first16');
           }
 
-          await ByteStreamPlayer.push(id, dec);
           Log.d('Pushed chunk $chunk (${dec.length} B)');
           if (defaultTargetPlatform == TargetPlatform.android && chunk == 1) {
             _markFirstFrameReady('android-first-chunk');
           }
 
-          if (_needToCreateFile) {
-            final baseDir = await getApplicationDocumentsDirectory();
-
-            final int timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-            final String videoName = 'video_$timestamp.mp4';
-            final filePath = p.join(
-              baseDir.path,
-              'camera_dir_$cameraName',
-              'videos',
-              videoName,
-            );
-
-            final parentDir = Directory(p.dirname(filePath));
-            if (!await parentDir.exists()) {
-              await parentDir.create(recursive: true);
-            }
-
-            videoFile = File(filePath);
-            await videoFile!.writeAsBytes(dec, mode: FileMode.writeOnly);
-
-            // TODO: The rest of the code here is almost identical to the code in pending_processor.dart
-            final box = AppStores.instance.videoStore.box<Video>();
-            var video = Video(cameraName, videoName, true, false);
-            box.put(video);
-
-            final cameraBox = AppStores.instance.cameraStore.box<Camera>();
-            final cameraQuery =
-                cameraBox.query(Camera_.name.equals(cameraName)).build();
-
-            final foundCamera = cameraQuery.findFirst();
-            cameraQuery.close();
-
-            if (foundCamera == null) {
-              Log.e(
-                "Camera entity is null in database. This shouldn't be possible. Camera: $cameraName Video: $videoName",
-              );
-            } else {
-              // Skip saving unreadMessages = true as they would've seen the livestream.
-              if (globalCameraViewPageState?.mounted == true &&
-                  globalCameraViewPageState?.widget.cameraName == cameraName) {
-                globalCameraViewPageState?.reloadVideos();
-              } else if (globalCameraViewPageState?.mounted == false) {
-                Log.d("Not reloading current camera page - not mounted");
-              } else {
-                final currentPage =
-                    globalCameraViewPageState?.widget.cameraName;
-                Log.d(
-                  "Not reloading current camera page - name doesn't match. $currentPage, $cameraName",
-                );
-              }
-            }
-
-            _needToCreateFile = false;
-          } else {
-            if (videoFile != null) {
-              await videoFile!.writeAsBytes(
-                dec,
-                mode: FileMode.writeOnlyAppend,
-              );
-            } else {
-              // Should not happen
-              Log.d('Livestream video file not created');
-            }
-          }
-
           chunk++;
+          currentFetch = nextFetch;
         },
         (err) async {
-          Log.d('Chunk $chunk error: $err');
+          Log.d(
+            'Chunk $chunk error after fetch=${snapshot.completedAtMs - snapshot.startedAtMs} ms: $err',
+          );
+          currentFetch = _fetchChunkSnapshot(chunk);
           // TODO: At some point, we should stop trying to find more chunks... show user an error. Also, what if a user closes out of the page? This continues on.
         },
       );
@@ -390,6 +436,7 @@ class _LivestreamPageState extends State<LivestreamPage>
     final id = _streamId;
     if (id != null) {
       _streamId = null;
+      await _archiveWriteChain;
       await ByteStreamPlayer.push(id, Uint8List(0)); // EOF
       await ByteStreamPlayer.finish(id);
       if (defaultTargetPlatform == TargetPlatform.iOS) {
@@ -1231,6 +1278,20 @@ class _LivestreamPageState extends State<LivestreamPage>
       },
     );
   }
+}
+
+class _ChunkFetchSnapshot {
+  const _ChunkFetchSnapshot({
+    required this.chunkNumber,
+    required this.startedAtMs,
+    required this.completedAtMs,
+    required this.result,
+  });
+
+  final int chunkNumber;
+  final int startedAtMs;
+  final int completedAtMs;
+  final Result<Uint8List> result;
 }
 
 class _LivestreamWorkingBackButton extends StatelessWidget {
