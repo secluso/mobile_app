@@ -622,9 +622,7 @@ Future<void> _handleChangeServer() async {
     return;
   }
   await nav.push(
-    MaterialPageRoute(
-      builder: (context) => const AppShell(initialIndex: 2),
-    ),
+    MaterialPageRoute(builder: (context) => const AppShell(initialIndex: 2)),
   );
 }
 
@@ -704,7 +702,6 @@ Future<void> _invalidateServerCredentials(SharedPreferences prefs) async {
   await prefs.remove(PrefKeys.serverAddr);
   await prefs.remove(PrefKeys.serverUsername);
   await prefs.remove(PrefKeys.serverPassword);
-  await prefs.remove(PrefKeys.credentialsFull);
   await prefs.remove(PrefKeys.fcmConfigJson);
 }
 

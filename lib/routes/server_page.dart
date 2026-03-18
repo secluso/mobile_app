@@ -26,6 +26,18 @@ import 'package:secluso_flutter/routes/camera/camera_ui_bridge.dart';
 import 'camera/new/qr_scan.dart';
 import 'camera/view_camera.dart';
 
+class UserCredentialsQrPayload {
+  final String serverUsername;
+  final String serverPassword;
+  final String serverAddress;
+
+  UserCredentialsQrPayload({
+    required this.serverUsername,
+    required this.serverPassword,
+    required this.serverAddress,
+  });
+}
+
 class ServerPage extends StatefulWidget {
   final bool showBackButton;
   final bool? previewHasSynced;
@@ -108,11 +120,7 @@ class _ServerPageState extends State<ServerPage> {
   Future<void> _loadServerSettings() async {
     final prefs = await SharedPreferences.getInstance();
     final savedServerAddr = prefs.getString(PrefKeys.serverAddr);
-    final credentialsFull = prefs.getString(PrefKeys.credentialsFull);
-    final synced =
-        savedServerAddr != null &&
-        savedServerAddr.isNotEmpty &&
-        credentialsFull != null;
+    final synced = savedServerAddr != null && savedServerAddr.isNotEmpty;
     final cameraNames = synced ? await _fetchCameraNames() : const <String>[];
     if (!mounted) return;
     setState(() {
@@ -137,17 +145,6 @@ class _ServerPageState extends State<ServerPage> {
     }
   }
 
-  bool _looksLikeCameraQrPayload(String rawValue) {
-    try {
-      final decoded = jsonDecode(rawValue);
-      return decoded is Map &&
-          decoded['v'] == Constants.cameraQrCodeVersion &&
-          decoded['cs'] is String;
-    } catch (_) {
-      return false;
-    }
-  }
-
   Uri? _validatedRelayUri(String rawValue) {
     final parsed = Uri.tryParse(rawValue.trim());
     if (parsed == null || !parsed.hasScheme || parsed.host.isEmpty) {
@@ -159,16 +156,15 @@ class _ServerPageState extends State<ServerPage> {
     return parsed;
   }
 
-  Future<void> _saveServerSettings(Uint8List credentialsFull) async {
+  Future<void> _saveServerSettings(
+    UserCredentialsQrPayload credentialsFull,
+  ) async {
     try {
-      String credentialsFullString = utf8.decode(credentialsFull);
-
       // TODO: Check how this handles on failure... bad QR code
-      if (credentialsFullString.length <=
-          (Constants.usernameLength + Constants.passwordLength)) {
-        var len = credentialsFull.length;
+      if (credentialsFull.serverUsername.length != Constants.usernameLength ||
+          credentialsFull.serverPassword.length != Constants.passwordLength) {
         Log.e(
-          "Server Page Save: User credentials should be more than 28 characters. Current is $len",
+          "Server Page Save: User credentials should be more than 28 characters.",
         );
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -180,34 +176,9 @@ class _ServerPageState extends State<ServerPage> {
         return;
       }
 
-      var serverUsername = credentialsFullString.substring(
-        0,
-        Constants.usernameLength,
-      );
-      var serverPassword = credentialsFullString.substring(
-        Constants.usernameLength,
-        Constants.usernameLength + Constants.passwordLength,
-      );
-
-      final newServerAddr = credentialsFullString.substring(
-        Constants.usernameLength + Constants.passwordLength,
-        credentialsFullString.length,
-      );
-
-      if (_looksLikeCameraQrPayload(credentialsFullString)) {
-        Log.w('Server QR scan rejected: camera QR payload detected');
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.red,
-            content: Text(
-              'That is a camera QR code. Scan the relay QR code instead.',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        );
-        return;
-      }
+      var newServerAddr = credentialsFull.serverAddress;
+      var serverUsername = credentialsFull.serverUsername;
+      var serverPassword = credentialsFull.serverPassword;
 
       final validatedRelayUri = _validatedRelayUri(newServerAddr);
       if (validatedRelayUri == null) {
@@ -232,11 +203,7 @@ class _ServerPageState extends State<ServerPage> {
 
       final prefs = await SharedPreferences.getInstance();
       final prevServerAddr = prefs.getString(PrefKeys.serverAddr);
-      final prevCredentialsFull = prefs.getString(PrefKeys.credentialsFull);
-      final prevHasSynced =
-          prevServerAddr != null &&
-          prevServerAddr.isNotEmpty &&
-          prevCredentialsFull != null;
+      final prevHasSynced = prevServerAddr != null && prevServerAddr.isNotEmpty;
 
       FcmConfig? fetchedFcmConfig;
       if (Platform.isAndroid) {
@@ -287,7 +254,6 @@ class _ServerPageState extends State<ServerPage> {
       } else {
         await prefs.remove(PrefKeys.fcmConfigJson);
       }
-      await prefs.setString(PrefKeys.credentialsFull, credentialsFullString);
 
       setState(() {
         serverAddr = normalizedServerAddr;
@@ -347,7 +313,8 @@ class _ServerPageState extends State<ServerPage> {
   }
 
   Future<void> _removeServerConnection() async {
-    final currentCameraNames = _isPreviewMode ? _cameraNames : await _fetchCameraNames();
+    final currentCameraNames =
+        _isPreviewMode ? _cameraNames : await _fetchCameraNames();
     if (currentCameraNames.isNotEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -362,7 +329,6 @@ class _ServerPageState extends State<ServerPage> {
     await prefs.remove(PrefKeys.serverAddr);
     await prefs.remove(PrefKeys.serverUsername);
     await prefs.remove(PrefKeys.serverPassword);
-    await prefs.remove(PrefKeys.credentialsFull);
     await prefs.remove(PrefKeys.fcmConfigJson);
     await prefs.remove(PrefKeys.needUpdateFcmToken);
     await prefs.remove(PrefKeys.needUpdateIosRelayBinding);
@@ -407,8 +373,8 @@ class _ServerPageState extends State<ServerPage> {
   }
 
   Future<void> _checkForUpdates() async {
-    final serverVersionResult = await HttpClientService.instance
-        .fetchServerVersion();
+    final serverVersionResult =
+        await HttpClientService.instance.fetchServerVersion();
     if (!mounted) return;
     if (serverVersionResult.isFailure || serverVersionResult.value == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -423,9 +389,10 @@ class _ServerPageState extends State<ServerPage> {
     final clientVersion = await rustLibVersion();
     if (!mounted) return;
 
-    final message = serverVersion == clientVersion
-        ? 'Relay and app are up to date ($serverVersion).'
-        : 'Relay version $serverVersion differs from app version $clientVersion.';
+    final message =
+        serverVersion == clientVersion
+            ? 'Relay and app are up to date ($serverVersion).'
+            : 'Relay version $serverVersion differs from app version $clientVersion.';
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
@@ -438,11 +405,9 @@ class _ServerPageState extends State<ServerPage> {
   }
 
   Future<void> _openRelayScanFlow() async {
-    final credentialsFull = await Navigator.push<Uint8List?>(
+    final credentialsFull = await Navigator.push<UserCredentialsQrPayload?>(
       context,
-      MaterialPageRoute(
-        builder: (_) => const _RelayQrScanPage(),
-      ),
+      MaterialPageRoute(builder: (_) => const _RelayQrScanPage()),
     );
     if (credentialsFull == null || !mounted) return;
     await _saveServerSettings(credentialsFull);
@@ -481,9 +446,10 @@ class _ServerPageState extends State<ServerPage> {
                     Text(
                       'Relay Connected',
                       style: theme.textTheme.titleLarge?.copyWith(
-                        color: dark
-                            ? const Color(0xFF37D695)
-                            : const Color(0xFF118E5E),
+                        color:
+                            dark
+                                ? const Color(0xFF37D695)
+                                : const Color(0xFF118E5E),
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -505,9 +471,10 @@ class _ServerPageState extends State<ServerPage> {
           Container(
             width: double.infinity,
             decoration: BoxDecoration(
-              color: theme.brightness == Brightness.dark
-                  ? Colors.black.withValues(alpha: 0.18)
-                  : Colors.white.withValues(alpha: 0.7),
+              color:
+                  theme.brightness == Brightness.dark
+                      ? Colors.black.withValues(alpha: 0.18)
+                      : Colors.white.withValues(alpha: 0.7),
               borderRadius: BorderRadius.circular(18),
               border: Border.all(color: theme.colorScheme.outlineVariant),
             ),
@@ -594,9 +561,10 @@ class _ServerPageState extends State<ServerPage> {
         const SizedBox(height: 16),
         ShellCard(
           radius: 18,
-          color: dark
-              ? Colors.white.withValues(alpha: 0.02)
-              : Colors.white.withValues(alpha: 0.68),
+          color:
+              dark
+                  ? Colors.white.withValues(alpha: 0.02)
+                  : Colors.white.withValues(alpha: 0.68),
           borderColor: theme.colorScheme.outlineVariant.withValues(alpha: 0.4),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -636,9 +604,10 @@ class _ServerPageState extends State<ServerPage> {
                     Text(
                       'End-to-end encryption is always on',
                       style: theme.textTheme.titleMedium?.copyWith(
-                        color: dark
-                            ? const Color(0xFF28D08B)
-                            : const Color(0xFF118E5E),
+                        color:
+                            dark
+                                ? const Color(0xFF28D08B)
+                                : const Color(0xFF118E5E),
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -672,31 +641,38 @@ class _ServerPageState extends State<ServerPage> {
       return ShellScaffold(
         backgroundColor: shellBackgroundColor,
         safeTop: true,
-        body: dark
-            ? SystemShellUnpairedPage(
-                onUseSeclusoRelay: _openRelayScanFlow,
-                onUseSelfHosted: () => _showPlaceholderMessage(
-                  'Self-hosted relay setup is not wired in this preview yet.',
+        body:
+            dark
+                ? SystemShellUnpairedPage(
+                  onUseSeclusoRelay: _openRelayScanFlow,
+                  onUseSelfHosted:
+                      () => _showPlaceholderMessage(
+                        'Self-hosted relay setup is not wired in this preview yet.',
+                      ),
+                  onContactSupport:
+                      () => _showPlaceholderMessage(
+                        'Support links are not wired in this preview yet.',
+                      ),
+                  onVisitWebsite:
+                      () => _showPlaceholderMessage(
+                        'Website links are not wired in this preview yet.',
+                      ),
+                )
+                : SystemShellUnpairedLightPage(
+                  onUseSeclusoRelay: _openRelayScanFlow,
+                  onUseSelfHosted:
+                      () => _showPlaceholderMessage(
+                        'Self-hosted relay setup is not wired in this preview yet.',
+                      ),
+                  onContactSupport:
+                      () => _showPlaceholderMessage(
+                        'Support links are not wired in this preview yet.',
+                      ),
+                  onVisitWebsite:
+                      () => _showPlaceholderMessage(
+                        'Website links are not wired in this preview yet.',
+                      ),
                 ),
-                onContactSupport: () => _showPlaceholderMessage(
-                  'Support links are not wired in this preview yet.',
-                ),
-                onVisitWebsite: () => _showPlaceholderMessage(
-                  'Website links are not wired in this preview yet.',
-                ),
-              )
-            : SystemShellUnpairedLightPage(
-                onUseSeclusoRelay: _openRelayScanFlow,
-                onUseSelfHosted: () => _showPlaceholderMessage(
-                  'Self-hosted relay setup is not wired in this preview yet.',
-                ),
-                onContactSupport: () => _showPlaceholderMessage(
-                  'Support links are not wired in this preview yet.',
-                ),
-                onVisitWebsite: () => _showPlaceholderMessage(
-                  'Website links are not wired in this preview yet.',
-                ),
-              ),
       );
     }
     if (widget.showShellChrome && hasSynced) {
@@ -711,12 +687,14 @@ class _ServerPageState extends State<ServerPage> {
             onCheckForUpdates: _checkForUpdates,
             onAddCamera: _openAddCameraFlow,
             onOpenCamera: _openCameraDetails,
-            onContactSupport: () => _showPlaceholderMessage(
-              'Support links are not wired in this preview yet.',
-            ),
-            onVisitWebsite: () => _showPlaceholderMessage(
-              'Website links are not wired in this preview yet.',
-            ),
+            onContactSupport:
+                () => _showPlaceholderMessage(
+                  'Support links are not wired in this preview yet.',
+                ),
+            onVisitWebsite:
+                () => _showPlaceholderMessage(
+                  'Website links are not wired in this preview yet.',
+                ),
           ),
         );
       }
@@ -730,12 +708,14 @@ class _ServerPageState extends State<ServerPage> {
           onCheckForUpdates: _checkForUpdates,
           onAddCamera: _openAddCameraFlow,
           onOpenCamera: _openCameraDetails,
-          onContactSupport: () => _showPlaceholderMessage(
-            'Support links are not wired in this preview yet.',
-          ),
-          onVisitWebsite: () => _showPlaceholderMessage(
-            'Website links are not wired in this preview yet.',
-          ),
+          onContactSupport:
+              () => _showPlaceholderMessage(
+                'Support links are not wired in this preview yet.',
+              ),
+          onVisitWebsite:
+              () => _showPlaceholderMessage(
+                'Website links are not wired in this preview yet.',
+              ),
         ),
       );
     }
@@ -749,16 +729,17 @@ class _ServerPageState extends State<ServerPage> {
       children: [
         Text(
           'System',
-          style: widget.showShellChrome
-              ? shellTitleStyle(
-                  context,
-                  fontSize: 22,
-                  designLetterSpacing: 0.55,
-                )
-              : theme.textTheme.headlineLarge?.copyWith(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                ),
+          style:
+              widget.showShellChrome
+                  ? shellTitleStyle(
+                    context,
+                    fontSize: 22,
+                    designLetterSpacing: 0.55,
+                  )
+                  : theme.textTheme.headlineLarge?.copyWith(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                  ),
         ),
         const SizedBox(height: 8),
         Text(
@@ -820,12 +801,14 @@ class _ServerPageState extends State<ServerPage> {
           const SizedBox(height: 18),
           ShellCard(
             radius: 24,
-            color: theme.brightness == Brightness.dark
-                ? const Color(0xFF0F1714)
-                : const Color(0xFFF7FFFB),
-            borderColor: theme.brightness == Brightness.dark
-                ? const Color(0xFF174E39)
-                : const Color(0xFFC7E8D8),
+            color:
+                theme.brightness == Brightness.dark
+                    ? const Color(0xFF0F1714)
+                    : const Color(0xFFF7FFFB),
+            borderColor:
+                theme.brightness == Brightness.dark
+                    ? const Color(0xFF174E39)
+                    : const Color(0xFFC7E8D8),
             child: Row(
               children: [
                 const Icon(
@@ -837,9 +820,10 @@ class _ServerPageState extends State<ServerPage> {
                   child: Text(
                     'End-to-end encryption is always on',
                     style: theme.textTheme.titleMedium?.copyWith(
-                      color: theme.brightness == Brightness.dark
-                          ? const Color(0xFF28D08B)
-                          : const Color(0xFF118E5E),
+                      color:
+                          theme.brightness == Brightness.dark
+                              ? const Color(0xFF28D08B)
+                              : const Color(0xFF118E5E),
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -864,17 +848,19 @@ class _ServerPageState extends State<ServerPage> {
       appBar: seclusoAppBar(
         context,
         title: '',
-        leading: widget.showBackButton
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => Navigator.of(context).maybePop(),
-              )
-            : Builder(
-                builder: (context) => IconButton(
-                  icon: const Icon(Icons.menu),
-                  onPressed: () => scaffoldKey.currentState?.openDrawer(),
+        leading:
+            widget.showBackButton
+                ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => Navigator.of(context).maybePop(),
+                )
+                : Builder(
+                  builder:
+                      (context) => IconButton(
+                        icon: const Icon(Icons.menu),
+                        onPressed: () => scaffoldKey.currentState?.openDrawer(),
+                      ),
                 ),
-              ),
       ),
       body: SafeArea(top: true, child: content),
     );
@@ -898,25 +884,43 @@ class _RelayQrScanPageState extends State<_RelayQrScanPage> {
     super.dispose();
   }
 
-  Uint8List? _credentialsFromBarcode(Barcode barcode) {
-    final text = barcode.rawValue?.trim();
-    if (text != null && text.isNotEmpty) {
-      return Uint8List.fromList(utf8.encode(text));
-    }
-
-    final rawBytes = barcode.rawBytes;
-    if (rawBytes != null && rawBytes.isNotEmpty) {
-      return Uint8List.fromList(rawBytes);
-    }
-
-    return null;
-  }
-
   Future<void> _handleDetection(BarcodeCapture capture) async {
     if (_handlingScan) return;
 
     for (final barcode in capture.barcodes) {
-      final credentials = _credentialsFromBarcode(barcode);
+      var rawValue = barcode.rawValue?.trim();
+      if (rawValue == null || rawValue.isEmpty) {
+        continue;
+      }
+
+      dynamic decoded;
+      try {
+        decoded = jsonDecode(rawValue);
+      } catch (_) {
+        decoded = null;
+      }
+
+      var credentials = null;
+
+      if (decoded is Map) {
+        final versionKey = decoded['v'];
+        final serverUsername = decoded['u'];
+        final serverPassword = decoded['p'];
+        final serverAddress = decoded['sa'];
+        if (versionKey is String &&
+            serverUsername is String &&
+            serverPassword is String &&
+            serverAddress is String &&
+            versionKey == Constants.userCredentialsQrCodeVersion) {
+          credentials = UserCredentialsQrPayload(
+            serverUsername: serverUsername,
+            serverPassword: serverPassword,
+            serverAddress: serverAddress,
+          );
+          try {} catch (_) {}
+        }
+      }
+
       if (credentials == null) {
         continue;
       }
@@ -963,12 +967,14 @@ class _SystemActionButton extends StatelessWidget {
       child: FilledButton(
         onPressed: onTap,
         style: FilledButton.styleFrom(
-          backgroundColor: dark
-              ? Colors.white.withValues(alpha: 0.10)
-              : Colors.white.withValues(alpha: 0.82),
-          foregroundColor: dark
-              ? Colors.white.withValues(alpha: 0.84)
-              : const Color(0xFF3E4352),
+          backgroundColor:
+              dark
+                  ? Colors.white.withValues(alpha: 0.10)
+                  : Colors.white.withValues(alpha: 0.82),
+          foregroundColor:
+              dark
+                  ? Colors.white.withValues(alpha: 0.84)
+                  : const Color(0xFF3E4352),
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -983,9 +989,10 @@ class _SystemActionButton extends StatelessWidget {
           style: theme.textTheme.labelLarge?.copyWith(
             fontSize: 13,
             fontWeight: FontWeight.w700,
-            color: dark
-                ? Colors.white.withValues(alpha: 0.84)
-                : const Color(0xFF3E4352),
+            color:
+                dark
+                    ? Colors.white.withValues(alpha: 0.84)
+                    : const Color(0xFF3E4352),
           ),
         ),
       ),
@@ -1080,16 +1087,18 @@ Widget _setupOptionCard(
       child: Container(
         width: double.infinity,
         decoration: BoxDecoration(
-          color: highlighted
-              ? (dark ? const Color(0xFF1B2433) : const Color(0xFFF2ECD7))
-              : (dark
-                    ? Colors.white.withValues(alpha: 0.03)
-                    : const Color(0xFFF5F6FA)),
+          color:
+              highlighted
+                  ? (dark ? const Color(0xFF1B2433) : const Color(0xFFF2ECD7))
+                  : (dark
+                      ? Colors.white.withValues(alpha: 0.03)
+                      : const Color(0xFFF5F6FA)),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: highlighted
-                ? (dark ? const Color(0xFF445C8C) : const Color(0xFFE3C15B))
-                : theme.colorScheme.outlineVariant,
+            color:
+                highlighted
+                    ? (dark ? const Color(0xFF445C8C) : const Color(0xFFE3C15B))
+                    : theme.colorScheme.outlineVariant,
           ),
         ),
         padding: const EdgeInsets.all(16),
@@ -1100,16 +1109,18 @@ Widget _setupOptionCard(
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: dark
-                    ? Colors.white.withValues(alpha: 0.08)
-                    : Colors.white.withValues(alpha: 0.72),
+                color:
+                    dark
+                        ? Colors.white.withValues(alpha: 0.08)
+                        : Colors.white.withValues(alpha: 0.72),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 icon,
-                color: highlighted
-                    ? const Color(0xFF8BB1F4)
-                    : const Color(0xFFB0BCD4),
+                color:
+                    highlighted
+                        ? const Color(0xFF8BB1F4)
+                        : const Color(0xFFB0BCD4),
               ),
             ),
             const SizedBox(width: 14),

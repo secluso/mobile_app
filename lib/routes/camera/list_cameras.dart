@@ -444,12 +444,10 @@ class CamerasPageState extends State<CamerasPage>
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
     final serverAddr = prefs.getString(PrefKeys.serverAddr);
-    final credentialsFull = prefs.getString(PrefKeys.credentialsFull);
+    final serverUsername = prefs.getString(PrefKeys.serverUsername);
     final synced =
-        serverAddr != null &&
-        serverAddr.isNotEmpty &&
-        credentialsFull != null &&
-        prefs.containsKey(PrefKeys.serverUsername);
+        serverAddr != null && serverAddr.isNotEmpty && serverUsername != null;
+
     if (!mounted) return;
     setState(() {
       _serverHasSyncedState = synced;
@@ -935,7 +933,8 @@ class CamerasPageState extends State<CamerasPage>
     final all = <Map<String, dynamic>>[];
     for (final camera in storedCameras) {
       final latestVideo = latestVideoByCamera[camera.name];
-      final latestDisplayableEvent = latestDisplayableEventByCamera[camera.name];
+      final latestDisplayableEvent =
+          latestDisplayableEventByCamera[camera.name];
       final detections =
           latestVideo == null
               ? const <String>{}
@@ -1091,7 +1090,9 @@ class CamerasPageState extends State<CamerasPage>
       try {
         await AppStores.init();
       } catch (e, st) {
-        Log.e("Failed to init AppStores for thumb lookup [$cameraName]: $e\n$st");
+        Log.e(
+          "Failed to init AppStores for thumb lookup [$cameraName]: $e\n$st",
+        );
         return null;
       }
     }
@@ -1111,7 +1112,10 @@ class CamerasPageState extends State<CamerasPage>
       if (!await _videoFileExists(video.camera, video.video)) {
         continue;
       }
-      final detections = await _detectionTypesForVideo(detectionBox, video.video);
+      final detections = await _detectionTypesForVideo(
+        detectionBox,
+        video.video,
+      );
       if (!video.motion && detections.isEmpty) {
         continue;
       }

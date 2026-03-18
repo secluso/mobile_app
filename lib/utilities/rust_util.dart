@@ -1,6 +1,7 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
 import 'dart:async';
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
@@ -52,10 +53,14 @@ Future<String> addCamera(
   }
 
   final prefs = await SharedPreferences.getInstance();
-  final credentialsFull = prefs.getString(PrefKeys.credentialsFull);
+  final serverAddress = prefs.getString(PrefKeys.serverAddr);
+  final serverUsername = prefs.getString(PrefKeys.serverUsername);
+  final serverPassword = prefs.getString(PrefKeys.serverPassword);
 
-  if (credentialsFull == null) {
-    Log.e("credentialsFull is null");
+  if (serverAddress == null ||
+      serverUsername == null ||
+      serverPassword == null) {
+    Log.e("credentials for server are null");
     return "Error";
   }
 
@@ -69,7 +74,7 @@ Future<String> addCamera(
     ssid: ssid,
     password: password,
     pairingToken: pairingToken,
-    credentialsFull: credentialsFull,
+    credentialsFull: serverUsername + serverPassword + serverAddress,
   );
 }
 
@@ -95,8 +100,7 @@ Future<InitOutcome> initialize(
             ? null
             : DateTime.now().difference(state.startedAt!).inMilliseconds;
     if (state.lastTimeout != null &&
-        DateTime.now().difference(state.lastTimeout!) <
-            _initTimeoutCooldown) {
+        DateTime.now().difference(state.lastTimeout!) < _initTimeoutCooldown) {
       Log.w(
         "[init] Init still running for $cameraName; skipping to avoid stall (age=${ageMs ?? -1}ms)",
       );
@@ -113,17 +117,13 @@ Future<InitOutcome> initialize(
     final lastFailure = state.lastFailure;
     if (lastFailure != null &&
         now.difference(lastFailure) < _initFailureCooldown) {
-      Log.w(
-        "[init] Recent init failure for $cameraName; skipping retry",
-      );
+      Log.w("[init] Recent init failure for $cameraName; skipping retry");
       return InitOutcome.failed;
     }
     final lastTimeout = state.lastTimeout;
     if (lastTimeout != null &&
         now.difference(lastTimeout) < _initFailureCooldown) {
-      Log.w(
-        "[init] Recent init timeout for $cameraName; skipping retry",
-      );
+      Log.w("[init] Recent init timeout for $cameraName; skipping retry");
       return InitOutcome.timeout;
     }
   }
@@ -173,8 +173,7 @@ Future<bool> _doInitialize(
       "[init] Starting init for $cameraName (attempt ${state.attempts}, firstTime=${!firstTimeConnectionDone})",
     );
 
-    final success =
-        await initializeCore(cameraName, !firstTimeConnectionDone);
+    final success = await initializeCore(cameraName, !firstTimeConnectionDone);
     sw.stop();
 
     if (success) {

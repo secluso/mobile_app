@@ -146,8 +146,7 @@ class SeclusoQrScanScreen extends StatelessWidget {
                           height: metrics.frameSize,
                           child: _QrScanPageFrame(
                             metrics: metrics,
-                            cornerColor:
-                                const Color(0xFF8BB3EE),
+                            cornerColor: const Color(0xFF8BB3EE),
                             scanLineColor: const Color(0xFF8BB3EE),
                           ),
                         ),

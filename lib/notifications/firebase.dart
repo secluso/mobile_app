@@ -96,7 +96,6 @@ Future<void> _invalidateServerCredentials(SharedPreferences prefs) async {
   await prefs.remove(PrefKeys.serverAddr);
   await prefs.remove(PrefKeys.serverUsername);
   await prefs.remove(PrefKeys.serverPassword);
-  await prefs.remove(PrefKeys.credentialsFull);
   await prefs.remove(PrefKeys.fcmConfigJson);
 }
 
@@ -709,12 +708,9 @@ class PushNotificationService {
     final box = AppStores.instance.videoStore.box<Video>();
 
     final videoName = 'video_$timestamp.mp4';
-    final existing =
-        box
-            .query()
-            .build()
-            .find()
-            .any((video) => video.camera == cameraName && video.video == videoName);
+    final existing = box.query().build().find().any(
+      (video) => video.camera == cameraName && video.video == videoName,
+    );
 
     if (existing) {
       return;
