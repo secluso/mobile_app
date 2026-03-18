@@ -456,8 +456,10 @@ class CamerasPageState extends State<CamerasPage>
 
   void _refreshHomeState() {
     if (!mounted) return;
+    final freshPrefs = _loadPrefsFresh();
     setState(() {
-      _prefsFuture = _loadPrefsFresh();
+      _prefsFuture = freshPrefs;
+      _serverHasSyncedState = null;
     });
     unawaited(_reloadServerSyncState());
     unawaited(_loadCamerasFromDatabase(true));
@@ -905,8 +907,11 @@ class CamerasPageState extends State<CamerasPage>
       latestVideoByCamera.putIfAbsent(video.camera, () => video);
     }
 
-    final activeCameraNames = storedCameras.map((camera) => camera.name).toSet();
-    _thumbCache.removeWhere((cameraName, _) => !activeCameraNames.contains(cameraName));
+    final activeCameraNames =
+        storedCameras.map((camera) => camera.name).toSet();
+    _thumbCache.removeWhere(
+      (cameraName, _) => !activeCameraNames.contains(cameraName),
+    );
     _thumbFallback.removeWhere(
       (cameraName, _) => !activeCameraNames.contains(cameraName),
     );
