@@ -53,6 +53,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
   late Box<Detection> _detBox;
   Set<String> _dets = {};
   bool _shareInProgress = false;
+  double _playbackSpeed = 1.0;
 
   bool get _isPreviewMode => widget.previewAssetPath != null;
 
@@ -164,6 +165,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
 
       await _controller.initialize();
       await _controller.setLooping(true);
+      await _controller.setPlaybackSpeed(_playbackSpeed);
       _controller.addListener(() {
         if (mounted) setState(() {});
       });
@@ -259,6 +261,58 @@ class _VideoViewPageState extends State<VideoViewPage> {
     setState(() {
       _controller.value.isPlaying ? _controller.pause() : _controller.play();
     });
+  }
+
+  Future<void> _setPlaybackSpeed(double speed) async {
+    if (_isPreviewMode || !_initialized || _playbackSpeed == speed) {
+      return;
+    }
+
+    try {
+      await _controller.setPlaybackSpeed(speed);
+      if (!mounted) return;
+      setState(() {
+        _playbackSpeed = speed;
+      });
+    } catch (e, st) {
+      Log.e('Failed to change playback speed: $e\n$st');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to change playback speed')),
+      );
+    }
+  }
+
+  Duration _safeSeekTarget(Duration requested, Duration duration) {
+    if (requested <= Duration.zero) {
+      return Duration.zero;
+    }
+
+    if (duration <= Duration.zero) {
+      return Duration.zero;
+    }
+
+    final endPadding = Duration(
+      milliseconds: duration.inMilliseconds > 250 ? 250 : 1,
+    );
+    final lastSafePosition = duration - endPadding;
+    if (requested >= duration) {
+      return lastSafePosition > Duration.zero
+          ? lastSafePosition
+          : Duration.zero;
+    }
+
+    return requested;
+  }
+
+  Future<void> _seekToSafe(Duration requested) async {
+    if (_isPreviewMode || !_initialized) {
+      return;
+    }
+
+    final duration = _controller.value.duration;
+    final target = _safeSeekTarget(requested, duration);
+    await _controller.seekTo(target);
   }
 
   Future<void> _shareVideo() async {
@@ -410,7 +464,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
                   onPressed: () {
                     final current = _controller.value.position;
                     final newPosition = current - const Duration(seconds: 5);
-                    _controller.seekTo(
+                    _seekToSafe(
                       newPosition >= Duration.zero
                           ? newPosition
                           : Duration.zero,
@@ -437,7 +491,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
                     final current = _controller.value.position;
                     final max = _controller.value.duration;
                     final newPosition = current + const Duration(seconds: 5);
-                    _controller.seekTo(newPosition <= max ? newPosition : max);
+                    _seekToSafe(newPosition <= max ? newPosition : max);
                   },
                 ),
               ],
@@ -462,15 +516,13 @@ class _VideoViewPageState extends State<VideoViewPage> {
       onRewind: () {
         final current = _controller.value.position;
         final newPosition = current - const Duration(seconds: 5);
-        _controller.seekTo(
-          newPosition >= Duration.zero ? newPosition : Duration.zero,
-        );
+        _seekToSafe(newPosition >= Duration.zero ? newPosition : Duration.zero);
       },
       onFastForward: () {
         final current = _controller.value.position;
         final max = _controller.value.duration;
         final newPosition = current + const Duration(seconds: 5);
-        _controller.seekTo(newPosition <= max ? newPosition : max);
+        _seekToSafe(newPosition <= max ? newPosition : max);
       },
     );
   }
@@ -616,9 +668,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
                 _isPreviewMode
                     ? null
                     : (value) async {
-                      await _controller.seekTo(
-                        Duration(milliseconds: value.round()),
-                      );
+                      await _seekToSafe(Duration(milliseconds: value.round()));
                     },
           ),
           SizedBox(height: metrics.progressToTimeGap),
@@ -674,11 +724,26 @@ class _VideoViewPageState extends State<VideoViewPage> {
                 ),
               ),
               const Spacer(),
-              _speedChip('0.5×', false, metrics: metrics),
+              _speedChip(
+                '0.5×',
+                _playbackSpeed == 0.5,
+                metrics: metrics,
+                onTap: () => _setPlaybackSpeed(0.5),
+              ),
               SizedBox(width: metrics.speedChipGap),
-              _speedChip('1×', true, metrics: metrics),
+              _speedChip(
+                '1×',
+                _playbackSpeed == 1.0,
+                metrics: metrics,
+                onTap: () => _setPlaybackSpeed(1.0),
+              ),
               SizedBox(width: metrics.speedChipGap),
-              _speedChip('2×', false, metrics: metrics),
+              _speedChip(
+                '2×',
+                _playbackSpeed == 2.0,
+                metrics: metrics,
+                onTap: () => _setPlaybackSpeed(2.0),
+              ),
             ],
           ),
           SizedBox(height: metrics.controlsToDetailsGap),
@@ -871,44 +936,48 @@ class _VideoViewPageState extends State<VideoViewPage> {
     String label,
     bool selected, {
     required _ClipViewMetrics metrics,
+    required VoidCallback onTap,
   }) {
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
-    return Container(
-      width:
-          label == '0.5×'
-              ? metrics.speedChipWideWidth
-              : metrics.speedChipNarrowWidth,
-      height: metrics.speedChipHeight,
-      decoration: BoxDecoration(
-        color:
-            selected
-                ? const Color(0xFF8BB1F4).withValues(alpha: 0.14)
-                : (dark
-                    ? Colors.white.withValues(alpha: 0.04)
-                    : const Color(0xFFF3F4F6)),
-        borderRadius: BorderRadius.circular(metrics.speedChipRadius),
-        border: Border.all(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width:
+            label == '0.5×'
+                ? metrics.speedChipWideWidth
+                : metrics.speedChipNarrowWidth,
+        height: metrics.speedChipHeight,
+        decoration: BoxDecoration(
           color:
               selected
-                  ? const Color(0xFF8BB1F4)
+                  ? const Color(0xFF8BB1F4).withValues(alpha: 0.14)
                   : (dark
-                      ? Colors.white.withValues(alpha: 0.06)
-                      : const Color(0xFFE5E7EB)),
-        ),
-      ),
-      child: Center(
-        child: Text(
-          label,
-          style: theme.textTheme.labelLarge?.copyWith(
-            fontSize: metrics.speedChipTextSize,
+                      ? Colors.white.withValues(alpha: 0.04)
+                      : const Color(0xFFF3F4F6)),
+          borderRadius: BorderRadius.circular(metrics.speedChipRadius),
+          border: Border.all(
             color:
                 selected
                     ? const Color(0xFF8BB1F4)
                     : (dark
-                        ? Colors.white.withValues(alpha: 0.4)
-                        : const Color(0xFF6B7280)),
-            fontWeight: FontWeight.w600,
+                        ? Colors.white.withValues(alpha: 0.06)
+                        : const Color(0xFFE5E7EB)),
+          ),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              fontSize: metrics.speedChipTextSize,
+              color:
+                  selected
+                      ? const Color(0xFF8BB1F4)
+                      : (dark
+                          ? Colors.white.withValues(alpha: 0.4)
+                          : const Color(0xFF6B7280)),
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ),
