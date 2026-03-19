@@ -74,4 +74,6 @@ android/key.properties
 *.jks
 
 # Custom Developer Tools
-tool/
+tool/*
+!tool/device_farm_design_capture.sh
+!tool/design_targets_android.txt

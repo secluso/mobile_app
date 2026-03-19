@@ -1,0 +1,53 @@
+# target|theme
+#
+# "what exactly do we capture?" list for Android.
+# Both the local adb screenshot script and the Device Farm instrumentation test read from here
+
+# Home and shell states
+cameras_relay_missing|dark
+home_shell_no_relay_dark|dark
+home_shell_no_relay_light|light
+home_shell_no_cameras|dark
+home_shell_error|dark
+home_shell_offline|dark
+control_room|dark
+home_shell_two_cameras|dark
+home_shell_placeholder|dark
+home_shell_one_camera|dark
+home_shell_one_camera_empty_dark|dark
+home_shell_three_cameras|dark
+home_shell_four_cameras|dark
+
+# Activity, system, and settings
+activity_overview|dark
+activity_empty|dark
+system_overview|dark
+system_unpaired|dark
+settings_overview|dark
+app_settings|dark
+settings_top|dark
+settings_bottom|dark
+settings_very_bottom|dark
+
+# Cameras, pairing, and playback
+cameras_ready|dark
+cameras_populated|dark
+scan_qr_page|dark
+server_linked|dark
+server_pairing|dark
+camera_detail|dark
+camera_detail_empty_dark|dark
+camera_settings|dark
+video_viewer|dark
+livestream_viewer|dark
+livestream_error|dark
+drawer_preview|dark
+
+# Dialog states
+dialog_secluso_connect|dark
+dialog_secluso_setup|dark
+dialog_secluso_pairing|dark
+dialog_secluso_pairing_failed|dark
+dialog_secluso_paired|dark
+dialog_ip_import|dark
+dialog_qr_scan|dark

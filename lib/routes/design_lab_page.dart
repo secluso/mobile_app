@@ -793,6 +793,156 @@ class DesignLabPage extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 18),
+            // This section intentionally mirrors the wider screenshot manifest
+            // more closely than the original "core screens" list did.
+            //
+            // The practical reason is simple: if the design lab is our starting
+            // point for visual review, it should expose the major shell states
+            // and failure/empty variants too, not just the happy-path screens.
+            _LabSection(
+              title: 'State coverage',
+              children: [
+                _LabEntry(
+                  title: 'Home / no relay (dark)',
+                  subtitle: 'Primary relay setup state in dark mode.',
+                  onTap:
+                      () => _openScreen(
+                        context,
+                        designLabTargetPage('home_shell_no_relay_dark')!,
+                      ),
+                ),
+                _LabEntry(
+                  title: 'Home / no relay (light)',
+                  subtitle: 'Primary relay setup state in light mode.',
+                  onTap:
+                      () => _openScreen(
+                        context,
+                        designLabTargetPage(
+                          'home_shell_no_relay_light',
+                          themeName: 'light',
+                        )!,
+                      ),
+                ),
+                _LabEntry(
+                  title: 'Home / no cameras',
+                  subtitle: 'Linked relay with no paired camera feeds yet.',
+                  onTap:
+                      () => _openScreen(
+                        context,
+                        designLabTargetPage('home_shell_no_cameras')!,
+                      ),
+                ),
+                _LabEntry(
+                  title: 'Home / error state',
+                  subtitle: 'Recent event rail plus the inline error treatment.',
+                  onTap:
+                      () => _openScreen(
+                        context,
+                        designLabTargetPage('home_shell_error')!,
+                      ),
+                ),
+                _LabEntry(
+                  title: 'Home / notifications offline',
+                  subtitle: 'Offline warning treatment for background delivery.',
+                  onTap:
+                      () => _openScreen(
+                        context,
+                        designLabTargetPage('home_shell_offline')!,
+                      ),
+                ),
+                _LabEntry(
+                  title: 'Home / one camera',
+                  subtitle: 'Single paired camera with a populated hero card.',
+                  onTap:
+                      () => _openScreen(
+                        context,
+                        designLabTargetPage('home_shell_one_camera')!,
+                      ),
+                ),
+                _LabEntry(
+                  title: 'Home / one camera awaiting event',
+                  subtitle: 'Single paired camera before the first visible clip.',
+                  onTap:
+                      () => _openScreen(
+                        context,
+                        designLabTargetPage('home_shell_one_camera_empty_dark')!,
+                      ),
+                ),
+                _LabEntry(
+                  title: 'Home / two cameras',
+                  subtitle: 'Balanced two-camera shell layout.',
+                  onTap:
+                      () => _openScreen(
+                        context,
+                        designLabTargetPage('home_shell_two_cameras')!,
+                      ),
+                ),
+                _LabEntry(
+                  title: 'Home / three cameras',
+                  subtitle: 'Three-card camera rail stress state.',
+                  onTap:
+                      () => _openScreen(
+                        context,
+                        designLabTargetPage('home_shell_three_cameras')!,
+                      ),
+                ),
+                _LabEntry(
+                  title: 'Home / four cameras',
+                  subtitle: 'Dense four-camera shell stress state.',
+                  onTap:
+                      () => _openScreen(
+                        context,
+                        designLabTargetPage('home_shell_four_cameras')!,
+                      ),
+                ),
+                _LabEntry(
+                  title: 'Home / placeholder imagery',
+                  subtitle: 'Shell with intentionally missing preview media.',
+                  onTap:
+                      () => _openScreen(
+                        context,
+                        designLabTargetPage('home_shell_placeholder')!,
+                      ),
+                ),
+                _LabEntry(
+                  title: 'Activity / empty',
+                  subtitle: 'Zero-event archive state inside the shell.',
+                  onTap:
+                      () => _openScreen(
+                        context,
+                        designLabTargetPage('activity_empty')!,
+                      ),
+                ),
+                _LabEntry(
+                  title: 'System / unpaired',
+                  subtitle: 'Relay server setup state before linking.',
+                  onTap:
+                      () => _openScreen(
+                        context,
+                        designLabTargetPage('system_unpaired')!,
+                      ),
+                ),
+                _LabEntry(
+                  title: 'Camera / detail empty',
+                  subtitle: 'Camera page before any clip thumbnails exist.',
+                  onTap:
+                      () => _openScreen(
+                        context,
+                        designLabTargetPage('camera_detail_empty_dark')!,
+                      ),
+                ),
+                _LabEntry(
+                  title: 'Shell / drawer',
+                  subtitle: 'Navigation drawer treatment from the new shell.',
+                  onTap:
+                      () => _openScreen(
+                        context,
+                        designLabTargetPage('drawer_preview')!,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
             _LabSection(
               title: 'Dialogs',
               children: [
@@ -803,6 +953,42 @@ class DesignLabPage extends StatelessWidget {
                       () => _openScreen(
                         context,
                         designLabTargetPage('dialog_secluso_connect')!,
+                      ),
+                ),
+                _LabEntry(
+                  title: 'Secluso camera / setup dialog',
+                  subtitle: 'Relay account guidance step before pairing.',
+                  onTap:
+                      () => _openScreen(
+                        context,
+                        designLabTargetPage('dialog_secluso_setup')!,
+                      ),
+                ),
+                _LabEntry(
+                  title: 'Secluso camera / pairing dialog',
+                  subtitle: 'In-progress camera pairing modal.',
+                  onTap:
+                      () => _openScreen(
+                        context,
+                        designLabTargetPage('dialog_secluso_pairing')!,
+                      ),
+                ),
+                _LabEntry(
+                  title: 'Secluso camera / pairing failed dialog',
+                  subtitle: 'Failure treatment for pairing problems.',
+                  onTap:
+                      () => _openScreen(
+                        context,
+                        designLabTargetPage('dialog_secluso_pairing_failed')!,
+                      ),
+                ),
+                _LabEntry(
+                  title: 'Secluso camera / paired dialog',
+                  subtitle: 'Successful camera pairing confirmation state.',
+                  onTap:
+                      () => _openScreen(
+                        context,
+                        designLabTargetPage('dialog_secluso_paired')!,
                       ),
                 ),
                 _LabEntry(

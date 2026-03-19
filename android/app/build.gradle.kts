@@ -66,6 +66,15 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Device Farm runs the screenshot pass through Android instrumentation, so we need a real instrumentation
+        // runner here instead of relying on Flutter's normal app entry only
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    sourceSets {
+        getByName("androidTest") {
+            assets.srcDir(project.file("../../tool"))
+        }
     }
 
     signingConfigs {
@@ -97,4 +106,16 @@ dependencies {
     implementation("com.google.firebase:firebase-messaging:24.1.1")
     implementation("androidx.media3:media3-exoplayer:1.7.1")
     implementation("androidx.media3:media3-ui:1.7.1")
+    // Keep these AndroidX test libs on versions that work nicely with the rest
+    // of the Flutter / Gradle stack already in this app. 
+    //
+    // In practice, we only need these:
+    // - runner: actually launches the instrumentation process on Device Farm
+    // - ext:junit: normal JUnit4 
+    // - core: small Android test utilities
+    // - uiautomator: gives us device-level screenshots and app launching
+    androidTestImplementation("androidx.test:runner:1.2.0")
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test:core:1.5.0")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
 }
