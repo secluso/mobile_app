@@ -62,6 +62,9 @@ const String _designCommandFile = String.fromEnvironment(
   'SECLUSO_DESIGN_COMMAND_FILE',
   defaultValue: '/tmp/secluso_design_command.txt',
 );
+const bool _designPreviewBoot =
+    kDebugMode &&
+    (_launchDesignLab || _launchDesignTarget != '' || _launchDesignController);
 
 void main() {
   // Wrap main() with a zone so if something throws during init, we still attempt to close the DB.
@@ -73,12 +76,21 @@ void main() {
       await Log.runWithContext(traceId, () async {
         Log.i('UI context started (id=$traceId)');
         Log.i('main() started');
-        WidgetsFlutterBinding.ensureInitialized();
+        final binding = WidgetsFlutterBinding.ensureInitialized();
         await SystemChrome.setPreferredOrientations([
           DeviceOrientation.portraitUp,
         ]);
         SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
         UiState.markBindingReady();
+        final initialDarkMode = await ThemeProvider.loadThemePreference();
+        final shouldDeferFirstFrame =
+            !_designPreviewBoot;
+        if (shouldDeferFirstFrame) {
+          // Keep the native Android splash visible until startup actually
+          // resolves. That gives us one continuous launch surface instead of a
+          // native splash handing off to extra black/white placeholder frames.
+          binding.deferFirstFrame();
+        }
         FlutterError.onError = (details) {
           Log.e('FlutterError: ${details.exceptionAsString()}');
           final stack = details.stack;
@@ -123,7 +135,12 @@ void main() {
             firebaseMessagingBackgroundHandler,
           );
         }
-        runApp(const AppBootstrap());
+        runApp(
+          AppBootstrap(
+            initialDarkMode: initialDarkMode,
+            releaseFirstFrameOnReady: shouldDeferFirstFrame,
+          ),
+        );
       });
     },
     (error, stack) async {
@@ -335,40 +352,40 @@ Future<void> _initializeApp(ThemeProvider themeProvider) async {
     Log.d("Skipping PushNotificationService.init; Firebase not initialized");
   }
 
-  // Load saved dark mode state after startup work begins
-  bool isDarkMode = await ThemeProvider.loadThemePreference();
-  themeProvider.setTheme(isDarkMode);
-  Log.d("Loaded darkTheme value: $isDarkMode");
+  // Theme is preloaded before runApp so we do not briefly boot the app in the
+  // wrong color scheme and flash light mode during startup.
+  Log.d("Using preloaded darkTheme value: ${themeProvider.isDarkMode}");
 }
 
 class AppBootstrap extends StatefulWidget {
-  const AppBootstrap({super.key});
+  const AppBootstrap({
+    super.key,
+    required this.initialDarkMode,
+    required this.releaseFirstFrameOnReady,
+  });
+
+  final bool initialDarkMode;
+  final bool releaseFirstFrameOnReady;
 
   @override
   State<AppBootstrap> createState() => _AppBootstrapState();
 }
 
 class _AppBootstrapState extends State<AppBootstrap> {
-  static const bool _designPreviewBoot =
-      kDebugMode &&
-      (_launchDesignLab ||
-          _launchDesignTarget != '' ||
-          _launchDesignController);
-
-  final ThemeProvider _themeProvider = ThemeProvider(_designPreviewBoot);
+  late final ThemeProvider _themeProvider = ThemeProvider(widget.initialDarkMode);
   bool _isReady = _designPreviewBoot;
   bool _initStarted = false;
   String? _initError;
+  bool _firstFrameReleased = false;
 
   @override
   void initState() {
     super.initState();
     if (_designPreviewBoot) {
+      _releaseFirstFrameIfNeeded();
       return;
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startInitialization();
-    });
+    _startInitialization();
   }
 
   Future<void> _startInitialization() async {
@@ -381,6 +398,7 @@ class _AppBootstrapState extends State<AppBootstrap> {
           _isReady = true;
         });
       }
+      _releaseFirstFrameIfNeeded();
     } catch (e, st) {
       Log.e("Initialization failed: $e\n$st");
       if (mounted) {
@@ -388,7 +406,16 @@ class _AppBootstrapState extends State<AppBootstrap> {
           _initError = "Initialization failed";
         });
       }
+      _releaseFirstFrameIfNeeded();
     }
+  }
+
+  void _releaseFirstFrameIfNeeded() {
+    if (!widget.releaseFirstFrameOnReady || _firstFrameReleased) {
+      return;
+    }
+    WidgetsBinding.instance.allowFirstFrame();
+    _firstFrameReleased = true;
   }
 
   @override
@@ -408,20 +435,13 @@ class SplashScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (errorMessage == null) {
-      return const SeclusoScaffold(
-        body: ColoredBox(
-          color: Color(0xFF050505),
-          child: Center(
-            child: SizedBox(
-              width: 88,
-              height: 88,
-              child: Image(
-                image: AssetImage('assets/icon_centered.png'),
-                fit: BoxFit.contain,
-              ),
-            ),
-          ),
-        ),
+      // Keep the normal startup placeholder as plain black only. Android is
+      // already showing a native launch splash before Flutter draws, so adding
+      // a second centered-icon screen here just makes startup feel like it is
+      // stepping through one extra fake page before the real UI appears.
+      return const ColoredBox(
+        color: Color(0xFF050505),
+        child: SizedBox.expand(),
       );
     }
 
