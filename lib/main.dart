@@ -904,7 +904,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           },
         );
         final mediaQuery = MediaQuery.maybeOf(context);
-        if (Platform.isAndroid && mediaQuery != null) {
+        if (mediaQuery != null) {
           return MediaQuery(
             data: mediaQuery.copyWith(textScaler: TextScaler.noScaling),
             child: appContent,
