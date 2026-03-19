@@ -74,6 +74,9 @@ void main() {
         Log.i('UI context started (id=$traceId)');
         Log.i('main() started');
         WidgetsFlutterBinding.ensureInitialized();
+        await SystemChrome.setPreferredOrientations([
+          DeviceOrientation.portraitUp,
+        ]);
         SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
         UiState.markBindingReady();
         FlutterError.onError = (details) {
