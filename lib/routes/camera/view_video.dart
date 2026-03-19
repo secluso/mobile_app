@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path/path.dart' as p;
 import 'package:gal/gal.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/ui/secluso_surfaces.dart';
 import 'package:secluso_flutter/ui/secluso_theme.dart';
@@ -51,6 +52,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
   late String _videoPath;
   late Box<Detection> _detBox;
   Set<String> _dets = {};
+  bool _shareInProgress = false;
 
   bool get _isPreviewMode => widget.previewAssetPath != null;
 
@@ -259,6 +261,48 @@ class _VideoViewPageState extends State<VideoViewPage> {
     });
   }
 
+  Future<void> _shareVideo() async {
+    if (_isPreviewMode || _shareInProgress) {
+      return;
+    }
+
+    final videoFile = File(_videoPath);
+    if (!await videoFile.exists()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Video file not found')));
+      return;
+    }
+
+    setState(() {
+      _shareInProgress = true;
+    });
+
+    try {
+      if (!mounted) return;
+      final box = context.findRenderObject() as RenderBox?;
+      await Share.shareXFiles(
+        [XFile(videoFile.path, mimeType: 'video/mp4')],
+        subject: 'Secluso clip',
+        sharePositionOrigin:
+            box == null ? null : box.localToGlobal(Offset.zero) & box.size,
+      );
+    } catch (e, st) {
+      Log.e('Failed to share video: $e\n$st');
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Unable to share clip')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _shareInProgress = false;
+        });
+      }
+    }
+  }
+
   String _detectionLabel(Set<String> types) {
     if (types.isEmpty) return 'None';
     final norm = {for (final t in types) (t == 'pets' ? 'pet' : t)};
@@ -436,9 +480,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
       aspectRatio: 16 / 9,
       media: Stack(
         fit: StackFit.expand,
-        children: [
-          Image.asset(widget.previewAssetPath!, fit: BoxFit.cover),
-        ],
+        children: [Image.asset(widget.previewAssetPath!, fit: BoxFit.cover)],
       ),
       position: widget.previewPosition,
       duration: widget.previewDuration,
@@ -768,7 +810,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
                           metrics: metrics,
                           dark: dark,
                           label: 'Share',
-                          onTap: () {},
+                          onTap: _shareInProgress ? () {} : _shareVideo,
                           child: _ClipShareIcon(
                             size: metrics.actionIconSize,
                             color:
