@@ -1,8 +1,7 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:secluso_flutter/constants.dart';
@@ -82,181 +81,197 @@ class SeclusoQrScanScreen extends StatelessWidget {
     final securityBorderColor = Colors.white.withValues(alpha: 0.12);
     final securityIconColor = Colors.white.withValues(alpha: 0.3);
 
-    return SeclusoScaffold(
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final metrics = _QrScanMetrics.forWidth(constraints.maxWidth);
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              background,
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.24),
-                      Colors.black.withValues(alpha: 0.08),
-                      Colors.black.withValues(alpha: 0.18),
-                    ],
-                    stops: const [0.0, 0.42, 1.0],
+    final overlayStyle = const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.black,
+      systemNavigationBarDividerColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
+      systemNavigationBarIconBrightness: Brightness.light,
+      systemStatusBarContrastEnforced: false,
+      systemNavigationBarContrastEnforced: false,
+    );
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: overlayStyle,
+      child: Scaffold(
+        backgroundColor: const Color(0xFF050505),
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            final metrics = _QrScanMetrics.forWidth(constraints.maxWidth);
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                const ColoredBox(color: Color(0xFF050505)),
+                background,
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.24),
+                        Colors.black.withValues(alpha: 0.08),
+                        Colors.black.withValues(alpha: 0.18),
+                      ],
+                      stops: const [0.0, 0.42, 1.0],
+                    ),
                   ),
                 ),
-              ),
-              SafeArea(
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    metrics.sideInset,
-                    metrics.topInset,
-                    metrics.sideInset,
-                    metrics.bottomInset,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        height: metrics.headerHeight,
-                        child: Row(
-                          children: [
-                            _BackCircle(
-                              size: metrics.backButtonSize,
-                              iconSize: metrics.backIconSize,
-                              fillColor: Colors.white.withValues(alpha: 0.06),
-                              iconColor: Colors.white,
-                              onTap: onBack,
-                            ),
-                            SizedBox(width: metrics.headerGap),
-                            Text(
-                              title,
-                              style: GoogleFonts.inter(
-                                textStyle: theme.textTheme.titleLarge,
-                                color: Colors.white,
-                                fontSize: metrics.headerTitleSize,
-                                fontWeight: FontWeight.w600,
-                                height: 28 / 18,
+                SafeArea(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      metrics.sideInset,
+                      metrics.topInset,
+                      metrics.sideInset,
+                      metrics.bottomInset,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          height: metrics.headerHeight,
+                          child: Row(
+                            children: [
+                              _BackCircle(
+                                size: metrics.backButtonSize,
+                                iconSize: metrics.backIconSize,
+                                fillColor: Colors.white.withValues(alpha: 0.06),
+                                iconColor: Colors.white,
+                                onTap: onBack,
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(height: metrics.headerToFrameGap),
-                      const Spacer(),
-                      Center(
-                        child: SizedBox(
-                          width: metrics.frameSize,
-                          height: metrics.frameSize,
-                          child: _QrScanPageFrame(
-                            metrics: metrics,
-                            cornerColor: const Color(0xFF8BB3EE),
-                            scanLineColor: const Color(0xFF8BB3EE),
+                              SizedBox(width: metrics.headerGap),
+                              Text(
+                                title,
+                                style: GoogleFonts.inter(
+                                  textStyle: theme.textTheme.titleLarge,
+                                  color: Colors.white,
+                                  fontSize: metrics.headerTitleSize,
+                                  fontWeight: FontWeight.w600,
+                                  height: 28 / 18,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                      if (belowFrameText != null) ...[
-                        SizedBox(height: metrics.frameToTitleGap),
+                        SizedBox(height: metrics.headerToFrameGap),
+                        const Spacer(),
                         Center(
                           child: SizedBox(
-                            width: metrics.titleBlockWidth,
-                            child: Text(
-                              belowFrameText!,
-                              textAlign: TextAlign.center,
-                              style: GoogleFonts.inter(
-                                textStyle: theme.textTheme.titleLarge,
-                                color: Colors.white,
-                                fontSize: metrics.titleSize,
-                                fontWeight: FontWeight.w600,
-                                height: 22.5 / 15,
-                              ),
+                            width: metrics.frameSize,
+                            height: metrics.frameSize,
+                            child: _QrScanPageFrame(
+                              metrics: metrics,
+                              cornerColor: const Color(0xFF8BB3EE),
+                              scanLineColor: const Color(0xFF8BB3EE),
                             ),
                           ),
                         ),
-                        SizedBox(height: metrics.titleToBodyGap * 0.35),
-                      ] else ...[
-                        SizedBox(height: metrics.frameToTitleGap * 0.45),
-                      ],
-                      const Spacer(),
-                      Container(
-                        constraints: BoxConstraints(
-                          minHeight: metrics.securityCardHeight,
-                        ),
-                        decoration: BoxDecoration(
-                          color: securityCardColor,
-                          borderRadius: BorderRadius.circular(
-                            metrics.securityCardRadius,
-                          ),
-                          border: Border.all(color: securityBorderColor),
-                        ),
-                        padding: EdgeInsets.fromLTRB(
-                          metrics.securityCardInset,
-                          metrics.securityCardInset,
-                          metrics.securityCardInset,
-                          metrics.securityCardInset,
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
-                              padding: EdgeInsets.only(
-                                top: metrics.securityIconTopInset,
-                              ),
-                              child: _QrSecurityLockIcon(
-                                size: metrics.securityIconSize,
-                                color: securityIconColor,
-                              ),
-                            ),
-                            SizedBox(width: metrics.securityTextGap),
-                            Expanded(
+                        if (belowFrameText != null) ...[
+                          SizedBox(height: metrics.frameToTitleGap),
+                          Center(
+                            child: SizedBox(
+                              width: metrics.titleBlockWidth,
                               child: Text(
-                                bottomMessage,
+                                belowFrameText!,
+                                textAlign: TextAlign.center,
                                 style: GoogleFonts.inter(
-                                  textStyle: theme.textTheme.bodySmall,
-                                  color: secondaryTextColor,
-                                  fontSize: metrics.securityTextSize,
-                                  fontWeight: FontWeight.w400,
-                                  height: 16.25 / 10,
+                                  textStyle: theme.textTheme.titleLarge,
+                                  color: Colors.white,
+                                  fontSize: metrics.titleSize,
+                                  fontWeight: FontWeight.w600,
+                                  height: 22.5 / 15,
                                 ),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                      if (indicatorMessage != null) ...[
-                        SizedBox(height: 12 * metrics.scale),
-                        Center(
-                          child: Text(
-                            indicatorMessage!,
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.inter(
-                              textStyle: theme.textTheme.bodySmall,
-                              color: const Color(0xFFF59E0B),
-                              fontSize: metrics.bodySize,
-                              fontWeight: FontWeight.w600,
+                          ),
+                          SizedBox(height: metrics.titleToBodyGap * 0.35),
+                        ] else ...[
+                          SizedBox(height: metrics.frameToTitleGap * 0.45),
+                        ],
+                        const Spacer(),
+                        Container(
+                          constraints: BoxConstraints(
+                            minHeight: metrics.securityCardHeight,
+                          ),
+                          decoration: BoxDecoration(
+                            color: securityCardColor,
+                            borderRadius: BorderRadius.circular(
+                              metrics.securityCardRadius,
                             ),
+                            border: Border.all(color: securityBorderColor),
+                          ),
+                          padding: EdgeInsets.fromLTRB(
+                            metrics.securityCardInset,
+                            metrics.securityCardInset,
+                            metrics.securityCardInset,
+                            metrics.securityCardInset,
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: EdgeInsets.only(
+                                  top: metrics.securityIconTopInset,
+                                ),
+                                child: _QrSecurityLockIcon(
+                                  size: metrics.securityIconSize,
+                                  color: securityIconColor,
+                                ),
+                              ),
+                              SizedBox(width: metrics.securityTextGap),
+                              Expanded(
+                                child: Text(
+                                  bottomMessage,
+                                  style: GoogleFonts.inter(
+                                    textStyle: theme.textTheme.bodySmall,
+                                    color: secondaryTextColor,
+                                    fontSize: metrics.securityTextSize,
+                                    fontWeight: FontWeight.w400,
+                                    height: 16.25 / 10,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ] else if (errorMessage != null) ...[
-                        SizedBox(height: 12 * metrics.scale),
-                        Center(
-                          child: Text(
-                            errorMessage!,
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.inter(
-                              textStyle: theme.textTheme.bodySmall,
-                              color: const Color(0xFFEF4444),
-                              fontSize: metrics.bodySize,
-                              fontWeight: FontWeight.w600,
+                        if (indicatorMessage != null) ...[
+                          SizedBox(height: 12 * metrics.scale),
+                          Center(
+                            child: Text(
+                              indicatorMessage!,
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(
+                                textStyle: theme.textTheme.bodySmall,
+                                color: const Color(0xFFF59E0B),
+                                fontSize: metrics.bodySize,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
-                        ),
+                        ] else if (errorMessage != null) ...[
+                          SizedBox(height: 12 * metrics.scale),
+                          Center(
+                            child: Text(
+                              errorMessage!,
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(
+                                textStyle: theme.textTheme.bodySmall,
+                                color: const Color(0xFFEF4444),
+                                fontSize: metrics.bodySize,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
       ),
     );
   }

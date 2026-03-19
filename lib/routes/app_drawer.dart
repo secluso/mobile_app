@@ -6,7 +6,6 @@ import 'app_shell.dart';
 import 'camera/list_cameras.dart';
 import 'design_lab_page.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
-import 'package:secluso_flutter/ui/secluso_preview_assets.dart';
 import 'package:secluso_flutter/ui/secluso_surfaces.dart';
 import 'package:secluso_flutter/ui/secluso_theme.dart';
 
@@ -46,17 +45,45 @@ class AppDrawer extends StatelessWidget {
                       child: Stack(
                         children: [
                           Positioned.fill(
-                            child: Opacity(
-                              opacity: dark ? 0.34 : 0.2,
-                              child: Image.asset(
-                                dark
-                                    ? SeclusoPreviewAssets.darkMaterial
-                                    : SeclusoPreviewAssets.lightArchitecture,
-                                fit: BoxFit.cover,
-                                alignment:
-                                    dark
-                                        ? Alignment.centerRight
-                                        : Alignment.centerLeft,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors:
+                                      dark
+                                          ? [
+                                            const Color(0xFF15171B),
+                                            const Color(0xFF101114),
+                                            const Color(0xFF0B0C0E),
+                                          ]
+                                          : [
+                                            Colors.white,
+                                            const Color(0xFFF6F7FB),
+                                            const Color(0xFFECEFF5),
+                                          ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            top: -36,
+                            right: -28,
+                            child: IgnorePointer(
+                              child: Container(
+                                width: 138,
+                                height: 138,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: RadialGradient(
+                                    colors: [
+                                      SeclusoColors.blue.withValues(
+                                        alpha: dark ? 0.18 : 0.14,
+                                      ),
+                                      Colors.transparent,
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                           ),

@@ -35,7 +35,7 @@ Widget? designLabTargetPage(String target, {String themeName = 'dark'}) {
   const previewThumbAssets = <String, String>{
     '2:34 PM': SeclusoPreviewAssets.designFrontDoor,
     '11:02 AM': SeclusoPreviewAssets.designBackyard,
-    'Yesterday': SeclusoPreviewAssets.lightArchitecture,
+    'Yesterday': SeclusoPreviewAssets.designLivingRoom,
   };
   const previewDurations = <String, Duration>{
     '2:34 PM': Duration(seconds: 12),

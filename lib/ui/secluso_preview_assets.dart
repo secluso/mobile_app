@@ -19,10 +19,6 @@ class SeclusoPreviewAssets {
   static const String pairingCard = 'assets/design/pairing_card.png';
   static const String tabletopCamera = designLivingRoom;
   static const String lensMacro = 'assets/design/lens_macro.png';
-  static const String darkMaterial = 'assets/design/dark_material.png';
-  static const String lightArchitecture =
-      'assets/design/light_architecture.png';
-  static const String lightBackdrop = 'assets/design/light_backdrop.png';
   static const String previewFrontDoor = designFrontDoor;
   static const String previewLivingRoom = designLivingRoom;
   static const String previewBackyard = designBackyard;

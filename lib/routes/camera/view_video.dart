@@ -437,18 +437,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
       media: Stack(
         fit: StackFit.expand,
         children: [
-          if (widget.previewAssetPath == 'assets/design/light_backdrop.png')
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFFAEC4DE), Color(0xFFB7CBDD)],
-                ),
-              ),
-            )
-          else
-            Image.asset(widget.previewAssetPath!, fit: BoxFit.cover),
+          Image.asset(widget.previewAssetPath!, fit: BoxFit.cover),
         ],
       ),
       position: widget.previewPosition,

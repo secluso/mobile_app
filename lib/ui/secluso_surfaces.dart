@@ -4,7 +4,6 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:secluso_flutter/ui/secluso_preview_assets.dart';
 import 'package:secluso_flutter/ui/secluso_theme.dart';
 
 class SeclusoScaffold extends StatelessWidget {
@@ -113,7 +112,6 @@ class SeclusoBackdrop extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
-    final backdropAsset = dark ? SeclusoPreviewAssets.darkMaterial : null;
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -136,19 +134,6 @@ class SeclusoBackdrop extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (backdropAsset != null)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Opacity(
-                  opacity: 0.2,
-                  child: Image.asset(
-                    backdropAsset,
-                    fit: BoxFit.cover,
-                    alignment: Alignment.centerRight,
-                  ),
-                ),
-              ),
-            ),
           if (dark)
             Positioned(
               top: -90,
