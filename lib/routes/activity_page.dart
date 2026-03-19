@@ -94,10 +94,91 @@ class _ActivityPageState extends State<ActivityPage>
   final Map<String, Uint8List> _eventThumbCache = {};
   final Map<String, Future<Uint8List?>> _eventThumbFutures = {};
   bool _isLoading = true;
+  String _selectedCategory = 'ALL';
+  String? _selectedCameraName;
   late final AnimationController _emptyCardsBreatheController;
 
   bool get _isPreviewMode => widget.previewItems != null;
   bool get _showSystemExample => _entries.isNotEmpty;
+
+  bool _hasPersonDetection(Set<String> detections) {
+    return detections.contains('human') || detections.contains('person');
+  }
+
+  bool _matchesCategory(_ActivityEntry entry, [String? category]) {
+    final activeCategory = category ?? _selectedCategory;
+    switch (activeCategory) {
+      case 'PEOPLE':
+        return !entry.isSystem && _hasPersonDetection(entry.detections);
+      case 'MOTION':
+        return !entry.isSystem && entry.motion;
+      case 'SYSTEM':
+        return entry.isSystem;
+      case 'ALL':
+      default:
+        return true;
+    }
+  }
+
+  List<String> _availableCameraNames([String? category]) {
+    final names = <String>[];
+    final seen = <String>{};
+    for (final entry in _entries) {
+      if (entry.isSystem || entry.cameraName.isEmpty) continue;
+      if (!_matchesCategory(entry, category)) continue;
+      if (!seen.add(entry.cameraName)) continue;
+      names.add(entry.cameraName);
+    }
+    return names;
+  }
+
+  void _normalizeCameraSelection([String? category]) {
+    final available = _availableCameraNames(category);
+    if (_selectedCameraName != null &&
+        !available.contains(_selectedCameraName)) {
+      _selectedCameraName = null;
+    }
+  }
+
+  List<_ActivityEntry> get _filteredEntries {
+    return _entries.where((entry) {
+      if (!_matchesCategory(entry)) {
+        return false;
+      }
+      if (_selectedCameraName == null) {
+        return true;
+      }
+      return !entry.isSystem && entry.cameraName == _selectedCameraName;
+    }).toList();
+  }
+
+  bool get _shouldShowSyntheticSystemEntry {
+    if (_isPreviewMode || widget.shellMode || !_showSystemExample) {
+      return false;
+    }
+    if (_selectedCategory == 'PEOPLE' || _selectedCategory == 'MOTION') {
+      return false;
+    }
+    if (_selectedCameraName == null) {
+      return true;
+    }
+    return _entries.first.cameraName == _selectedCameraName;
+  }
+
+  void _selectCategory(String category) {
+    if (_selectedCategory == category) return;
+    setState(() {
+      _selectedCategory = category;
+      _normalizeCameraSelection(category);
+    });
+  }
+
+  void _selectCamera(String? cameraName) {
+    if (_selectedCameraName == cameraName) return;
+    setState(() {
+      _selectedCameraName = cameraName;
+    });
+  }
 
   @override
   void initState() {
@@ -123,6 +204,7 @@ class _ActivityPageState extends State<ActivityPage>
           ),
         ),
       );
+      _normalizeCameraSelection();
       _isLoading = false;
       return;
     }
@@ -265,7 +347,10 @@ class _ActivityPageState extends State<ActivityPage>
             videoName: video.video,
             detections: detections,
             motion: video.motion,
-            thumbnailBytes: await _eventThumbnailBytes(video.camera, video.video),
+            thumbnailBytes: await _eventThumbnailBytes(
+              video.camera,
+              video.video,
+            ),
           ),
         );
         loadedKeys.add(videoKey);
@@ -277,6 +362,7 @@ class _ActivityPageState extends State<ActivityPage>
         _entries
           ..clear()
           ..addAll(loaded);
+        _normalizeCameraSelection();
         _isLoading = false;
       });
     } catch (e, st) {
@@ -371,7 +457,10 @@ class _ActivityPageState extends State<ActivityPage>
               if (entry.previewAssetPath != null)
                 Opacity(
                   opacity: 0.45,
-                  child: Image.asset(entry.previewAssetPath!, fit: BoxFit.cover),
+                  child: Image.asset(
+                    entry.previewAssetPath!,
+                    fit: BoxFit.cover,
+                  ),
                 )
               else
                 Center(
@@ -408,6 +497,20 @@ class _ActivityPageState extends State<ActivityPage>
   }
 
   void _openEntry(_ActivityEntry entry) {
+    if (entry.isSystem) {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder:
+              (_) => CameraViewPage(
+                cameraName: entry.cameraName,
+                previewVideos: const [],
+                previewDetectionsByVideo: const {},
+              ),
+        ),
+      );
+      return;
+    }
+
     Navigator.of(context).push(
       MaterialPageRoute(
         builder:
@@ -427,6 +530,7 @@ class _ActivityPageState extends State<ActivityPage>
 
   @override
   Widget build(BuildContext context) {
+    final filteredEntries = _filteredEntries;
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -445,7 +549,7 @@ class _ActivityPageState extends State<ActivityPage>
       }
       if (_entries.isNotEmpty) {
         return ShellScaffold(
-          body: _buildShellBody(context),
+          body: _buildShellBody(context, filteredEntries),
           backgroundColor: backgroundColor,
           safeTop: true,
         );
@@ -538,7 +642,11 @@ class _ActivityPageState extends State<ActivityPage>
             runSpacing: 10,
             children: [
               for (final filter in _categoryFilters)
-                _ActivityPill(label: filter, selected: filter == 'ALL'),
+                _ActivityPill(
+                  label: filter,
+                  selected: filter == _selectedCategory,
+                  onTap: () => _selectCategory(filter),
+                ),
             ],
           ),
           const SizedBox(height: 10),
@@ -546,28 +654,57 @@ class _ActivityPageState extends State<ActivityPage>
             spacing: 10,
             runSpacing: 10,
             children: [
-              const _ActivityPill(label: 'ALL CAMERAS', selected: true),
-              _ActivityPill(label: _entries.first.cameraName.toUpperCase()),
-              if (_entries.length > 1)
-                _ActivityPill(label: _entries[1].cameraName.toUpperCase()),
+              _ActivityPill(
+                label: 'ALL CAMERAS',
+                selected: _selectedCameraName == null,
+                onTap: () => _selectCamera(null),
+              ),
+              for (final cameraName in _availableCameraNames())
+                _ActivityPill(
+                  label: cameraName.toUpperCase(),
+                  selected: _selectedCameraName == cameraName,
+                  onTap: () => _selectCamera(cameraName),
+                ),
             ],
           ),
           const SizedBox(height: 24),
-          for (var i = 0; i < _entries.length; i++) ...[
-            if (i == 0 || _sectionLabel(i) != _sectionLabel(i - 1)) ...[
-              ShellSectionLabel(_sectionLabel(i)),
+          if (filteredEntries.isEmpty) ...[
+            const SizedBox(height: 18),
+            Icon(
+              Icons.filter_alt_off_outlined,
+              size: 32,
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.34),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'No activity matches these filters.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.58),
+                height: 1.45,
+              ),
+            ),
+          ] else
+            for (var i = 0; i < filteredEntries.length; i++) ...[
+              if (i == 0 ||
+                  _entrySectionLabel(filteredEntries[i], i) !=
+                      _entrySectionLabel(filteredEntries[i - 1], i - 1)) ...[
+                ShellSectionLabel(_entrySectionLabel(filteredEntries[i], i)),
+                const SizedBox(height: 12),
+              ],
+              _ActivityCard(
+                title: _detectionTitle(filteredEntries[i]),
+                subtitle: _entrySubtitle(filteredEntries[i]),
+                thumbnail: _thumb(filteredEntries[i]),
+                onTap: () => _openEntry(filteredEntries[i]),
+              ),
               const SizedBox(height: 12),
             ],
-            _ActivityCard(
-              title: _detectionTitle(_entries[i]),
-              subtitle:
-                  '${_entries[i].cameraName} · ${_timestampLabel(_entries[i].videoName)}',
-              thumbnail: _thumb(_entries[i]),
-              onTap: () => _openEntry(_entries[i]),
-            ),
-            const SizedBox(height: 12),
-          ],
-          if (_showSystemExample) ...[
+          if (_shouldShowSyntheticSystemEntry) ...[
             const SizedBox(height: 6),
             const ShellSectionLabel('Yesterday'),
             const SizedBox(height: 12),
@@ -625,7 +762,10 @@ class _ActivityPageState extends State<ActivityPage>
     );
   }
 
-  Widget _buildShellBody(BuildContext context) {
+  Widget _buildShellBody(
+    BuildContext context,
+    List<_ActivityEntry> filteredEntries,
+  ) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final metrics = _ShellActivityMetrics.forWidth(constraints.maxWidth);
@@ -687,35 +827,42 @@ class _ActivityPageState extends State<ActivityPage>
                           children: [
                             _ShellActivityPill(
                               label: 'ALL',
-                              selected: true,
+                              selected: _selectedCategory == 'ALL',
                               compact: false,
                               metrics: metrics,
                               dark: dark,
                               width: metrics.largeChipWidth('ALL'),
+                              onTap: () => _selectCategory('ALL'),
                             ),
                             SizedBox(width: metrics.chipGap),
                             _ShellActivityPill(
                               label: 'PEOPLE',
+                              selected: _selectedCategory == 'PEOPLE',
                               compact: false,
                               metrics: metrics,
                               dark: dark,
                               width: metrics.largeChipWidth('PEOPLE'),
+                              onTap: () => _selectCategory('PEOPLE'),
                             ),
                             SizedBox(width: metrics.chipGap),
                             _ShellActivityPill(
                               label: 'MOTION',
+                              selected: _selectedCategory == 'MOTION',
                               compact: false,
                               metrics: metrics,
                               dark: dark,
                               width: metrics.largeChipWidth('MOTION'),
+                              onTap: () => _selectCategory('MOTION'),
                             ),
                             SizedBox(width: metrics.chipGap),
                             _ShellActivityPill(
                               label: 'SYSTEM',
+                              selected: _selectedCategory == 'SYSTEM',
                               compact: false,
                               metrics: metrics,
                               dark: dark,
                               width: metrics.largeChipWidth('SYSTEM'),
+                              onTap: () => _selectCategory('SYSTEM'),
                             ),
                           ],
                         ),
@@ -739,13 +886,18 @@ class _ActivityPageState extends State<ActivityPage>
                           children: [
                             _ShellActivityPill(
                               label: 'ALL CAMERAS',
-                              selected: true,
+                              selected: _selectedCameraName == null,
                               compact: true,
                               metrics: metrics,
                               dark: dark,
                               width: metrics.compactChipWidth('ALL CAMERAS'),
+                              onTap: () => _selectCamera(null),
                             ),
-                            ..._buildCameraPills(metrics, dark),
+                            ..._buildCameraPills(
+                              metrics,
+                              dark,
+                              _selectedCategory,
+                            ),
                           ],
                         ),
                       ),
@@ -754,10 +906,31 @@ class _ActivityPageState extends State<ActivityPage>
                 ),
               ),
               SizedBox(height: metrics.filterToListGap),
-              for (var i = 0; i < _entries.length; i++) ...[
+              if (filteredEntries.isEmpty)
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    metrics.headerInset,
+                    metrics.sectionTopInset,
+                    metrics.headerInset,
+                    metrics.cardGap,
+                  ),
+                  child: Text(
+                    'No activity matches these filters.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color:
+                          dark
+                              ? Colors.white.withValues(alpha: 0.4)
+                              : const Color(0xFF6B7280),
+                      fontSize: metrics.subtitleSize,
+                      fontWeight: FontWeight.w400,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              for (var i = 0; i < filteredEntries.length; i++) ...[
                 if (i == 0 ||
-                    _entrySectionLabel(_entries[i], i) !=
-                        _entrySectionLabel(_entries[i - 1], i - 1))
+                    _entrySectionLabel(filteredEntries[i], i) !=
+                        _entrySectionLabel(filteredEntries[i - 1], i - 1))
                   Padding(
                     padding: EdgeInsets.fromLTRB(
                       metrics.headerInset,
@@ -766,7 +939,7 @@ class _ActivityPageState extends State<ActivityPage>
                       metrics.sectionBottomInset,
                     ),
                     child: _ShellActivitySectionLabel(
-                      _entrySectionLabel(_entries[i], i),
+                      _entrySectionLabel(filteredEntries[i], i),
                       metrics: metrics,
                       dark: dark,
                     ),
@@ -779,15 +952,15 @@ class _ActivityPageState extends State<ActivityPage>
                     metrics.cardGap,
                   ),
                   child: _ShellActivityCard(
-                    title: _detectionTitle(_entries[i]),
-                    subtitle: _entrySubtitle(_entries[i]),
-                    previewAssetPath: _entries[i].previewAssetPath,
-                    thumbnailBytes: _entries[i].thumbnailBytes,
-                    durationLabel: _entryDuration(_entries[i]),
-                    isSystem: _entries[i].isSystem,
+                    title: _detectionTitle(filteredEntries[i]),
+                    subtitle: _entrySubtitle(filteredEntries[i]),
+                    previewAssetPath: filteredEntries[i].previewAssetPath,
+                    thumbnailBytes: filteredEntries[i].thumbnailBytes,
+                    durationLabel: _entryDuration(filteredEntries[i]),
+                    isSystem: filteredEntries[i].isSystem,
                     metrics: metrics,
                     dark: dark,
-                    onTap: () => _openEntry(_entries[i]),
+                    onTap: () => _openEntry(filteredEntries[i]),
                   ),
                 ),
               ],
@@ -963,21 +1136,28 @@ class _ActivityPageState extends State<ActivityPage>
     );
   }
 
-  List<Widget> _buildCameraPills(_ShellActivityMetrics metrics, bool dark) {
+  List<Widget> _buildCameraPills(
+    _ShellActivityMetrics metrics,
+    bool dark,
+    String category,
+  ) {
     final labels = <String>{};
     final chips = <Widget>[];
     for (final entry in _entries) {
       if (entry.isSystem || entry.cameraName.isEmpty) continue;
+      if (!_matchesCategory(entry, category)) continue;
       final label = entry.cameraName.toUpperCase();
       if (!labels.add(label)) continue;
       chips.add(SizedBox(width: metrics.chipGap));
       chips.add(
         _ShellActivityPill(
           label: label,
+          selected: _selectedCameraName == entry.cameraName,
           compact: true,
           metrics: metrics,
           dark: dark,
           width: metrics.compactChipWidth(label),
+          onTap: () => _selectCamera(entry.cameraName),
         ),
       );
     }
@@ -986,41 +1166,51 @@ class _ActivityPageState extends State<ActivityPage>
 }
 
 class _ActivityPill extends StatelessWidget {
-  const _ActivityPill({required this.label, this.selected = false});
+  const _ActivityPill({required this.label, this.selected = false, this.onTap});
 
   final String label;
   final bool selected;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-      decoration: BoxDecoration(
-        color:
-            selected
-                ? const Color(0xFF8BB1F4)
-                : (dark ? Colors.white.withValues(alpha: 0.04) : Colors.white),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color:
-              selected
-                  ? const Color(0xFF8BB1F4)
-                  : (dark
-                      ? Colors.white.withValues(alpha: 0.08)
-                      : theme.colorScheme.outlineVariant),
-        ),
-      ),
-      child: Text(
-        label,
-        style: theme.textTheme.labelLarge?.copyWith(
-          color:
-              selected
-                  ? Colors.white
-                  : theme.colorScheme.onSurface.withValues(alpha: 0.56),
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.5,
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+          decoration: BoxDecoration(
+            color:
+                selected
+                    ? const Color(0xFF8BB1F4)
+                    : (dark
+                        ? Colors.white.withValues(alpha: 0.04)
+                        : Colors.white),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color:
+                  selected
+                      ? const Color(0xFF8BB1F4)
+                      : (dark
+                          ? Colors.white.withValues(alpha: 0.08)
+                          : theme.colorScheme.outlineVariant),
+            ),
+          ),
+          child: Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color:
+                  selected
+                      ? Colors.white
+                      : theme.colorScheme.onSurface.withValues(alpha: 0.56),
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+            ),
+          ),
         ),
       ),
     );
@@ -1063,6 +1253,7 @@ class _ShellActivityPill extends StatelessWidget {
     required this.dark,
     this.width,
     this.selected = false,
+    this.onTap,
   });
 
   final String label;
@@ -1071,6 +1262,7 @@ class _ShellActivityPill extends StatelessWidget {
   final _ShellActivityMetrics metrics;
   final bool dark;
   final double? width;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1086,41 +1278,51 @@ class _ShellActivityPill extends StatelessWidget {
         compact
             ? metrics.compactChipHorizontalPadding
             : metrics.largeChipHorizontalPadding;
-    return Container(
-      width: width,
-      height: height,
-      padding:
-          width == null
-              ? EdgeInsets.symmetric(horizontal: horizontalPadding)
-              : EdgeInsets.zero,
-      decoration: BoxDecoration(
-        color:
-            selected
-                ? const Color(0xFF8BB3EE)
-                : (dark ? Colors.white.withValues(alpha: 0.04) : Colors.white),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color:
-              selected
-                  ? const Color(0xFF8BB3EE)
-                  : (dark
-                      ? Colors.white.withValues(alpha: 0.06)
-                      : const Color(0xFFE5E7EB)),
-        ),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color:
-              selected
-                  ? Colors.white
-                  : (dark
-                      ? Colors.white.withValues(alpha: 0.4)
-                      : const Color(0xFF6B7280)),
-          fontSize: fontSize,
-          fontWeight: FontWeight.w500,
-          letterSpacing: letterSpacing,
+        child: Ink(
+          width: width,
+          height: height,
+          padding:
+              width == null
+                  ? EdgeInsets.symmetric(horizontal: horizontalPadding)
+                  : EdgeInsets.zero,
+          decoration: BoxDecoration(
+            color:
+                selected
+                    ? const Color(0xFF8BB3EE)
+                    : (dark
+                        ? Colors.white.withValues(alpha: 0.04)
+                        : Colors.white),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color:
+                  selected
+                      ? const Color(0xFF8BB3EE)
+                      : (dark
+                          ? Colors.white.withValues(alpha: 0.06)
+                          : const Color(0xFFE5E7EB)),
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color:
+                    selected
+                        ? Colors.white
+                        : (dark
+                            ? Colors.white.withValues(alpha: 0.4)
+                            : const Color(0xFF6B7280)),
+                fontSize: fontSize,
+                fontWeight: FontWeight.w500,
+                letterSpacing: letterSpacing,
+              ),
+            ),
+          ),
         ),
       ),
     );
