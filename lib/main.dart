@@ -889,7 +889,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       home: home,
       builder: (context, child) {
         final base = child ?? const SizedBox.shrink();
-        return ValueListenableBuilder<VersionGateInfo?>(
+        final appContent = ValueListenableBuilder<VersionGateInfo?>(
           valueListenable: VersionGate.notifier,
           builder: (context, gateInfo, _) {
             if (gateInfo == null) {
@@ -903,6 +903,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             );
           },
         );
+        final mediaQuery = MediaQuery.maybeOf(context);
+        if (Platform.isAndroid && mediaQuery != null) {
+          return MediaQuery(
+            data: mediaQuery.copyWith(textScaler: TextScaler.noScaling),
+            child: appContent,
+          );
+        }
+        return appContent;
       },
     );
   }
