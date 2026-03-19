@@ -24,6 +24,7 @@ import 'package:secluso_flutter/routes/camera/list_cameras.dart';
 import 'package:secluso_flutter/routes/camera/new/show_new_camera_options.dart';
 import 'package:secluso_flutter/routes/home_page.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/proprietary_camera_hotspot.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
@@ -399,11 +400,9 @@ class _ProprietaryCameraWaitingDialogState
     prefs.setBool("first_time_${widget.cameraName}", true);
     prefs.remove(PrefKeys.lastCameraAdd);
 
-    final existingSet = prefs.getStringList(PrefKeys.cameraSet) ?? <String>[];
+    final existingSet = await AppCoordinationState.getCameraSet();
     final wasFirstCamera = existingSet.isEmpty;
-    if (!existingSet.contains(widget.cameraName)) {
-      existingSet.add(widget.cameraName);
-      await prefs.setStringList(PrefKeys.cameraSet, existingSet);
+    if (await AppCoordinationState.addCamera(widget.cameraName)) {
       await prefs.setInt(
         PrefKeys.numIgnoredHeartbeatsPrefix + widget.cameraName,
         0,

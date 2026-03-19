@@ -29,6 +29,7 @@ import 'package:secluso_flutter/database/migration_runner.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/trace_id.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
+import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'package:secluso_flutter/utilities/lock.dart';
 import 'package:secluso_flutter/utilities/version_gate.dart';
 import 'package:secluso_flutter/utilities/ui_state.dart';
@@ -83,8 +84,7 @@ void main() {
         SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
         UiState.markBindingReady();
         final initialDarkMode = await ThemeProvider.loadThemePreference();
-        final shouldDeferFirstFrame =
-            !_designPreviewBoot;
+        final shouldDeferFirstFrame = !_designPreviewBoot;
         if (shouldDeferFirstFrame) {
           // Keep the native Android splash visible until startup actually
           // resolves. That gives us one continuous launch surface instead of a
@@ -372,7 +372,9 @@ class AppBootstrap extends StatefulWidget {
 }
 
 class _AppBootstrapState extends State<AppBootstrap> {
-  late final ThemeProvider _themeProvider = ThemeProvider(widget.initialDarkMode);
+  late final ThemeProvider _themeProvider = ThemeProvider(
+    widget.initialDarkMode,
+  );
   bool _isReady = _designPreviewBoot;
   bool _initStarted = false;
   String? _initError;
@@ -739,8 +741,7 @@ Future<void> _checkForUpdates() async {
   }
 
   var cameraNames = cameraNamesResult.value!;
-  final prefs = await SharedPreferences.getInstance();
-  final cameraSet = prefs.getStringList(PrefKeys.cameraSet) ?? [];
+  final cameraSet = await AppCoordinationState.getCameraSet();
   if (cameraSet.isNotEmpty) {
     final cameraSetLookup = cameraSet.toSet();
     final filtered =
@@ -767,27 +768,13 @@ Future<void> _checkForUpdates() async {
   if (await lock(Constants.cameraWaitingLock)) {
     try {
       Log.d("Adding to queue for $cameraNames");
-      var sharedPref = SharedPreferencesAsync();
       for (final camera in cameraNames) {
-        if (await sharedPref.containsKey(PrefKeys.downloadCameraQueue)) {
-          var currentCameraList = await sharedPref.getStringList(
-            PrefKeys.downloadCameraQueue,
-          );
-          if (!currentCameraList!.contains(camera)) {
-            Log.d("Added to pre-existing list for $camera");
-            currentCameraList.add(camera);
-            await sharedPref.setStringList(
-              PrefKeys.downloadCameraQueue,
-              currentCameraList,
-            );
-          } else {
-            Log.d("List already contained $camera");
-          }
+        final currentCameraList = await AppCoordinationState.getDownloadQueue();
+        if (!currentCameraList.contains(camera)) {
+          Log.d("Added to pre-existing list for $camera");
+          await AppCoordinationState.enqueueDownloadCamera(camera);
         } else {
-          Log.d("Created new string list for $camera");
-          await sharedPref.setStringList(PrefKeys.downloadCameraQueue, [
-            camera,
-          ]);
+          Log.d("List already contained $camera");
         }
       }
     } finally {

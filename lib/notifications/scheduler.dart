@@ -3,12 +3,11 @@
 import 'dart:io' show Platform;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:secluso_flutter/constants.dart';
-import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/notifications/download_task.dart';
 import 'package:secluso_flutter/notifications/heartbeat_task.dart';
+import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/lock.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 
 const String _bgTaskId = 'com.secluso.task'; // Matches Info.plist
@@ -142,10 +141,8 @@ class DownloadScheduler {
       final trimmedCamera = camera.trim();
       final isBroadcast = trimmedCamera.isEmpty;
       String? cameraName = isBroadcast ? null : trimmedCamera;
-      final sharedPref = SharedPreferencesAsync();
-      final cameraSet = await sharedPref.getStringList(PrefKeys.cameraSet);
+      final cameraSet = await AppCoordinationState.getCameraSet();
       if (cameraName != null &&
-          cameraSet != null &&
           cameraSet.isNotEmpty &&
           !cameraSet.contains(cameraName)) {
         Log.w("Skipping schedule for unknown camera $cameraName");
@@ -177,25 +174,13 @@ class DownloadScheduler {
         if (lockSucceeded) {
           Log.d("Adding to queue for $cameraName");
           try {
-            if (await sharedPref.containsKey(PrefKeys.downloadCameraQueue)) {
-              var currentCameraList = await sharedPref.getStringList(
-                PrefKeys.downloadCameraQueue,
-              );
-              if (!currentCameraList!.contains(cameraName)) {
-                Log.d("Added to pre-existing list for $cameraName");
-                currentCameraList.add(cameraName);
-                await sharedPref.setStringList(
-                  PrefKeys.downloadCameraQueue,
-                  currentCameraList,
-                );
-              } else {
-                Log.d("List already contained $cameraName");
-              }
+            final currentCameraList =
+                await AppCoordinationState.getDownloadQueue();
+            if (!currentCameraList.contains(cameraName)) {
+              Log.d("Added to pre-existing list for $cameraName");
+              await AppCoordinationState.enqueueDownloadCamera(cameraName);
             } else {
-              Log.d("Created new string list for $cameraName");
-              await sharedPref.setStringList(PrefKeys.downloadCameraQueue, [
-                cameraName,
-              ]);
+              Log.d("List already contained $cameraName");
             }
           } finally {
             // Ensure it's unlocked.

@@ -8,6 +8,7 @@ import 'dart:async';
 import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/proprietary_camera_hotspot.dart';
@@ -1350,8 +1351,7 @@ class _ProprietaryCameraInfoDialogState
     final cameraName = _cameraNameController.text.trim();
 
     var sharedPreferences = await SharedPreferences.getInstance();
-    var existingCameraSet =
-        sharedPreferences.getStringList(PrefKeys.cameraSet) ?? [];
+    var existingCameraSet = await AppCoordinationState.getCameraSet();
 
     // Reset these as they are no longer needed.
     if (sharedPreferences.containsKey(PrefKeys.lastCameraAdd)) {

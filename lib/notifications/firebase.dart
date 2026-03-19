@@ -25,6 +25,7 @@ import 'package:secluso_flutter/utilities/rust_api.dart';
 import '../utilities/result.dart';
 import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
+import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/src/rust/frb_generated.dart';
 import 'dart:io' show File, Platform;
@@ -119,8 +120,7 @@ class PushNotificationService {
   static String? _iosSkipReason;
 
   bool _cameraStillExists(SharedPreferences prefs, String cameraName) {
-    final cameraSet = prefs.getStringList(PrefKeys.cameraSet) ?? const [];
-    return cameraSet.contains(cameraName);
+    return AppCoordinationState.containsCameraInSnapshot(prefs, cameraName);
   }
 
   Future<void> init() async {
@@ -464,8 +464,7 @@ class PushNotificationService {
 
     try {
       final Uint8List bytes = base64Decode(encoded);
-      final List<String> cameraSet =
-          prefs.getStringList(PrefKeys.cameraSet) ?? [];
+      final List<String> cameraSet = await AppCoordinationState.getCameraSet();
 
       Log.d("Pre-existing camera set: $cameraSet");
       if (cameraSet.isEmpty) {

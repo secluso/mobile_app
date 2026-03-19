@@ -4,9 +4,8 @@ import 'dart:async';
 import 'package:secluso_flutter/notifications/epoch.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/constants.dart';
-import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/routes/camera/list_cameras.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/lock.dart';
@@ -52,9 +51,7 @@ class ThumbnailManager {
   }
 
   static Future<bool> _cameraStillExists(String camera) async {
-    final prefs = await SharedPreferences.getInstance();
-    final cameraSet = prefs.getStringList(PrefKeys.cameraSet) ?? <String>[];
-    return cameraSet.contains(camera);
+    return AppCoordinationState.containsCamera(camera);
   }
 
   static Future<bool> _maybeForceInit(String camera, String reason) async {

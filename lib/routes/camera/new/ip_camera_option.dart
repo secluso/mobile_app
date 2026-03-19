@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/routes/camera/new/ip_camera_waiting.dart';
@@ -96,8 +97,7 @@ class _IpCameraDialogState extends State<IpCameraDialog> {
         }
       }
 
-      final existingCameraSet = prefs.getStringList(PrefKeys.cameraSet) ?? [];
-      if (!existingCameraSet.contains(cameraName)) {
+      if (!await AppCoordinationState.containsCamera(cameraName)) {
         if (!mounted) {
           return;
         }

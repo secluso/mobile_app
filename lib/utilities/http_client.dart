@@ -12,6 +12,7 @@ import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/notifications/epoch.dart';
 import 'package:secluso_flutter/notifications/ios_notification_relay.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
+import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'package:secluso_flutter/utilities/http_entities.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/utilities/version_gate.dart';
@@ -146,12 +147,7 @@ class HttpClientService {
   Future<Result<List<String>>> bulkCheckAvailableCameras(
     int minimumTime,
   ) => _wrap(() async {
-    final pref = await SharedPreferences.getInstance();
-    if (!pref.containsKey(PrefKeys.cameraSet)) {
-      return [];
-    }
-
-    final cameraNames = pref.getStringList(PrefKeys.cameraSet)!;
+    final cameraNames = await AppCoordinationState.getCameraSet();
     if (cameraNames.isEmpty) {
       return [];
     }

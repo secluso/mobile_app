@@ -7,6 +7,7 @@ import 'package:secluso_flutter/constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/routes/camera/list_cameras.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
@@ -82,12 +83,9 @@ class _CameraSetupStatusDialogState extends State<CameraSetupStatusDialog> {
     final prefs = await SharedPreferences.getInstance();
     prefs.setBool("first_time_$cameraName", true);
 
-    final existingCameraSet =
-        prefs.getStringList(PrefKeys.cameraSet) ?? <String>[];
+    final existingCameraSet = await AppCoordinationState.getCameraSet();
     final wasFirstCamera = existingCameraSet.isEmpty;
-    if (!existingCameraSet.contains(cameraName)) {
-      existingCameraSet.add(cameraName);
-      await prefs.setStringList(PrefKeys.cameraSet, existingCameraSet);
+    if (await AppCoordinationState.addCamera(cameraName)) {
       await prefs.setInt(PrefKeys.numIgnoredHeartbeatsPrefix + cameraName, 0);
       await prefs.setInt(
         PrefKeys.cameraStatusPrefix + cameraName,

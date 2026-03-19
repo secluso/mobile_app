@@ -11,6 +11,7 @@ import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import '../../objectbox.g.dart';
@@ -44,30 +45,8 @@ class CameraUiBridge {
 
     await prefs.remove('first_time_$cameraName');
 
-    var existingCameraSet = prefs.getStringList(PrefKeys.cameraSet) ?? [];
-    existingCameraSet.remove(cameraName);
-    await prefs.setStringList(PrefKeys.cameraSet, existingCameraSet);
-
-    for (final queueKey in [
-      PrefKeys.downloadCameraQueue,
-      PrefKeys.backupDownloadCameraQueue,
-    ]) {
-      final existingQueue = prefs.getStringList(queueKey);
-      if (existingQueue == null) {
-        continue;
-      }
-      final filteredQueue =
-          existingQueue
-              .where((queuedCamera) => queuedCamera != cameraName)
-              .toList();
-      if (filteredQueue.length != existingQueue.length) {
-        if (filteredQueue.isEmpty) {
-          await prefs.remove(queueKey);
-        } else {
-          await prefs.setStringList(queueKey, filteredQueue);
-        }
-      }
-    }
+    await AppCoordinationState.removeCamera(cameraName);
+    await AppCoordinationState.removeCameraFromDownloadQueues(cameraName);
 
     final query = cameraBox.query(Camera_.name.equals(cameraName)).build();
     final cams = query.find();

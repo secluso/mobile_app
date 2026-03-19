@@ -2,15 +2,14 @@
 
 import 'package:path_provider/path_provider.dart';
 import 'package:secluso_flutter/constants.dart';
-import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/notifications/epoch.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/routes/app_drawer.dart';
 import 'package:secluso_flutter/src/rust/frb_generated.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/lock.dart';
+import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/utilities/ui_state.dart';
 import 'package:secluso_flutter/notifications/download_status.dart';
@@ -57,9 +56,7 @@ bool _isBusyError(String message) {
 }
 
 Future<bool> _cameraStillExists(String cameraName) async {
-  final prefs = SharedPreferencesAsync();
-  final cameraSet = await prefs.getStringList(PrefKeys.cameraSet) ?? [];
-  return cameraSet.contains(cameraName);
+  return AppCoordinationState.containsCamera(cameraName);
 }
 
 Future<void> _enqueuePendingVideo(String cameraName, String decFileName) async {
@@ -156,37 +153,30 @@ Future<bool> doWorkBackground() async {
     Log.d("Starting to work");
 
     // Perform an initial check (before lock)
-    var prefs = SharedPreferencesAsync();
-    if (!await prefs.containsKey(PrefKeys.downloadCameraQueue) &&
-        !await prefs.containsKey(PrefKeys.backupDownloadCameraQueue)) {
+    if (!await AppCoordinationState.hasAnyDownloadQueue()) {
       Log.w("There are no pref keys to base off of.");
       return true;
     }
 
     if (await lock(Constants.genericDownloadTaskLock)) {
       try {
-        var prefs = SharedPreferencesAsync();
         if (await lock(Constants.cameraWaitingLock)) {
           var downloadCameraQueue;
           try {
             // Secondary check after locking
-            if (!await prefs.containsKey(PrefKeys.downloadCameraQueue) &&
-                !await prefs.containsKey(PrefKeys.backupDownloadCameraQueue)) {
+            if (!await AppCoordinationState.hasAnyDownloadQueue()) {
               Log.e("There are no pref keys to base off of.");
               return true;
             }
 
-            downloadCameraQueue = await prefs.getStringList(
-              PrefKeys.downloadCameraQueue,
-            );
+            downloadCameraQueue = await AppCoordinationState.getDownloadQueue();
 
-            var backupDownloadCameraQueue = await prefs.getStringList(
-              PrefKeys.backupDownloadCameraQueue,
-            );
-            if (downloadCameraQueue == null) {
+            var backupDownloadCameraQueue =
+                await AppCoordinationState.getBackupDownloadQueue();
+            if (downloadCameraQueue.isEmpty) {
               downloadCameraQueue =
                   backupDownloadCameraQueue; // Replace the existing queue with the pre-existing backup.
-            } else if (backupDownloadCameraQueue != null) {
+            } else if (backupDownloadCameraQueue.isNotEmpty) {
               // Merge the two queues (without duplicates by using sets)
               downloadCameraQueue =
                   downloadCameraQueue
@@ -200,19 +190,15 @@ Future<bool> doWorkBackground() async {
             );
             if (downloadCameraQueue.isEmpty) {
               Log.w("No valid cameras in download queue after sanitization");
-              await prefs.remove(PrefKeys.downloadCameraQueue);
-              await prefs.remove(PrefKeys.backupDownloadCameraQueue);
+              await AppCoordinationState.clearDownloadQueues();
               return true;
             }
 
             // Await these, so that they don't run outside the lock.
-            await prefs.setStringList(
-              PrefKeys.backupDownloadCameraQueue,
+            await AppCoordinationState.setBackupDownloadQueue(
               downloadCameraQueue,
             ); // Create a backup of the current list.
-            await prefs.remove(
-              PrefKeys.downloadCameraQueue,
-            ); // Delete the existing list, so that we know any new entries from this point will require an additional download later
+            await AppCoordinationState.clearDownloadQueue(); // Delete the existing list, so that we know any new entries from this point will require an additional download later
           } finally {
             // Ensure this always unlocks
             await unlock(Constants.cameraWaitingLock);
@@ -272,12 +258,10 @@ Future<bool> doWorkBackground() async {
               Log.d("After queue cleanup");
 
               // Merge the failed list and ones that still need updates.
-              if (await prefs.containsKey(PrefKeys.downloadCameraQueue)) {
+              if (await AppCoordinationState.hasDownloadQueue()) {
                 Log.d("Merging lists together");
                 List<String> updatedList =
-                    (await prefs.getStringList(
-                      PrefKeys.downloadCameraQueue,
-                    ))!; // This cannot be null
+                    await AppCoordinationState.getDownloadQueue();
                 downloadCameraQueue =
                     downloadCameraQueue
                         .toSet()
@@ -293,14 +277,13 @@ Future<bool> doWorkBackground() async {
 
               // Set the new list to be scheduled next time,
               if (downloadCameraQueue.isEmpty) {
-                await prefs.remove(PrefKeys.downloadCameraQueue);
+                await AppCoordinationState.clearDownloadQueue();
               } else {
-                await prefs.setStringList(
-                  PrefKeys.downloadCameraQueue,
+                await AppCoordinationState.setDownloadQueue(
                   downloadCameraQueue,
                 );
               }
-              await prefs.remove(PrefKeys.backupDownloadCameraQueue);
+              await AppCoordinationState.clearBackupDownloadQueue();
             } finally {
               await unlock(
                 Constants.cameraWaitingLock,
@@ -365,8 +348,7 @@ List<String> _dedupePreserveOrder(List<String> items) {
 Future<List<String>> _sanitizeDownloadQueue(List<String> queue) async {
   final nonEmpty =
       queue.where((cameraName) => cameraName.trim().isNotEmpty).toList();
-  final prefs = SharedPreferencesAsync();
-  final cameraSet = await prefs.getStringList(PrefKeys.cameraSet) ?? [];
+  final cameraSet = await AppCoordinationState.getCameraSet();
   if (cameraSet.isEmpty) {
     if (nonEmpty.isNotEmpty) {
       Log.w(

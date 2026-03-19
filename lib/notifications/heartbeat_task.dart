@@ -10,6 +10,7 @@ import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/lock.dart';
 import 'package:secluso_flutter/src/rust/frb_generated.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'dart:io';
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -51,8 +52,7 @@ Future<bool> _cameraStillExists(
   SharedPreferences prefs,
   String cameraName,
 ) async {
-  final cameraSet = prefs.getStringList(PrefKeys.cameraSet) ?? <String>[];
-  return cameraSet.contains(cameraName);
+  return AppCoordinationState.containsCameraInSnapshot(prefs, cameraName);
 }
 
 Future<bool> _doHeartbeatTask(String cameraName) async {
@@ -415,8 +415,7 @@ Future<void> doAllHeartbeatTasks(bool inBackground) async {
   }
   Log.d("Starting to run all heartbeat tasks");
 
-  final prefs = await SharedPreferences.getInstance();
-  final List<String> cameraSet = prefs.getStringList(PrefKeys.cameraSet) ?? [];
+  final List<String> cameraSet = await AppCoordinationState.getCameraSet();
 
   for (final cameraName in cameraSet) {
     await _doHeartbeatTask(cameraName);
