@@ -29,6 +29,9 @@ class PrefKeys {
   static const downloadActiveCameras = "download_active_cameras";
   static const notificationsEnabled = "notifications_enabled";
   static const lastNotificationCheck = "last_notification_check";
+  static const storageAutoCleanupEnabled = "storage_auto_cleanup_enabled";
+  static const storageRetentionDays = "storage_retention_days";
+  static const storageLastCleanupMs = "storage_last_cleanup_ms";
   static const numIgnoredHeartbeatsPrefix = "num_ignored_heartbeat_";
   static const cameraStatusPrefix = "camera_status_";
   static const numHeartbeatNotificationsPrefix = "num_heartbeat_notifications_";

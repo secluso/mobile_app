@@ -31,6 +31,7 @@ import 'package:secluso_flutter/utilities/trace_id.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'package:secluso_flutter/utilities/lock.dart';
+import 'package:secluso_flutter/utilities/storage_manager.dart';
 import 'package:secluso_flutter/utilities/version_gate.dart';
 import 'package:secluso_flutter/utilities/ui_state.dart';
 import 'package:secluso_flutter/keys.dart';
@@ -330,6 +331,7 @@ Future<void> _initializeApp(ThemeProvider themeProvider) async {
   }
 
   await _runStartupPhase(_startupPhasePostFirebase, cameraNames);
+  unawaited(StorageManager.runAutomaticMaintenance());
 
   QueueProcessor.instance.start();
   QueueProcessor.instance.signalNewFile();

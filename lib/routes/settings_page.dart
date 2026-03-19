@@ -1,17 +1,39 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/routes/camera/camera_ui_bridge.dart';
 import 'package:secluso_flutter/routes/theme_provider.dart';
 import 'package:secluso_flutter/ui/secluso_surfaces.dart';
 import 'package:secluso_flutter/ui/secluso_shell_ui.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/storage_manager.dart';
 
 enum SettingsPreviewScrollPosition { top, bottom, veryBottom }
+
+String _formatStorageDisplayBytes(int bytes) {
+  if (bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  var value = bytes.toDouble();
+  var unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex++;
+  }
+
+  final formatter =
+      (value - value.roundToDouble()).abs() < 0.05
+          ? NumberFormat('#,##0')
+          : NumberFormat('#,##0.#');
+  return '${formatter.format(value)} ${units[unitIndex]}';
+}
 
 class SettingsPage extends StatefulWidget {
   final bool? previewNightTheme;
@@ -33,6 +55,15 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   final ScrollController _scrollController = ScrollController();
+  static const StorageSummary _previewStorageSummary = StorageSummary(
+    totalBytes: 1058013184,
+    videoBytes: 888143872,
+    thumbnailBytes: 130023424,
+    encryptedBytes: 39845888,
+    otherBytes: 0,
+    videoCount: 148,
+    thumbnailCount: 148,
+  );
 
   bool isNightTheme = false;
   bool isNotificationsOn = true;
@@ -40,6 +71,9 @@ class _SettingsPageState extends State<SettingsPage> {
   bool personAlerts = true;
   bool motionAlerts = true;
   bool showErrorNotifications = true;
+  bool storageAutoCleanupEnabled = true;
+  int? storageRetentionDays = StorageManager.defaultRetentionDays;
+  StorageSummary? storageSummary;
 
   bool get _isPreviewMode => widget.previewNightTheme != null;
 
@@ -52,6 +86,9 @@ class _SettingsPageState extends State<SettingsPage> {
       personAlerts = widget.previewNotificationsOn ?? true;
       motionAlerts = widget.previewNotificationsOn ?? true;
       showErrorNotifications = true;
+      storageAutoCleanupEnabled = true;
+      storageRetentionDays = StorageManager.defaultRetentionDays;
+      storageSummary = _previewStorageSummary;
       return;
     }
     _loadSettings();
@@ -83,6 +120,25 @@ class _SettingsPageState extends State<SettingsPage> {
         prefs.getBool(PrefKeys.notificationsEnabled) ??
         prefs.getBool('notifications') ??
         true;
+    StorageSummary loadedStorageSummary;
+    try {
+      loadedStorageSummary = await StorageManager.calculateSummary();
+    } catch (e) {
+      Log.w('Failed to load storage summary: $e');
+      loadedStorageSummary = const StorageSummary(
+        totalBytes: 0,
+        videoBytes: 0,
+        thumbnailBytes: 0,
+        encryptedBytes: 0,
+        otherBytes: 0,
+        videoCount: 0,
+        thumbnailCount: 0,
+      );
+    }
+    final loadedAutoCleanupEnabled =
+        await StorageManager.isAutoCleanupEnabled();
+    final loadedRetentionDays = await StorageManager.getRetentionDays();
+    if (!mounted) return;
     setState(() {
       isNightTheme = prefs.getBool('darkTheme') ?? true;
       isNotificationsOn = notificationsEnabled;
@@ -90,6 +146,9 @@ class _SettingsPageState extends State<SettingsPage> {
       motionAlerts = prefs.getBool('motionAlerts') ?? true;
       biometricLock = prefs.getBool('biometricLock') ?? false;
       showErrorNotifications = prefs.getBool('showErrorNotifications') ?? true;
+      storageAutoCleanupEnabled = loadedAutoCleanupEnabled;
+      storageRetentionDays = loadedRetentionDays;
+      storageSummary = loadedStorageSummary;
     });
   }
 
@@ -107,17 +166,44 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _copyLogs() async {
     final logs = await Log.getLogDump();
-    final exportText =
-        logs.trim().isEmpty ? 'No logs available yet.' : logs;
+    final exportText = logs.trim().isEmpty ? 'No logs available yet.' : logs;
     await Clipboard.setData(ClipboardData(text: exportText));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          logs.trim().isEmpty ? 'No logs available yet. Placeholder copied.' : 'Logs copied to clipboard.',
+          logs.trim().isEmpty
+              ? 'No logs available yet. Placeholder copied.'
+              : 'Logs copied to clipboard.',
         ),
       ),
     );
+  }
+
+  Future<void> _openStorageSettings() async {
+    if (_isPreviewMode) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder:
+            (_) => StorageSettingsPage(
+              initialSummary:
+                  storageSummary ??
+                  const StorageSummary(
+                    totalBytes: 0,
+                    videoBytes: 0,
+                    thumbnailBytes: 0,
+                    encryptedBytes: 0,
+                    otherBytes: 0,
+                    videoCount: 0,
+                    thumbnailCount: 0,
+                  ),
+              initialAutoCleanupEnabled: storageAutoCleanupEnabled,
+              initialRetentionDays: storageRetentionDays,
+            ),
+      ),
+    );
+    if (!mounted) return;
+    await _loadSettings();
   }
 
   @override
@@ -202,6 +288,30 @@ class _SettingsPageState extends State<SettingsPage> {
                 offset: const Offset(0, 1),
               ),
             ];
+    final storageManageRowStyle = GoogleFonts.inter(
+      color: shell ? shellPrimaryTextColor : theme.colorScheme.onSurface,
+      fontSize: shell ? shellMetrics.rowTitleSize : 11.05,
+      fontWeight: FontWeight.w400,
+      fontStyle: FontStyle.normal,
+      letterSpacing: 0,
+      height: shell ? 19.5 / shellMetrics.rowTitleSize : 19 / 11.05,
+    );
+    final currentStorageSummary =
+        storageSummary ??
+        (_isPreviewMode
+            ? _previewStorageSummary
+            : const StorageSummary(
+              totalBytes: 0,
+              videoBytes: 0,
+              thumbnailBytes: 0,
+              encryptedBytes: 0,
+              otherBytes: 0,
+              videoCount: 0,
+              thumbnailCount: 0,
+            ));
+    final managedStorageBytes = currentStorageSummary.managedMediaBytes;
+    final totalManagedText =
+        '${_formatStorageDisplayBytes(managedStorageBytes)} used';
 
     final content = ListView(
       controller: _scrollController,
@@ -486,71 +596,20 @@ class _SettingsPageState extends State<SettingsPage> {
         SizedBox(height: shell ? shellMetrics.sectionTitleGap : 12),
         ShellCard(
           padding: EdgeInsets.zero,
-          radius: shell ? shellMetrics.groupRadius : 22,
+          radius: 12,
           color: shell ? shellSurfaceColor : null,
           borderColor: shell ? shellSurfaceBorderColor : null,
           boxShadow: shell ? shellCardShadow : null,
           child: Column(
             children: [
-              Padding(
+              _StorageSettingsCard(
+                summary: currentStorageSummary,
+                title: 'Local Storage',
+                totalText: totalManagedText,
                 padding:
                     shell
-                        ? EdgeInsets.fromLTRB(
-                          shellMetrics.storageInset,
-                          shellMetrics.storageInset,
-                          shellMetrics.storageInset,
-                          shellMetrics.storageBottomInset,
-                        )
-                        : const EdgeInsets.fromLTRB(18, 18, 18, 14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Local Storage',
-                      style:
-                          shell
-                              ? shellRowTitleStyle
-                              : theme.textTheme.titleMedium?.copyWith(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
-                    ),
-                    SizedBox(
-                      height: shell ? shellMetrics.storageBarTopGap : 14,
-                    ),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(999),
-                      child: LinearProgressIndicator(
-                        minHeight: shell ? shellMetrics.storageBarHeight : 8,
-                        value: 2.4 / 32,
-                        backgroundColor:
-                            dark
-                                ? Colors.white.withValues(alpha: 0.1)
-                                : const Color(0xFFE4E6EE),
-                        valueColor: const AlwaysStoppedAnimation<Color>(
-                          Color(0xFF8BB3EE),
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      height: shell ? shellMetrics.storageTextTopGap : 10,
-                    ),
-                    Text(
-                      '2.4 GB used of 32 GB',
-                      style:
-                          shell
-                              ? GoogleFonts.inter(
-                                color: shellSecondaryTextColor,
-                                fontSize: shellMetrics.storageInfoSize,
-                                fontWeight: FontWeight.w400,
-                                fontStyle: FontStyle.normal,
-                                letterSpacing: 0,
-                                height: 15 / 10,
-                              )
-                              : theme.textTheme.bodySmall,
-                    ),
-                  ],
-                ),
+                        ? EdgeInsets.fromLTRB(14, 16, 14, 17)
+                        : const EdgeInsets.fromLTRB(14, 16, 14, 17),
               ),
               Divider(
                 height: 1,
@@ -559,20 +618,18 @@ class _SettingsPageState extends State<SettingsPage> {
                         ? shellDividerColor
                         : theme.colorScheme.outlineVariant,
               ),
-              ShellSettingsRow(
+              _StorageChevronRow(
                 title: 'Manage Storage',
-                height: shell ? shellMetrics.manageRowHeight : 56,
+                onTap: _openStorageSettings,
+                height: shell ? shellMetrics.manageRowHeight : 53,
                 horizontalPadding:
-                    shell ? shellMetrics.rowHorizontalPadding : 18,
-                titleFontSize: shell ? shellMetrics.rowTitleSize : 16,
-                valueFontSize: shell ? shellMetrics.rowValueSize : 16,
-                titleWeight: shell ? FontWeight.w400 : FontWeight.w500,
-                valueWeight: shell ? FontWeight.w400 : FontWeight.w500,
-                chevronSize: shell ? shellMetrics.chevronSize : 24,
-                valueChevronGap: shell ? 8 : 10,
-                titleColor: shell ? shellPrimaryTextColor : null,
-                chevronColor: shell ? shellChevronColor : null,
-                titleStyle: shellRowTitleStyle,
+                    shell ? shellMetrics.rowHorizontalPadding : 14,
+                titleStyle: storageManageRowStyle,
+                chevronColor:
+                    shell
+                        ? shellChevronColor
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                chevronSize: shell ? shellMetrics.chevronSize : 14,
               ),
             ],
           ),
@@ -793,6 +850,414 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 }
 
+class StorageSettingsPage extends StatefulWidget {
+  const StorageSettingsPage({
+    super.key,
+    required this.initialSummary,
+    required this.initialAutoCleanupEnabled,
+    required this.initialRetentionDays,
+  });
+
+  final StorageSummary initialSummary;
+  final bool initialAutoCleanupEnabled;
+  final int? initialRetentionDays;
+
+  @override
+  State<StorageSettingsPage> createState() => _StorageSettingsPageState();
+}
+
+class _StorageSettingsPageState extends State<StorageSettingsPage> {
+  late StorageSummary _summary;
+  late bool _autoCleanupEnabled;
+  late int? _retentionDays;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _summary = widget.initialSummary;
+    _autoCleanupEnabled = widget.initialAutoCleanupEnabled;
+    _retentionDays = widget.initialRetentionDays;
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _refreshSummary() async {
+    final summary = await StorageManager.calculateSummary();
+    if (!mounted) return;
+    setState(() {
+      _summary = summary;
+    });
+  }
+
+  Future<void> _setAutoCleanupEnabled(bool enabled) async {
+    setState(() => _autoCleanupEnabled = enabled);
+    await StorageManager.setAutoCleanupEnabled(enabled);
+    _showSnack(
+      enabled ? 'Automatic cleanup is on.' : 'Automatic cleanup is off.',
+    );
+  }
+
+  Future<void> _pickRetentionDays() async {
+    final selection = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) {
+        final theme = Theme.of(context);
+        final options = <int?>[null, ...StorageManager.retentionOptions];
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.72,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const ListTile(
+                  title: Text('Retention window'),
+                  subtitle: Text(
+                    'Choose how long motion clips stay on this device.',
+                  ),
+                ),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final option in options)
+                        ListTile(
+                          title: Text(StorageManager.retentionLabel(option)),
+                          trailing:
+                              option == _retentionDays
+                                  ? Icon(
+                                    Icons.check_rounded,
+                                    color: theme.colorScheme.primary,
+                                  )
+                                  : null,
+                          onTap: () => Navigator.of(context).pop(option ?? -1),
+                        ),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (selection == null) return;
+    final newValue = selection < 0 ? null : selection;
+    await StorageManager.setRetentionDays(newValue);
+    if (!mounted) return;
+    setState(() {
+      _retentionDays = newValue;
+    });
+    _showSnack('Retention set to ${StorageManager.retentionLabel(newValue)}.');
+  }
+
+  Future<void> _runStorageAction({
+    required String emptyMessage,
+    required Future<StorageCleanupResult> Function() action,
+    bool refreshMediaViews = true,
+  }) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final result = await action();
+      await _refreshSummary();
+      if (refreshMediaViews) {
+        CameraUiBridge.refreshCameraListCallback?.call();
+        CameraUiBridge.refreshActivityCallback?.call();
+      }
+      _showSnack(_storageResultMessage(result, emptyMessage));
+    } catch (e) {
+      Log.e('Storage action failed: $e');
+      _showSnack('Storage action failed.');
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _cleanOldVideosNow() async {
+    if (_retentionDays == null) {
+      _showSnack('Set a retention window first.');
+      return;
+    }
+    await _runStorageAction(
+      emptyMessage:
+          'No clips older than ${StorageManager.retentionLabel(_retentionDays)}.',
+      action:
+          () => StorageManager.deleteVideosOlderThan(
+            Duration(days: _retentionDays!),
+          ),
+    );
+  }
+
+  Future<void> _clearEncryptedFiles() async {
+    await _runStorageAction(
+      emptyMessage: 'No encrypted temp files to clear.',
+      action: StorageManager.clearEncryptedTempFiles,
+      refreshMediaViews: false,
+    );
+  }
+
+  Future<void> _confirmDeleteAllVideos() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete all saved videos?'),
+          content: const Text(
+            'This removes every saved motion clip from this device. Camera recordings will not be recoverable after deletion.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete all'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) return;
+    await _runStorageAction(
+      emptyMessage: 'No saved videos to delete.',
+      action: StorageManager.deleteAllVideos,
+    );
+  }
+
+  String _storageResultMessage(
+    StorageCleanupResult result,
+    String emptyMessage,
+  ) {
+    if (!result.didWork) return emptyMessage;
+    final parts = <String>[];
+    if (result.deletedVideos > 0) {
+      parts.add(
+        '${result.deletedVideos} clip${result.deletedVideos == 1 ? '' : 's'}',
+      );
+    }
+    if (result.deletedThumbnails > 0) {
+      parts.add(
+        '${result.deletedThumbnails} thumbnail${result.deletedThumbnails == 1 ? '' : 's'}',
+      );
+    }
+    if (result.deletedTempFiles > 0) {
+      parts.add(
+        '${result.deletedTempFiles} temp file${result.deletedTempFiles == 1 ? '' : 's'}',
+      );
+    }
+    if (result.removedVideoRows > 0) {
+      parts.add(
+        '${result.removedVideoRows} video entr${result.removedVideoRows == 1 ? 'y' : 'ies'}',
+      );
+    }
+    if (result.removedDetectionRows > 0) {
+      parts.add(
+        '${result.removedDetectionRows} detection entr${result.removedDetectionRows == 1 ? 'y' : 'ies'}',
+      );
+    }
+    final detail =
+        parts.isEmpty ? 'Cleanup complete.' : 'Removed ${parts.join(', ')}';
+    return '$detail Freed ${StorageManager.formatBytes(result.bytesFreed)}.';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final managedStorageBytes = _summary.managedMediaBytes;
+    final totalManagedText = _formatStorageDisplayBytes(managedStorageBytes);
+    final sectionTitleStyle = GoogleFonts.inter(
+      color: theme.colorScheme.onSurface,
+      fontSize: 9,
+      fontWeight: FontWeight.w600,
+      fontStyle: FontStyle.normal,
+      letterSpacing: 0.9,
+      height: 13.5 / 9,
+    );
+    final rowTitleStyle = GoogleFonts.inter(
+      color: theme.colorScheme.onSurface,
+      fontSize: 11.05,
+      fontWeight: FontWeight.w400,
+      fontStyle: FontStyle.normal,
+      letterSpacing: 0,
+      height: 19 / 11.05,
+    );
+    final rowValueStyle = GoogleFonts.inter(
+      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+      fontSize: 9.35,
+      fontWeight: FontWeight.w400,
+      fontStyle: FontStyle.normal,
+      letterSpacing: 0,
+      height: 16 / 9.35,
+    );
+    final headerTitleStyle = GoogleFonts.inter(
+      color: theme.colorScheme.onSurface,
+      fontSize: 18.7,
+      fontWeight: FontWeight.w600,
+      fontStyle: FontStyle.normal,
+      letterSpacing: 0,
+      height: 27 / 18.7,
+    );
+    final headerButtonColor =
+        theme.brightness == Brightness.dark
+            ? Colors.white.withValues(alpha: 0.05)
+            : Colors.black.withValues(alpha: 0.04);
+    final storageDividerColor =
+        theme.brightness == Brightness.dark
+            ? Colors.white.withValues(alpha: 0.08)
+            : Colors.black.withValues(alpha: 0.06);
+
+    return SeclusoScaffold(
+      body: SafeArea(
+        top: true,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: headerButtonColor,
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    iconSize: 20,
+                    icon: const Icon(Icons.chevron_left_rounded),
+                    onPressed: () => Navigator.of(context).maybePop(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text('Manage Storage', style: headerTitleStyle),
+              ],
+            ),
+            const SizedBox(height: 28),
+            ShellCard(
+              padding: EdgeInsets.zero,
+              radius: 12,
+              child: _StorageTotalUsedCard(
+                summary: _summary,
+                totalText: totalManagedText,
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+              ),
+            ),
+            const SizedBox(height: 32),
+            _StorageSection(
+              title: 'Auto-Cleanup',
+              titleStyle: sectionTitleStyle,
+              child: ShellCard(
+                padding: EdgeInsets.zero,
+                radius: 12,
+                child: Column(
+                  children: [
+                    _StorageToggleRow(
+                      title: 'Enable Auto-Cleanup',
+                      value: _autoCleanupEnabled,
+                      onChanged: _setAutoCleanupEnabled,
+                      height: 53,
+                      horizontalPadding: 14,
+                      titleStyle: rowTitleStyle,
+                    ),
+                    Divider(height: 1, color: storageDividerColor),
+                    _StorageChevronRow(
+                      title: 'Retention Window',
+                      value: StorageManager.retentionLabel(_retentionDays),
+                      onTap: _pickRetentionDays,
+                      height: 53,
+                      horizontalPadding: 14,
+                      titleStyle: rowTitleStyle,
+                      valueStyle: rowValueStyle,
+                      chevronColor: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.5,
+                      ),
+                      chevronSize: 14,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            _StorageSection(
+              title: 'Manual Deletion',
+              titleStyle: sectionTitleStyle,
+              child: ShellCard(
+                padding: EdgeInsets.zero,
+                radius: 12,
+                child: Column(
+                  children: [
+                    _StorageChevronRow(
+                      title: 'Delete Old Clips Now',
+                      value:
+                          _retentionDays == null
+                              ? 'Never'
+                              : '> ${StorageManager.retentionLabel(_retentionDays)}',
+                      onTap: _busy ? null : _cleanOldVideosNow,
+                      height: 53,
+                      horizontalPadding: 14,
+                      titleStyle: rowTitleStyle,
+                      valueStyle: rowValueStyle,
+                      chevronColor: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.5,
+                      ),
+                      chevronSize: 14,
+                    ),
+                    Divider(height: 1, color: storageDividerColor),
+                    _StorageChevronRow(
+                      title: 'Clear Temp Files',
+                      value: _formatStorageDisplayBytes(
+                        _summary.encryptedBytes,
+                      ),
+                      onTap: _busy ? null : _clearEncryptedFiles,
+                      height: 53,
+                      horizontalPadding: 14,
+                      titleStyle: rowTitleStyle,
+                      valueStyle: rowValueStyle,
+                      chevronColor: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.5,
+                      ),
+                      chevronSize: 14,
+                    ),
+                    Divider(height: 1, color: storageDividerColor),
+                    _DangerStorageRow(
+                      title: 'Delete All Videos',
+                      onTap: _busy ? null : _confirmDeleteAllVideos,
+                      height: 53,
+                      horizontalPadding: 14,
+                      textStyle: GoogleFonts.inter(
+                        color: const Color(0xFFEF4444),
+                        fontSize: 11.05,
+                        fontWeight: FontWeight.w400,
+                        fontStyle: FontStyle.normal,
+                        letterSpacing: 0,
+                        height: 19 / 11.05,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SettingsFooterLockIcon extends StatelessWidget {
   const _SettingsFooterLockIcon({required this.size, required this.color});
 
@@ -805,6 +1270,385 @@ class _SettingsFooterLockIcon extends StatelessWidget {
       width: size,
       height: size,
       child: CustomPaint(painter: _SettingsFooterLockPainter(color)),
+    );
+  }
+}
+
+class _StorageSettingsCard extends StatelessWidget {
+  const _StorageSettingsCard({
+    required this.summary,
+    required this.title,
+    required this.totalText,
+    required this.padding,
+  });
+
+  final StorageSummary summary;
+  final String title;
+  final String totalText;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final titleStyle = GoogleFonts.inter(
+      color: theme.colorScheme.onSurface,
+      fontSize: 11.05,
+      fontWeight: FontWeight.w400,
+      fontStyle: FontStyle.normal,
+      letterSpacing: 0,
+      height: 19 / 11.05,
+    );
+    final valueStyle = GoogleFonts.inter(
+      color: theme.colorScheme.onSurface.withValues(alpha: 0.9),
+      fontSize: 9.35,
+      fontWeight: FontWeight.w500,
+      fontStyle: FontStyle.normal,
+      letterSpacing: 0,
+      height: 16 / 9.35,
+    );
+
+    return Padding(
+      padding: padding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text(title, style: titleStyle)),
+              Text(totalText, style: valueStyle),
+            ],
+          ),
+          const SizedBox(height: 18),
+          _StorageUsageBar(summary: summary),
+          const SizedBox(height: 18),
+          _StorageLegendRow(
+            label: 'Videos',
+            value: _formatStorageDisplayBytes(summary.videoBytes),
+            color: const Color(0xFF8BB3EE),
+          ),
+          const SizedBox(height: 12),
+          _StorageLegendRow(
+            label: 'Thumbnails',
+            value: _formatStorageDisplayBytes(summary.thumbnailBytes),
+            color: const Color(0xFFA78BFA),
+          ),
+          const SizedBox(height: 12),
+          _StorageLegendRow(
+            label: 'Temp Files',
+            value: _formatStorageDisplayBytes(summary.encryptedBytes),
+            color: const Color(0xFFF59E0B),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StorageTotalUsedCard extends StatelessWidget {
+  const _StorageTotalUsedCard({
+    required this.summary,
+    required this.totalText,
+    required this.padding,
+  });
+
+  final StorageSummary summary;
+  final String totalText;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final titleStyle = GoogleFonts.inter(
+      color: theme.colorScheme.onSurface,
+      fontSize: 11.05,
+      fontWeight: FontWeight.w400,
+      fontStyle: FontStyle.normal,
+      letterSpacing: 0,
+      height: 19 / 11.05,
+    );
+    final valueStyle = GoogleFonts.inter(
+      color: theme.colorScheme.onSurface,
+      fontSize: 11.05,
+      fontWeight: FontWeight.w600,
+      fontStyle: FontStyle.normal,
+      letterSpacing: 0,
+      height: 19 / 11.05,
+    );
+
+    return Padding(
+      padding: padding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text('Total Used', style: titleStyle)),
+              Text(totalText, style: valueStyle),
+            ],
+          ),
+          const SizedBox(height: 18),
+          _StorageUsageBar(summary: summary),
+        ],
+      ),
+    );
+  }
+}
+
+class _StorageUsageBar extends StatelessWidget {
+  const _StorageUsageBar({required this.summary});
+
+  final StorageSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = summary.managedMediaBytes;
+    final segments = <({Color color, int flex})>[];
+    final values = [
+      (summary.videoBytes, const Color(0xFF8BB3EE)),
+      (summary.thumbnailBytes, const Color(0xFFA78BFA)),
+      (summary.encryptedBytes, const Color(0xFFF59E0B)),
+    ];
+
+    if (total > 0) {
+      for (final (value, color) in values) {
+        if (value <= 0) continue;
+        final flex = ((value / total) * 1000).round().clamp(1, 1000);
+        segments.add((color: color, flex: flex));
+      }
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: SizedBox(
+        height: 8,
+        child:
+            segments.isEmpty
+                ? Container(color: Colors.white.withValues(alpha: 0.1))
+                : Row(
+                  children: [
+                    for (final segment in segments)
+                      Expanded(
+                        flex: segment.flex,
+                        child: Container(color: segment.color),
+                      ),
+                  ],
+                ),
+      ),
+    );
+  }
+}
+
+class _StorageLegendRow extends StatelessWidget {
+  const _StorageLegendRow({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final labelStyle = GoogleFonts.inter(
+      color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+      fontSize: 9.35,
+      fontWeight: FontWeight.w400,
+      fontStyle: FontStyle.normal,
+      letterSpacing: 0,
+      height: 16 / 9.35,
+    );
+    final valueStyle = GoogleFonts.inter(
+      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+      fontSize: 9.35,
+      fontWeight: FontWeight.w400,
+      fontStyle: FontStyle.normal,
+      letterSpacing: 0,
+      height: 16 / 9.35,
+    );
+    return Row(
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Text(label, style: labelStyle)),
+        Text(value, style: valueStyle),
+      ],
+    );
+  }
+}
+
+class _StorageChevronRow extends StatelessWidget {
+  const _StorageChevronRow({
+    required this.title,
+    this.value,
+    this.onTap,
+    required this.height,
+    required this.horizontalPadding,
+    required this.titleStyle,
+    this.valueStyle,
+    required this.chevronColor,
+    required this.chevronSize,
+  });
+
+  final String title;
+  final String? value;
+  final VoidCallback? onTap;
+  final double height;
+  final double horizontalPadding;
+  final TextStyle titleStyle;
+  final TextStyle? valueStyle;
+  final Color chevronColor;
+  final double chevronSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final row = SizedBox(
+      height: height,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+        child: Row(
+          children: [
+            Expanded(child: Text(title, style: titleStyle)),
+            if (value != null) ...[
+              Text(value!, style: valueStyle),
+              const SizedBox(width: 8),
+            ],
+            Icon(
+              Icons.chevron_right_rounded,
+              size: chevronSize,
+              color: chevronColor,
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (onTap == null) return row;
+    return InkWell(onTap: onTap, child: row);
+  }
+}
+
+class _StorageToggleRow extends StatelessWidget {
+  const _StorageToggleRow({
+    required this.title,
+    required this.value,
+    required this.onChanged,
+    required this.height,
+    required this.horizontalPadding,
+    required this.titleStyle,
+  });
+
+  final String title;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final double height;
+  final double horizontalPadding;
+  final TextStyle titleStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: height,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+        child: Row(
+          children: [
+            Expanded(child: Text(title, style: titleStyle)),
+            ShellToggle(
+              value: value,
+              onChanged: onChanged,
+              width: 40,
+              height: 24,
+              padding: 2,
+              thumbSize: 20,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DangerStorageRow extends StatelessWidget {
+  const _DangerStorageRow({
+    required this.title,
+    this.onTap,
+    this.height = 56,
+    this.horizontalPadding = 18,
+    this.textStyle,
+  });
+
+  final String title;
+  final VoidCallback? onTap;
+  final double height;
+  final double horizontalPadding;
+  final TextStyle? textStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    final row = SizedBox(
+      height: height,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.delete_outline_rounded,
+              size: 18,
+              color: Color(0xFFEF4444),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                title,
+                style:
+                    textStyle ??
+                    Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: const Color(0xFFEF4444),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (onTap == null) return row;
+    return InkWell(onTap: onTap, child: row);
+  }
+}
+
+class _StorageSection extends StatelessWidget {
+  const _StorageSection({
+    required this.title,
+    required this.titleStyle,
+    required this.child,
+  });
+
+  final String title;
+  final TextStyle titleStyle;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4),
+          child: Text(title, style: titleStyle),
+        ),
+        const SizedBox(height: 8),
+        child,
+      ],
     );
   }
 }

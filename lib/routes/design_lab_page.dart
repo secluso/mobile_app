@@ -24,6 +24,7 @@ import 'package:secluso_flutter/ui/secluso_preview_assets.dart';
 import 'package:secluso_flutter/routes/theme_provider.dart';
 import 'package:secluso_flutter/ui/secluso_surfaces.dart';
 import 'package:secluso_flutter/ui/secluso_theme.dart';
+import 'package:secluso_flutter/utilities/storage_manager.dart';
 
 Widget? designLabTargetPage(String target, {String themeName = 'dark'}) {
   final isLight = themeName == 'light';
@@ -406,6 +407,20 @@ Widget? designLabTargetPage(String target, {String themeName = 'dark'}) {
         previewNotificationsOn: true,
         previewScrollPosition:
             app_settings.SettingsPreviewScrollPosition.veryBottom,
+      );
+    case 'storage_manage':
+      return const app_settings.StorageSettingsPage(
+        initialSummary: StorageSummary(
+          totalBytes: 1058013184,
+          videoBytes: 888143872,
+          thumbnailBytes: 130023424,
+          encryptedBytes: 39845888,
+          otherBytes: 0,
+          videoCount: 148,
+          thumbnailCount: 148,
+        ),
+        initialAutoCleanupEnabled: true,
+        initialRetentionDays: 30,
       );
     case 'camera_settings':
       return const camera_settings.SettingsPage(
@@ -834,7 +849,8 @@ class DesignLabPage extends StatelessWidget {
                 ),
                 _LabEntry(
                   title: 'Home / error state',
-                  subtitle: 'Recent event rail plus the inline error treatment.',
+                  subtitle:
+                      'Recent event rail plus the inline error treatment.',
                   onTap:
                       () => _openScreen(
                         context,
@@ -843,7 +859,8 @@ class DesignLabPage extends StatelessWidget {
                 ),
                 _LabEntry(
                   title: 'Home / notifications offline',
-                  subtitle: 'Offline warning treatment for background delivery.',
+                  subtitle:
+                      'Offline warning treatment for background delivery.',
                   onTap:
                       () => _openScreen(
                         context,
@@ -861,11 +878,14 @@ class DesignLabPage extends StatelessWidget {
                 ),
                 _LabEntry(
                   title: 'Home / one camera awaiting event',
-                  subtitle: 'Single paired camera before the first visible clip.',
+                  subtitle:
+                      'Single paired camera before the first visible clip.',
                   onTap:
                       () => _openScreen(
                         context,
-                        designLabTargetPage('home_shell_one_camera_empty_dark')!,
+                        designLabTargetPage(
+                          'home_shell_one_camera_empty_dark',
+                        )!,
                       ),
                 ),
                 _LabEntry(
