@@ -123,6 +123,7 @@ class HttpClientService {
   static final HttpClientService instance = HttpClientService._();
   Future<void>? _versionCheckInFlight;
   bool _versionMatchConfirmed = false;
+  static final Future<String> _versionFuture = rustLibVersion();
   static const Duration _groupNameInitCooldown = Duration(seconds: 30);
   static const Duration _groupNameInitTimeout = Duration(seconds: 8);
   final Map<String, DateTime> _groupNameInitLast = {};
@@ -654,7 +655,7 @@ class HttpClientService {
       return;
     }
 
-    final clientVersion = await rustLibVersion();
+    final clientVersion = await _versionFuture;
     if (serverVersion != clientVersion) {
       Log.i(
         'Server version ($serverVersion) differs from client version ($clientVersion)',
@@ -675,7 +676,7 @@ class HttpClientService {
   Future<void> _checkServerVersionAndGate() async {
     try {
       final serverVersion = await _fetchServerVersionRaw();
-      final clientVersion = await rustLibVersion();
+      final clientVersion = await _versionFuture;
 
       if (serverVersion != clientVersion) {
         Log.i(
@@ -705,7 +706,7 @@ class HttpClientService {
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
     final response = await http.get(url, headers: headers);
-    if (response.statusCode != 200) {
+    if (response.statusCode != 200 && response.statusCode != 409) {
       throw Exception(
         'Failed to fetch server version: ${response.statusCode} ${response.reasonPhrase}',
       );
@@ -746,9 +747,13 @@ class HttpClientService {
       return {
         HttpHeaders.authorizationHeader: 'Basic $credentials',
         HttpHeaders.contentTypeHeader: 'application/json',
+        'Client-Version': await _versionFuture,
       };
     } else {
-      return {HttpHeaders.authorizationHeader: 'Basic $credentials'};
+      return {
+        HttpHeaders.authorizationHeader: 'Basic $credentials',
+        'Client-Version': await _versionFuture,
+      };
     }
   }
 
