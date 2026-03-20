@@ -6,8 +6,10 @@ import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/notifications/download_task.dart';
 import 'package:secluso_flutter/notifications/heartbeat_task.dart';
 import 'package:secluso_flutter/utilities/app_coordination_state.dart';
+import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/lock.dart';
+import 'package:secluso_flutter/utilities/version_gate.dart';
 import 'package:workmanager/workmanager.dart';
 
 const String _bgTaskId = 'com.secluso.task'; // Matches Info.plist
@@ -137,6 +139,11 @@ class DownloadScheduler {
     final traceId = Log.deriveContext('sched');
     return Log.runWithContext(traceId, () async {
       Log.d("Scheduler context started (camera=$camera, id=$traceId)");
+      if (VersionGate.isBlocked) {
+        await HttpClientService.instance.potentiallySendBackgroundNotification();
+        Log.d("Skipping download scheduling because version gate is active");
+        return;
+      }
 
       final trimmedCamera = camera.trim();
       final isBroadcast = trimmedCamera.isEmpty;

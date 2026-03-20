@@ -12,6 +12,7 @@ import 'package:secluso_flutter/utilities/lock.dart';
 import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/utilities/ui_state.dart';
+import 'package:secluso_flutter/utilities/version_gate.dart';
 import 'package:secluso_flutter/notifications/download_status.dart';
 import 'package:secluso_flutter/notifications/epoch_markers.dart';
 import 'package:flutter/foundation.dart';
@@ -376,6 +377,11 @@ Future<List<String>> _sanitizeDownloadQueue(List<String> queue) async {
 
 Future<bool> retrieveVideos(String cameraName) async {
   Log.d("Entered for $cameraName");
+  if (VersionGate.isBlocked) {
+    await HttpClientService.instance.potentiallySendBackgroundNotification();
+    Log.d("$cameraName: Skipping video retrieval because version gate is active.");
+    return true;
+  }
   if (!await _cameraStillExists(cameraName)) {
     Log.d(
       "$cameraName: Camera deleted before background download started; skipping.",

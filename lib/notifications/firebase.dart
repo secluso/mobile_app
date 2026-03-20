@@ -27,6 +27,7 @@ import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
 import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
+import 'package:secluso_flutter/utilities/version_gate.dart';
 import 'package:secluso_flutter/src/rust/frb_generated.dart';
 import 'dart:io' show File, Platform;
 
@@ -702,10 +703,24 @@ class PushNotificationService {
     Duration timeout = const Duration(seconds: 10),
     Duration pollEvery = const Duration(milliseconds: 300),
   }) async {
+    if (VersionGate.isBlocked) {
+      await HttpClientService.instance.potentiallySendBackgroundNotification();
+      Log.d(
+        "Skipping thumbnail attachment because version gate is active (${Log.ownerTag()})",
+      );
+      return;
+    }
     final deadline = DateTime.now().add(timeout);
     final prefs = await SharedPreferences.getInstance();
 
     while (DateTime.now().isBefore(deadline)) {
+      if (VersionGate.isBlocked) {
+        await HttpClientService.instance.potentiallySendBackgroundNotification();
+        Log.d(
+          "Aborting thumbnail attachment because version gate is active (${Log.ownerTag()})",
+        );
+        return;
+      }
       if (!await _cameraStillExists(prefs, cameraName)) {
         Log.d(
           "[FCM] Camera deleted before thumbnail attachment for $cameraName; aborting.",

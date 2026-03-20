@@ -310,3 +310,37 @@ Future<void> showSupportLogNotification() async {
     details,
   );
 }
+
+Future<void> showOutdatedNotification() async {
+  // Android
+  final androidDetails = AndroidNotificationDetails(
+    'support_channel',
+    'Support Alerts',
+    channelDescription: 'Support and diagnostic notifications',
+    importance: Importance.high,
+    priority: Priority.high,
+    icon: 'ic_notification',
+    vibrationPattern: Int64List.fromList([200, 200, 200]),
+    enableLights: true,
+    color: const Color(0xFF8BB3EE),
+    ledColor: const Color(0xFF8BB3EE),
+    ledOnMs: 1000,
+    ledOffMs: 1000,
+  );
+
+  // iOS
+  final iosDetails = const DarwinNotificationDetails(
+    interruptionLevel: InterruptionLevel.timeSensitive,
+    sound: 'default',
+    badgeNumber: 1,
+  );
+
+  final details = NotificationDetails(android: androidDetails, iOS: iosDetails);
+
+  await _notifs.show(
+    DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    'Secluso support',
+    'Your app is outdated. Please update to continue receiving notifications and use your cameras',
+    details,
+  );
+}

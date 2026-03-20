@@ -18,6 +18,7 @@ import 'package:secluso_flutter/notifications/thumbnails.dart';
 import 'package:secluso_flutter/notifications/notifications.dart';
 import 'routes/app_shell.dart';
 import 'routes/design_lab_page.dart';
+import 'routes/camera/camera_ui_bridge.dart';
 import "routes/theme_provider.dart";
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -642,6 +643,50 @@ Future<void> _initAllCameras({List<String>? cameraNames}) async {
 }
 
 Future<void> _handleChangeServer() async {
+  final cameraNames = await _cameraNamesFromStore();
+  if (cameraNames.isNotEmpty) {
+    if (navigatorKey.currentContext == null) {
+      return;
+    }
+    await showDialog<void>(
+      context: navigatorKey.currentContext!,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: const Text('Remove all cameras first'),
+            content: const Text(
+              'To change the relay while this version mismatch is active, you must first remove all attached cameras.\n\nUse the button below to remove them.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.of(dialogContext).pop();
+                  for (final cameraName in cameraNames) {
+                    await CameraUiBridge.deleteCamera(cameraName);
+                  }
+                  CameraUiBridge.refreshCameraListCallback?.call();
+                  ScaffoldMessenger.maybeOf(
+                    navigatorKey.currentState?.context ??
+                        navigatorKey.currentContext!,
+                  )?.showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'All cameras removed. Tap Change server again to continue.',
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('Remove All Cameras'),
+              ),
+            ],
+          ),
+    );
+    return;
+  }
+
   final prefs = await SharedPreferences.getInstance();
   await _invalidateServerCredentials(prefs);
   HttpClientService.instance.resetVersionGateState();

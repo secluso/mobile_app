@@ -3,7 +3,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:secluso_flutter/constants.dart';
@@ -22,6 +21,7 @@ import 'package:secluso_flutter/routes/system_shell_page.dart';
 import 'package:secluso_flutter/ui/secluso_surfaces.dart';
 import 'package:secluso_flutter/ui/secluso_shell_ui.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
+import 'package:secluso_flutter/utilities/version_gate.dart';
 import 'package:secluso_flutter/routes/camera/camera_ui_bridge.dart';
 import 'camera/new/qr_scan.dart';
 import 'camera/view_camera.dart';
@@ -204,6 +204,15 @@ class _ServerPageState extends State<ServerPage> {
       final prefs = await SharedPreferences.getInstance();
       final prevServerAddr = prefs.getString(PrefKeys.serverAddr);
       final prevHasSynced = prevServerAddr != null && prevServerAddr.isNotEmpty;
+      final currentCameraNames =
+          _isPreviewMode ? _cameraNames : await _fetchCameraNames();
+      if (VersionGate.isBlocked &&
+          prevHasSynced &&
+          currentCameraNames.isNotEmpty) {
+        if (!mounted) return;
+        await _showRemoveAllCamerasRequiredDialog(currentCameraNames);
+        return;
+      }
 
       FcmConfig? fetchedFcmConfig;
       if (Platform.isAndroid) {
@@ -324,6 +333,10 @@ class _ServerPageState extends State<ServerPage> {
         _isPreviewMode ? _cameraNames : await _fetchCameraNames();
     if (currentCameraNames.isNotEmpty) {
       if (!mounted) return;
+      if (VersionGate.isBlocked) {
+        await _showRemoveAllCamerasRequiredDialog(currentCameraNames);
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Remove all cameras before removing the relay.'),
@@ -418,6 +431,48 @@ class _ServerPageState extends State<ServerPage> {
     );
     if (credentialsFull == null || !mounted) return;
     await _saveServerSettings(credentialsFull);
+  }
+
+  Future<void> _showRemoveAllCamerasRequiredDialog(
+    List<String> currentCameraNames,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: const Text('Remove all cameras first'),
+            content: const Text(
+              'This relay cannot be changed or removed while a version mismatch is active and cameras are still attached.\n\nIf you want to proceed, remove all cameras by clicking the button below.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  Navigator.of(dialogContext).pop();
+                  for (final cameraName in currentCameraNames) {
+                    await CameraUiBridge.deleteCamera(cameraName);
+                  }
+                  if (!mounted) return;
+                  setState(() {
+                    _cameraNames = const [];
+                  });
+                  CameraUiBridge.refreshCameraListCallback?.call();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'All cameras removed. You can now change or remove the relay.',
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('Remove All Cameras'),
+              ),
+            ],
+          ),
+    );
   }
 
   Widget _linkedRelayCard(ThemeData theme) {

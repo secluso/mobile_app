@@ -9,6 +9,7 @@ import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/lock.dart';
+import 'package:secluso_flutter/utilities/version_gate.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'dart:io';
@@ -168,6 +169,11 @@ class ThumbnailManager {
     String camera,
     String timestamp,
   ) async {
+    if (VersionGate.isBlocked) {
+      await HttpClientService.instance.potentiallySendBackgroundNotification();
+      Log.d("$camera: Skipping thumbnail check because version gate is active.");
+      return false;
+    }
     // Check if the file already exists in the thumbnails folder
     final baseDir = await getApplicationDocumentsDirectory();
 
@@ -197,6 +203,11 @@ class ThumbnailManager {
   }
 
   static Future<void> checkThumbnailsForAll() async {
+    if (VersionGate.isBlocked) {
+      await HttpClientService.instance.potentiallySendBackgroundNotification();
+      Log.d("Skipping thumbnail sweep because version gate is active.");
+      return;
+    }
     // Call the endpoint asking for the epochs that haven't been used in over 5 mins. This indicates we likely won't get a notification for it.
     // See if we have the epoch beforehand. If we do, we download it.
 
@@ -230,6 +241,11 @@ class ThumbnailManager {
   }) async {
     return Log.runWithDerivedContext('thumb', () async {
       Log.d("Entered thumbnail session");
+      if (VersionGate.isBlocked) {
+        await HttpClientService.instance.potentiallySendBackgroundNotification();
+        Log.d("$camera: Skipping thumbnail session because version gate is active.");
+        return;
+      }
       if (!await _cameraStillExists(camera)) {
         Log.d(
           "$camera: Camera deleted before thumbnail session started; skipping.",
@@ -535,6 +551,13 @@ class ThumbnailManager {
   static Future<bool> retrieveThumbnails({required String camera}) async {
     return Log.runWithDerivedContext('thumb', () async {
       Log.d("Entered retrieveThumbnails");
+      if (VersionGate.isBlocked) {
+        await HttpClientService.instance.potentiallySendBackgroundNotification();
+        Log.d(
+          "$camera: Skipping thumbnail retrieval because version gate is active.",
+        );
+        return true;
+      }
       if (!await _cameraStillExists(camera)) {
         Log.d(
           "$camera: Camera deleted before thumbnail retrieval started; skipping.",

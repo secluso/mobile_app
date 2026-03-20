@@ -11,6 +11,7 @@ import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/notifications/epoch.dart';
 import 'package:secluso_flutter/notifications/ios_notification_relay.dart';
+import 'package:secluso_flutter/notifications/notifications.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'package:secluso_flutter/utilities/http_entities.dart';
@@ -636,6 +637,7 @@ class HttpClientService {
 
   Future<void> _ensureVersionCompatible() async {
     if (VersionGate.isBlocked) {
+      await potentiallySendBackgroundNotification();
       throw _SilentException('Version gate active');
     }
     if (_versionMatchConfirmed) {
@@ -667,6 +669,8 @@ class HttpClientService {
           clientVersion: clientVersion,
         ),
       );
+
+      await potentiallySendBackgroundNotification();
       throw _SilentException('Server/client version mismatch');
     }
 
@@ -777,6 +781,42 @@ class HttpClientService {
     }
 
     return (serverAddr: serverAddr!, username: username!, password: password!);
+  }
+
+  // TODO: Should we put a lock around this? Is it possible for two bg tasks to run simultaneously?
+  Future<void> potentiallySendBackgroundNotification() async {
+    if (await background()) {
+      var currentTime = DateTime.now().millisecondsSinceEpoch;
+
+      var prefs = await SharedPreferences.getInstance();
+      if (prefs.containsKey(PrefKeys.lastOutdatedNotification)) {
+        // Check to ensure it wasn't too long ago
+        var lastOutdatedNotification =
+            prefs.getInt(PrefKeys.lastOutdatedNotification)!;
+
+        var timeDiff = currentTime - lastOutdatedNotification;
+        var minDiff =
+            3 * 60 * 60 * 1000; // We're okay with notifying them every 3 hours.
+
+        if (timeDiff < minDiff) {
+          return;
+        }
+      }
+
+      // Proceed if okay; set the time and send the notification now
+      Log.d("Sending background notification");
+      await prefs.setInt(PrefKeys.lastOutdatedNotification, currentTime);
+      await showOutdatedNotification();
+    }
+  }
+
+  Future<bool> background() async {
+    var currentContextId = Log.currentContextId();
+    Log.d("Checking current context: $currentContextId");
+    return currentContextId.startsWith("sched-") ||
+        currentContextId.startsWith("fcm-") ||
+        currentContextId.startsWith("dl-") ||
+        currentContextId.startsWith("thumb-");
   }
 
   Future<String> _groupName(String cameraName, String clientTag) async {
