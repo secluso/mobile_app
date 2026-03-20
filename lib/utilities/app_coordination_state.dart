@@ -44,6 +44,14 @@ class AppCoordinationState {
     return containsCameraInSnapshot(prefs, cameraName);
   }
 
+  static Future<bool> containsCameraInSnapshotFresh(
+    SharedPreferences prefs,
+    String cameraName,
+  ) async {
+    await prefs.reload();
+    return containsCameraInSnapshot(prefs, cameraName);
+  }
+
   static Future<bool> addCamera(String cameraName) async {
     final normalizedName = cameraName.trim();
     if (normalizedName.isEmpty) {

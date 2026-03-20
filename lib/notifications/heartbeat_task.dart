@@ -52,7 +52,7 @@ Future<bool> _cameraStillExists(
   SharedPreferences prefs,
   String cameraName,
 ) async {
-  return AppCoordinationState.containsCameraInSnapshot(prefs, cameraName);
+  return AppCoordinationState.containsCameraInSnapshotFresh(prefs, cameraName);
 }
 
 Future<bool> _doHeartbeatTask(String cameraName) async {
