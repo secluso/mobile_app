@@ -24,6 +24,7 @@ import 'package:secluso_flutter/ui/secluso_preview_assets.dart';
 import 'package:secluso_flutter/ui/secluso_luxury.dart';
 import 'package:secluso_flutter/ui/secluso_surfaces.dart';
 import 'package:secluso_flutter/ui/secluso_theme.dart';
+import 'package:secluso_flutter/utilities/video_thumbnail_store.dart';
 import 'package:secluso_flutter/routes/camera/shell_home_page.dart';
 import 'view_camera.dart';
 import 'camera_ui_bridge.dart';
@@ -665,6 +666,10 @@ class CamerasPageState extends State<CamerasPage>
   void didPopNext() {
     if (_isPreviewMode) return;
     Log.d("Returned to list cameras [pop]");
+    _thumbCache.clear();
+    _thumbFutures.clear();
+    _eventThumbCache.clear();
+    _eventThumbFutures.clear();
     _loadCamerasFromDatabase(true); // Load this every time we enter the page.
     _checkNotificationStatus();
   }
@@ -673,6 +678,10 @@ class CamerasPageState extends State<CamerasPage>
   void didPush() {
     if (_isPreviewMode) return;
     Log.d('Returned to list cameras [push]');
+    _thumbCache.clear();
+    _thumbFutures.clear();
+    _eventThumbCache.clear();
+    _eventThumbFutures.clear();
     _loadCamerasFromDatabase(true); // Load this every time we enter the page.
     _checkNotificationStatus();
   }
@@ -1130,16 +1139,6 @@ class CamerasPageState extends State<CamerasPage>
     return future;
   }
 
-  Future<bool> _isValidImageBytes(Uint8List bytes) async {
-    try {
-      final image = await decodeImageFromList(bytes);
-      image.dispose();
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
   Future<Uint8List?> _latestDisplayableThumbnailBytes(String cameraName) async {
     if (!AppStores.isInitialized) {
       try {
@@ -1219,53 +1218,20 @@ class CamerasPageState extends State<CamerasPage>
     String videoFile,
     String cacheKey,
   ) async {
-    final timestamp = _videoTimestampToken(videoFile);
-    if (timestamp == null) {
-      Log.d(
-        'Recent event thumb miss [$cameraName/$videoFile]: could not derive timestamp token',
-      );
-      return null;
-    }
-
-    final docsDir = await getApplicationDocumentsDirectory();
-    final thumbPath = p.join(
-      docsDir.path,
-      'camera_dir_$cameraName',
-      'videos',
-      'thumbnail_$timestamp.png',
-    );
-    final thumbFile = File(thumbPath);
-    if (!await thumbFile.exists()) {
-      Log.d(
-        'Recent event thumb miss [$cameraName/$videoFile]: file missing at $thumbPath',
-      );
-      return null;
-    }
-
     try {
-      final bytes = await thumbFile.readAsBytes();
-      if (await _isValidImageBytes(bytes)) {
-        _eventThumbCache[cacheKey] = bytes;
-        Log.d(
-          'Recent event thumb hit [$cameraName/$videoFile]: loaded $thumbPath (${bytes.length} bytes)',
-        );
-        return bytes;
-      }
-      Log.w(
-        'Recent event thumb invalid [$cameraName/$videoFile]: decode failed for $thumbPath',
+      final bytes = await VideoThumbnailStore.loadOrGenerate(
+        cameraName: cameraName,
+        videoFile: videoFile,
+        logPrefix: 'Recent event thumb',
       );
+      if (bytes != null) {
+        _eventThumbCache[cacheKey] = bytes;
+      }
+      return bytes;
     } catch (e) {
       Log.e("Event thumbnail read error [$cameraName/$videoFile]: $e");
-    }
-
-    return null;
-  }
-
-  String? _videoTimestampToken(String videoFile) {
-    if (!videoFile.startsWith('video_') || !videoFile.endsWith('.mp4')) {
       return null;
     }
-    return videoFile.substring(6, videoFile.length - 4);
   }
 
   Future<void> _openPrimaryFlow(

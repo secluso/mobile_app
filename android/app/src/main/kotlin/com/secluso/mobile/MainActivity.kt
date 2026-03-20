@@ -2,6 +2,8 @@
 package com.secluso.mobile
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -18,6 +20,8 @@ import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.LinkedBlockingQueue
 import java.io.IOException
+import java.io.ByteArrayOutputStream
+import java.io.FileInputStream
 import java.net.InetSocketAddress
 import java.net.Socket
 
@@ -153,6 +157,87 @@ class MainActivity : FlutterActivity() {
                         } else {
                             result.success("no_active_connection");
                         }
+                    }
+
+                    else -> result.notImplemented()
+                }
+            }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL_PREFIX + "thumbnail")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "generateThumbnail" -> {
+                        val path = call.argument<String>("path")
+                        if (path == null) {
+                            result.error("INVALID_ARGS", "Missing path", null)
+                            return@setMethodCallHandler
+                        }
+
+                        Thread {
+                            val retriever = MediaMetadataRetriever()
+                            var inputStream: FileInputStream? = null
+                            try {
+                                inputStream = FileInputStream(path)
+                                retriever.setDataSource(inputStream.fd)
+                                val rawDurationMs =
+                                    retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                                        ?.toLongOrNull() ?: 0L
+                                val targetUs = when {
+                                    rawDurationMs > 0L -> {
+                                        val quarterUs = (rawDurationMs * 1000L) / 4L
+                                        quarterUs.coerceIn(250_000L, 1_000_000L)
+                                    }
+                                    else -> 500_000L
+                                }
+                                val candidateTimesUs = linkedSetOf<Long>().apply {
+                                    add(0L)
+                                    add(targetUs)
+                                    add(250_000L)
+                                    add(500_000L)
+                                    add(1_000_000L)
+                                }
+                                var frame: Bitmap? = null
+                                for (candidateUs in candidateTimesUs) {
+                                    frame =
+                                        retriever.getFrameAtTime(
+                                            candidateUs,
+                                            MediaMetadataRetriever.OPTION_CLOSEST
+                                        )
+                                    if (frame != null) {
+                                        break
+                                    }
+                                }
+                                if (frame == null) {
+                                    runOnUiThread {
+                                        result.error(
+                                            "THUMBNAIL_ERROR",
+                                            "Could not extract frame",
+                                            null
+                                        )
+                                    }
+                                    return@Thread
+                                }
+
+                                val output = ByteArrayOutputStream()
+                                frame.compress(Bitmap.CompressFormat.PNG, 100, output)
+                                frame.recycle()
+                                val bytes = output.toByteArray()
+                                runOnUiThread { result.success(bytes) }
+                            } catch (e: Exception) {
+                                runOnUiThread {
+                                    result.error("THUMBNAIL_ERROR", e.message, null)
+                                }
+                            } finally {
+                                try {
+                                    inputStream?.close()
+                                } catch (_: Exception) {
+                                }
+                                try {
+                                    retriever.release()
+                                } catch (_: Exception) {
+                                }
+                            }
+                        }.start()
                     }
 
                     else -> result.notImplemented()

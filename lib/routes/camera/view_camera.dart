@@ -28,6 +28,7 @@ import 'package:path/path.dart' as p;
 import 'package:intl/intl.dart';
 import 'package:secluso_flutter/ui/secluso_surfaces.dart';
 import 'package:secluso_flutter/ui/secluso_theme.dart';
+import 'package:secluso_flutter/utilities/video_thumbnail_store.dart';
 
 _CameraViewPageState? globalCameraViewPageState;
 
@@ -75,19 +76,6 @@ String repackageVideoTitle(String videoFileName) {
 }
 
 class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
-  static const Duration _thumbStableWaitTimeout = Duration(seconds: 2);
-  static const Duration _thumbStableWaitPoll = Duration(milliseconds: 120);
-  static const int _minThumbPngSizeBytes = 32;
-  static const List<int> _pngSignature = <int>[
-    0x89,
-    0x50,
-    0x4E,
-    0x47,
-    0x0D,
-    0x0A,
-    0x1A,
-    0x0A,
-  ];
   late Box<Video> _videoBox;
   final List<Video> _videos = [];
   final Map<String, Uint8List?> _videoThumbCache = {};
@@ -192,6 +180,8 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
   void didPopNext() {
     if (_isPreviewMode) return;
     Log.d("Returned to view camera [pop]");
+    _videoThumbCache.clear();
+    _videoThumbFutures.clear();
     _markCameraRead(); // Load this every time we enter the page.
     _initDbAndFirstPage();
   }
@@ -200,6 +190,8 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
   void didPush() {
     if (_isPreviewMode) return;
     Log.d('Returned to view camera [push]');
+    _videoThumbCache.clear();
+    _videoThumbFutures.clear();
     _markCameraRead(); // Load this every time we enter the page.
     _initDbAndFirstPage();
   }
@@ -622,66 +614,6 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     ); // strip "video_" and ".mp4"
   }
 
-  Future<String?> _findPngForVideo(String cameraName, String videoFile) async {
-    final ts = _timestampFromVideo(videoFile);
-    if (ts == null) return null;
-
-    final docs = await getApplicationDocumentsDirectory();
-    final path = "${docs.path}/camera_dir_$cameraName/videos/thumbnail_$ts.png";
-    final f = File(path);
-    return await f.exists() ? path : null;
-  }
-
-  Future<bool> _isValidImageBytes(Uint8List bytes) async {
-    try {
-      final image = await decodeImageFromList(bytes);
-      image.dispose();
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  bool _looksLikePngHeader(Uint8List bytes) {
-    if (bytes.length < _pngSignature.length) return false;
-    for (var i = 0; i < _pngSignature.length; i++) {
-      if (bytes[i] != _pngSignature[i]) return false;
-    }
-    return true;
-  }
-
-  Future<bool> _waitForStablePng(String path) async {
-    // Thumbnails can be created while the UI is already trying to render them.
-    // We wait for a stable file size and a valid PNG header to avoid decoding
-    // partially-written files that trigger image decode errors.
-    final file = File(path);
-    final deadline = DateTime.now().add(_thumbStableWaitTimeout);
-    int? lastSize;
-
-    while (DateTime.now().isBefore(deadline)) {
-      if (!await file.exists()) return false;
-      final stat = await file.stat();
-      final size = stat.size;
-      if (size >= _minThumbPngSizeBytes &&
-          lastSize != null &&
-          size == lastSize) {
-        RandomAccessFile? raf;
-        try {
-          raf = await file.open(mode: FileMode.read);
-          final header = await raf.read(_pngSignature.length);
-          return _looksLikePngHeader(header);
-        } catch (_) {
-          return false;
-        } finally {
-          await raf?.close();
-        }
-      }
-      lastSize = size;
-      await Future.delayed(_thumbStableWaitPoll);
-    }
-    return false;
-  }
-
   Future<Uint8List?> _loadVideoThumbBytes(String cameraName, String videoFile) {
     final ts = _timestampFromVideo(videoFile);
     if (ts == null) {
@@ -703,36 +635,15 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
 
     final fut = () async {
       try {
-        final path = await _findPngForVideo(cameraName, videoFile);
-        if (path == null) {
-          final docs = await getApplicationDocumentsDirectory();
-          final expectedPath = p.join(
-            docs.path,
-            'camera_dir_$cameraName',
-            'videos',
-            'thumbnail_$ts.png',
-          );
-          Log.d('Camera thumb miss [$key]: file missing at $expectedPath');
+        final bytes = await VideoThumbnailStore.loadOrGenerate(
+          cameraName: cameraName,
+          videoFile: videoFile,
+          logPrefix: 'Camera thumb',
+        );
+        if (bytes == null) {
           _videoThumbCache[key] = null;
           return null;
         }
-        Log.d('Camera thumb found [$key]: checking $path');
-        final ready = await _waitForStablePng(path);
-        if (!ready) {
-          Log.w('Camera thumb not ready [$key]: $path');
-          _videoThumbCache[key] = null;
-          return null;
-        }
-        final bytes = await File(path).readAsBytes();
-        final ok = await _isValidImageBytes(bytes);
-        if (!ok) {
-          Log.w(
-            "Invalid thumbnail bytes for $key; leaving file in place for retry: $path",
-          );
-          _videoThumbCache[key] = null;
-          return null;
-        }
-        Log.d('Camera thumb hit [$key]: loaded $path (${bytes.length} bytes)');
         _videoThumbCache[key] = bytes;
         return bytes;
       } catch (e) {

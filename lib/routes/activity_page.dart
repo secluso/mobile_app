@@ -13,6 +13,7 @@ import 'package:secluso_flutter/ui/secluso_preview_assets.dart';
 import 'package:secluso_flutter/ui/secluso_surfaces.dart';
 import 'package:secluso_flutter/ui/secluso_shell_ui.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/video_thumbnail_store.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../objectbox.g.dart';
@@ -231,13 +232,6 @@ class _ActivityPageState extends State<ActivityPage>
     }
   }
 
-  String? _timestampFromVideo(String videoFile) {
-    if (!videoFile.startsWith('video_') || !videoFile.endsWith('.mp4')) {
-      return null;
-    }
-    return videoFile.substring(6, videoFile.length - 4);
-  }
-
   Future<bool> _videoFileExists(String cameraName, String videoFile) async {
     final docsDir = await getApplicationDocumentsDirectory();
     final file = File(
@@ -274,33 +268,18 @@ class _ActivityPageState extends State<ActivityPage>
     String videoFile,
     String cacheKey,
   ) async {
-    final timestamp = _timestampFromVideo(videoFile);
-    if (timestamp == null) {
-      return null;
-    }
-
-    final docsDir = await getApplicationDocumentsDirectory();
-    final file = File(
-      p.join(
-        docsDir.path,
-        'camera_dir_$cameraName',
-        'videos',
-        'thumbnail_$timestamp.png',
-      ),
-    );
-    if (!await file.exists()) {
-      return null;
-    }
-
     try {
-      final bytes = await file.readAsBytes();
-      await decodeImageFromList(bytes);
-      _eventThumbCache[cacheKey] = bytes;
+      final bytes = await VideoThumbnailStore.loadOrGenerate(
+        cameraName: cameraName,
+        videoFile: videoFile,
+        logPrefix: 'Activity thumb',
+      );
+      if (bytes != null) {
+        _eventThumbCache[cacheKey] = bytes;
+      }
       return bytes;
     } catch (e) {
-      Log.w(
-        'Activity thumb invalid [$cameraName/$videoFile]: ${file.path} ($e)',
-      );
+      Log.w('Activity thumb invalid [$cameraName/$videoFile]: $e');
       return null;
     }
   }

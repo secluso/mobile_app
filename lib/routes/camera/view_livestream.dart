@@ -22,9 +22,11 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
+import 'package:secluso_flutter/routes/app_drawer.dart';
 import 'package:secluso_flutter/routes/camera/view_camera.dart';
 import 'package:secluso_flutter/ui/secluso_surfaces.dart';
 import 'package:secluso_flutter/ui/secluso_theme.dart';
+import 'package:secluso_flutter/utilities/video_thumbnail_store.dart';
 import 'dart:io';
 import '../../objectbox.g.dart';
 
@@ -61,6 +63,7 @@ class _LivestreamPageState extends State<LivestreamPage>
   Future<void>? _shutdownFuture;
   Future<void> _archiveWriteChain = Future.value();
   File? _archiveVideoFile;
+  Uint8List? _archiveThumbnailBytes;
   bool _archiveInitialized = false;
   bool _archiveHasWrittenBytes = false;
   late final AnimationController _connectingPulseController =
@@ -80,6 +83,7 @@ class _LivestreamPageState extends State<LivestreamPage>
   MethodChannel? _methodChannel;
   AppLifecycleState?
   _lastLifecycleState; // Store the lifecycle state that was last to ensure we don't cancel the livestream for screen rotation
+  Future<void>? _chunkPumpFuture;
 
   bool get _isPreviewMode =>
       widget.previewAssetPath != null || widget.previewErrorMessage != null;
@@ -201,6 +205,14 @@ class _LivestreamPageState extends State<LivestreamPage>
                 }
               } else if (call.method == 'onFirstFrame') {
                 _markFirstFrameReady('native');
+              } else if (call.method == 'onThumbnailBytes') {
+                final bytes = call.arguments as Uint8List?;
+                if (bytes != null && bytes.isNotEmpty) {
+                  _archiveThumbnailBytes = bytes;
+                  Log.d(
+                    'Captured livestream thumbnail bytes (${bytes.length} B)',
+                  );
+                }
               } else if (call.method == "debug") {
                 // Plain text log line from swift livestream debug code
                 final msg = call.arguments as String? ?? '';
@@ -217,7 +229,7 @@ class _LivestreamPageState extends State<LivestreamPage>
 
           setState(() => isStreaming = true);
           _streamPaused = false;
-          _startChunkPump();
+          _chunkPumpFuture = _startChunkPump();
           startSucceeded = true;
           return;
         },
@@ -491,6 +503,85 @@ class _LivestreamPageState extends State<LivestreamPage>
     }
   }
 
+  void _resetArchiveState() {
+    _archiveWriteChain = Future.value();
+    _archiveVideoFile = null;
+    _archiveThumbnailBytes = null;
+    _archiveInitialized = false;
+    _archiveHasWrittenBytes = false;
+  }
+
+  Future<void> _finalizeArchivedVideo() async {
+    final archiveFile = _archiveVideoFile;
+    if (archiveFile == null) {
+      _resetArchiveState();
+      return;
+    }
+
+    try {
+      if (!await archiveFile.exists()) {
+        return;
+      }
+
+      final videoFile = p.basename(archiveFile.path);
+      final bytes =
+          await _writeCapturedArchiveThumbnail(videoFile) ??
+          await VideoThumbnailStore.loadOrGenerate(
+            cameraName: widget.cameraName,
+            videoFile: videoFile,
+            logPrefix: 'Livestream archive thumb',
+          );
+      if (bytes == null) {
+        Log.w(
+          'Livestream archive thumbnail generation failed for ${widget.cameraName}/$videoFile',
+        );
+        return;
+      }
+
+      camerasPageKey.currentState?.invalidateThumbnail(widget.cameraName);
+      if (globalCameraViewPageState?.mounted == true &&
+          globalCameraViewPageState?.widget.cameraName == widget.cameraName) {
+        await globalCameraViewPageState?.reloadVideos();
+      }
+
+      Log.d(
+        'Livestream archive thumbnail ready for ${widget.cameraName}/$videoFile (${bytes.length} B)',
+      );
+    } catch (e, st) {
+      Log.e('Livestream archive finalization error: $e\n$st');
+    } finally {
+      _resetArchiveState();
+    }
+  }
+
+  Future<Uint8List?> _writeCapturedArchiveThumbnail(String videoFile) async {
+    final bytes = _archiveThumbnailBytes;
+    if (bytes == null || bytes.isEmpty) {
+      return null;
+    }
+
+    final archiveFile = _archiveVideoFile;
+    final timestamp = VideoThumbnailStore.timestampTokenFromVideo(videoFile);
+    if (archiveFile == null || timestamp == null) {
+      return null;
+    }
+
+    final thumbPath = p.join(
+      p.dirname(archiveFile.path),
+      'thumbnail_$timestamp.png',
+    );
+    try {
+      await File(thumbPath).writeAsBytes(bytes, flush: true);
+      Log.d(
+        'Wrote captured livestream thumbnail for ${widget.cameraName}/$videoFile -> $thumbPath',
+      );
+      return bytes;
+    } catch (e, st) {
+      Log.e('Failed writing captured livestream thumbnail: $e\n$st');
+      return null;
+    }
+  }
+
   Future<void> _closeLivestream() async {
     if (_isPreviewMode) {
       if (mounted) {
@@ -512,6 +603,10 @@ class _LivestreamPageState extends State<LivestreamPage>
     final shutdownFuture = _finishNativeStream();
     _shutdownFuture = shutdownFuture;
     await shutdownFuture;
+    await (_chunkPumpFuture ?? Future.value());
+    _chunkPumpFuture = null;
+    await _archiveWriteChain;
+    await _finalizeArchivedVideo();
 
     if (mounted) {
       Navigator.of(context).maybePop();
@@ -556,6 +651,10 @@ class _LivestreamPageState extends State<LivestreamPage>
     }
     if (existingStreamId != null) {
       await _finishNativeStream();
+      await (_chunkPumpFuture ?? Future.value());
+      _chunkPumpFuture = null;
+      await _archiveWriteChain;
+      await _finalizeArchivedVideo();
     }
     _startLivestream();
   }

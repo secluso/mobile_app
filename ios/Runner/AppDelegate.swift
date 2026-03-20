@@ -135,13 +135,13 @@ import workmanager
                 do {
                     let cgImg = try gen.copyCGImage(at: time, actualTime: nil)
                     let uiImg = UIImage(cgImage: cgImg)
-                    if let jpeg = uiImg.jpegData(compressionQuality: 0.7) {
-                        result(FlutterStandardTypedData(bytes: jpeg))
+                    if let png = uiImg.pngData() {
+                        result(FlutterStandardTypedData(bytes: png))
                     } else {
                         result(
                             FlutterError(
-                                code: "JPEG_ERROR",
-                                message: "Could not encode JPEG",
+                                code: "PNG_ERROR",
+                                message: "Could not encode PNG",
                                 details: nil))
                     }
                 } catch {

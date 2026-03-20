@@ -3,6 +3,7 @@
 package com.secluso.mobile
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.SurfaceTexture
 import android.util.Log
 import android.view.Gravity
@@ -23,6 +24,7 @@ import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import io.flutter.plugin.platform.PlatformView
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
+import java.io.ByteArrayOutputStream
 import java.util.concurrent.LinkedBlockingQueue
 
 class BytePlayerPlatformView(
@@ -35,6 +37,8 @@ class BytePlayerPlatformView(
     private val player: ExoPlayer
     private val spinner: ProgressBar
     private val methodChannel: MethodChannel
+    private val textureView: TextureView
+    private var thumbnailSent = false
 
     init {
         methodChannel = MethodChannel(messenger, "byte_player_view_$streamId")
@@ -57,7 +61,7 @@ class BytePlayerPlatformView(
             }
 
         // Create a TextureView for video output
-        val texture = TextureView(ctx).apply {
+        textureView = TextureView(ctx).apply {
             surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                 override fun onSurfaceTextureAvailable(
                     surfaceTexture: SurfaceTexture,
@@ -72,7 +76,9 @@ class BytePlayerPlatformView(
 
                 override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) {}
                 override fun onSurfaceTextureDestroyed(st: SurfaceTexture) = true
-                override fun onSurfaceTextureUpdated(st: SurfaceTexture) {}
+                override fun onSurfaceTextureUpdated(st: SurfaceTexture) {
+                    maybeSendThumbnail()
+                }
             }
         }
 
@@ -82,7 +88,7 @@ class BytePlayerPlatformView(
         container = FrameLayout(ctx).apply {
             setBackgroundColor(0xFF000000.toInt())
             addView(
-                texture, FrameLayout.LayoutParams(
+                textureView, FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.MATCH_PARENT
                 )
@@ -98,6 +104,7 @@ class BytePlayerPlatformView(
             override fun onRenderedFirstFrame() {
                 Log.d("BytePV", "first frame rendered")
                 spinner.isVisible = false
+                maybeSendThumbnail()
             }
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
@@ -125,5 +132,21 @@ class BytePlayerPlatformView(
 
     override fun dispose() {
         player.release()
+    }
+
+    private fun maybeSendThumbnail() {
+        if (thumbnailSent) {
+            return
+        }
+        val bitmap = textureView.bitmap ?: return
+        try {
+            val output = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+            bitmap.recycle()
+            thumbnailSent = true
+            methodChannel.invokeMethod("onThumbnailBytes", output.toByteArray())
+        } catch (e: Exception) {
+            Log.w("BytePV", "thumbnail capture failed", e)
+        }
     }
 }
