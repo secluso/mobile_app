@@ -120,10 +120,7 @@ class PushNotificationService {
   static DateTime? _iosSkipRetryUntil;
   static String? _iosSkipReason;
 
-  Future<bool> _cameraStillExists(
-    SharedPreferences prefs,
-    String cameraName,
-  ) {
+  Future<bool> _cameraStillExists(SharedPreferences prefs, String cameraName) {
     return AppCoordinationState.containsCameraInSnapshotFresh(
       prefs,
       cameraName,
@@ -599,7 +596,7 @@ class PushNotificationService {
           }
           if (response == 'Download') {
             Log.d("Downloading video");
-            final bool useMobile = prefs.getBool('use_mobile_state') ?? false;
+            final bool useMobile = true;
 
             final statuses = await Connectivity().checkConnectivity();
             final bool isMetered = statuses.contains(ConnectivityResult.mobile);
@@ -715,7 +712,8 @@ class PushNotificationService {
 
     while (DateTime.now().isBefore(deadline)) {
       if (VersionGate.isBlocked) {
-        await HttpClientService.instance.potentiallySendBackgroundNotification();
+        await HttpClientService.instance
+            .potentiallySendBackgroundNotification();
         Log.d(
           "Aborting thumbnail attachment because version gate is active (${Log.ownerTag()})",
         );
