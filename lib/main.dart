@@ -166,6 +166,9 @@ bool _isAppInBackground() {
 
 Future<void> _handleBackgroundError(String reason) async {
   await Log.saveBackgroundSnapshot(reason: reason);
+  if (!await Log.errorNotificationsEnabled()) {
+    return;
+  }
   await initLocalNotifications();
   await showSupportLogNotification();
 }

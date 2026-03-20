@@ -22,6 +22,7 @@ class CameraUiBridge {
   static Future<void> Function(String cameraName)? deleteCameraCallback;
   static VoidCallback? refreshCameraListCallback;
   static VoidCallback? refreshActivityCallback;
+  static VoidCallback? showBackgroundLogDialogCallback;
   static void Function(int index, {bool openRelayScanOnLoad})?
   switchShellTabCallback;
 

@@ -479,7 +479,8 @@ class CamerasPageState extends State<CamerasPage>
   }
 
   Future<void> _loadRecentError() async {
-    final hasError = await Log.hasRecentError();
+    final enabled = await Log.errorNotificationsEnabled();
+    final hasError = enabled && await Log.hasRecentError();
     if (!mounted) return;
     setState(() => _showRecentError = hasError);
   }
@@ -509,6 +510,7 @@ class CamerasPageState extends State<CamerasPage>
 
   Future<void> _maybeShowBackgroundLogDialog() async {
     if (_backgroundDialogShown) return;
+    if (!await Log.errorNotificationsEnabled()) return;
     final snapshot = await Log.getBackgroundSnapshot();
     if (snapshot == null || !mounted) return;
     _backgroundDialogShown = true;
@@ -521,49 +523,53 @@ class CamerasPageState extends State<CamerasPage>
     final lines = [reason, when]..removeWhere((line) => line.isEmpty);
     final detailText = lines.isEmpty ? '' : '\n${lines.join('\n')}';
 
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder:
-          (ctx) => AlertDialog(
-            title: const Text('Background error detected'),
-            content: Text(
-              'An error occurred while the app was in the background. '
-              'These are the logs from that event. '
-              'Tap Copy Logs to share with support.$detailText',
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder:
+            (ctx) => AlertDialog(
+              title: const Text('Background error detected'),
+              content: Text(
+                'An error occurred while the app was in the background. '
+                'These are the logs from that event. '
+                'Tap Copy Logs to share them with support for troubleshooting.$detailText',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () async {
+                    await Log.clearBackgroundSnapshot();
+                    await Log.clearErrorFlag();
+                    if (mounted) {
+                      setState(() => _showRecentError = false);
+                      Navigator.of(ctx).pop();
+                    }
+                  },
+                  child: const Text('Dismiss'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: snapshot.logs));
+                    await Log.clearBackgroundSnapshot();
+                    await Log.clearErrorFlag();
+                    if (mounted) {
+                      setState(() => _showRecentError = false);
+                      Navigator.of(ctx).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Logs copied to clipboard.'),
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text('Copy logs'),
+                ),
+              ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () async {
-                  await Log.clearBackgroundSnapshot();
-                  await Log.clearErrorFlag();
-                  if (mounted) {
-                    setState(() => _showRecentError = false);
-                    Navigator.of(ctx).pop();
-                  }
-                },
-                child: const Text('Dismiss'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  await Clipboard.setData(ClipboardData(text: snapshot.logs));
-                  await Log.clearBackgroundSnapshot();
-                  await Log.clearErrorFlag();
-                  if (mounted) {
-                    setState(() => _showRecentError = false);
-                    Navigator.of(ctx).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Logs copied to clipboard.'),
-                      ),
-                    );
-                  }
-                },
-                child: const Text('Copy logs'),
-              ),
-            ],
-          ),
-    );
+      );
+    } finally {
+      _backgroundDialogShown = false;
+    }
   }
 
   Widget _recentErrorBanner() {
@@ -616,11 +622,31 @@ class CamerasPageState extends State<CamerasPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _maybeShowBackgroundLogDialog();
     });
+    CameraUiBridge.showBackgroundLogDialogCallback = () {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(_maybeShowBackgroundLogDialog());
+      });
+    };
 
     _errorListener = () {
-      if (!_showRecentError && mounted) {
-        setState(() => _showRecentError = true);
-      }
+      unawaited(() async {
+        final enabled = await Log.errorNotificationsEnabled();
+        if (!mounted) return;
+        if (!enabled) {
+          if (_showRecentError) {
+            setState(() => _showRecentError = false);
+          }
+          return;
+        }
+        if (!_showRecentError && mounted) {
+          setState(() => _showRecentError = true);
+        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          unawaited(_maybeShowBackgroundLogDialog());
+        });
+      }());
     };
     Log.errorNotifier.addListener(_errorListener);
 
@@ -665,6 +691,9 @@ class CamerasPageState extends State<CamerasPage>
     }
     if (CameraUiBridge.refreshCameraListCallback != null) {
       CameraUiBridge.refreshCameraListCallback = null;
+    }
+    if (CameraUiBridge.showBackgroundLogDialogCallback != null) {
+      CameraUiBridge.showBackgroundLogDialogCallback = null;
     }
     super.dispose();
   }

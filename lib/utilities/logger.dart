@@ -29,6 +29,7 @@ class Log {
   static const int _maxEntries = 300;
   static const String _prefsKey = 'log_buffer';
   static const String _prefsErrorKey = 'log_error_ts';
+  static const String _prefsErrorSeenKey = 'log_error_seen_ts';
   static const String _prefsBackgroundKey = 'log_background_snapshot';
   static const String _prefsBackgroundReasonKey = 'log_background_reason';
   static const String _prefsBackgroundTsKey = 'log_background_ts';
@@ -66,10 +67,7 @@ class Log {
     String context,
     Future<T> Function() action,
   ) {
-    return runZoned(
-      action,
-      zoneValues: {_contextKey: context},
-    );
+    return runZoned(action, zoneValues: {_contextKey: context});
   }
 
   static Future<T> runWithDerivedContext<T>(
@@ -81,23 +79,18 @@ class Log {
   }
 
   static T runWithContextSync<T>(String context, T Function() action) {
-    return runZoned(
-      action,
-      zoneValues: {_contextKey: context},
-    );
+    return runZoned(action, zoneValues: {_contextKey: context});
   }
 
-  static T runWithDerivedContextSync<T>(
-    String prefix,
-    T Function() action,
-  ) {
+  static T runWithDerivedContextSync<T>(String prefix, T Function() action) {
     final context = deriveContext(prefix);
     return runWithContextSync(context, action);
   }
 
   static String _contextTag() {
     final context = Zone.current[_contextKey] as String?;
-    final effective = context == null || context.isEmpty ? _defaultContext : context;
+    final effective =
+        context == null || context.isEmpty ? _defaultContext : context;
     return effective.isEmpty ? '' : '[$effective] ';
   }
 
@@ -165,6 +158,7 @@ class Log {
         }
       }
       _lastErrorEpochMs = prefs.getInt(_prefsErrorKey) ?? 0;
+      _lastSeenErrorEpochMs = prefs.getInt(_prefsErrorSeenKey) ?? 0;
       _storageReady = true;
     } catch (_) {
       // Ignore; storage will be retried on next flush.
@@ -178,10 +172,10 @@ class Log {
     return _buffer.join('\n');
   }
 
-  static Future<void> saveBackgroundSnapshot({
-    String reason = '',
-  }) async {
+  static Future<void> saveBackgroundSnapshot({String reason = ''}) async {
     await ensureStorageReady();
+    final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
+    _lastErrorEpochMs = nowEpochMs;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefsBackgroundKey, _buffer.join('\n'));
     if (reason.isNotEmpty) {
@@ -189,10 +183,10 @@ class Log {
     } else {
       await prefs.remove(_prefsBackgroundReasonKey);
     }
-    await prefs.setInt(
-      _prefsBackgroundTsKey,
-      DateTime.now().millisecondsSinceEpoch,
-    );
+    await prefs.setInt(_prefsBackgroundTsKey, nowEpochMs);
+    await prefs.setInt(_prefsErrorKey, nowEpochMs);
+    _storageReady = true;
+    _notifyErrorBanner();
   }
 
   static Future<BackgroundLogSnapshot?> getBackgroundSnapshot() async {
@@ -223,12 +217,36 @@ class Log {
     return _lastErrorEpochMs != 0;
   }
 
+  static Future<bool> errorNotificationsEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('showErrorNotifications') ?? true;
+  }
+
+  static Future<bool> hasUnseenRecentError() async {
+    await ensureStorageReady();
+    return _lastErrorEpochMs != 0 && _lastSeenErrorEpochMs < _lastErrorEpochMs;
+  }
+
+  static Future<void> markCurrentErrorSeen() async {
+    await ensureStorageReady();
+    if (_lastErrorEpochMs == 0) return;
+    _lastSeenErrorEpochMs = _lastErrorEpochMs;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_prefsErrorSeenKey, _lastSeenErrorEpochMs);
+    } catch (_) {}
+    errorNotifier.value++;
+  }
+
   static Future<void> clearErrorFlag() async {
     _lastErrorEpochMs = 0;
+    _lastSeenErrorEpochMs = 0;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_prefsErrorKey);
+      await prefs.remove(_prefsErrorSeenKey);
     } catch (_) {}
+    errorNotifier.value++;
   }
 
   static Logger? _logger;
@@ -237,6 +255,7 @@ class Log {
   static bool _storageReady = false;
   static bool _loadingStorage = false;
   static int _lastErrorEpochMs = 0;
+  static int _lastSeenErrorEpochMs = 0;
   static bool _errorBannerNotifyQueued = false;
 
   static const Map<Level, String> _levelMap = {
@@ -248,7 +267,10 @@ class Log {
     Level.fatal: 'F',
   };
 
-  static bool _shouldSuppressErrorBanner(dynamic msg, {String customLocation = ""}) {
+  static bool _shouldSuppressErrorBanner(
+    dynamic msg, {
+    String customLocation = "",
+  }) {
     final text = msg?.toString() ?? '';
 
     if (text.contains('No address associated with hostname')) return true;
@@ -256,16 +278,8 @@ class Log {
     return false;
   }
 
-  static void _record(
-    Level level,
-    dynamic msg, {
-    String customLocation = "",
-  }) {
-    final line = _formatLine(
-      level,
-      msg,
-      customLocation: customLocation,
-    );
+  static void _record(Level level, dynamic msg, {String customLocation = ""}) {
+    final line = _formatLine(level, msg, customLocation: customLocation);
     _appendLine(line);
 
     if (level == Level.error || level == Level.fatal) {

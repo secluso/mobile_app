@@ -8,6 +8,7 @@ import 'package:secluso_flutter/routes/server_page.dart';
 import 'package:secluso_flutter/routes/settings_page.dart';
 import 'package:secluso_flutter/ui/secluso_preview_assets.dart';
 import 'package:secluso_flutter/ui/secluso_shell_ui.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({
@@ -47,18 +48,28 @@ class _AppShellState extends State<AppShell> {
   late int _index;
   int _activityRefreshToken = 0;
   int _serverRelayScanRequestId = 0;
+  bool _showSettingsAlertBadge = false;
+  late final VoidCallback _errorBadgeListener;
 
   @override
   void initState() {
     super.initState();
     _index = widget.initialIndex;
+    _errorBadgeListener = () => _refreshSettingsAlertBadge();
+    Log.errorNotifier.addListener(_errorBadgeListener);
+    if (!widget.preview) {
+      _refreshSettingsAlertBadge();
+    }
     CameraUiBridge.refreshActivityCallback = () {
       if (!mounted) return;
       setState(() {
         _activityRefreshToken++;
       });
     };
-    CameraUiBridge.switchShellTabCallback = (index, {openRelayScanOnLoad = false}) {
+    CameraUiBridge.switchShellTabCallback = (
+      index, {
+      openRelayScanOnLoad = false,
+    }) {
       if (!mounted) return;
       setState(() {
         _index = index;
@@ -74,6 +85,7 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
+    Log.errorNotifier.removeListener(_errorBadgeListener);
     if (CameraUiBridge.refreshActivityCallback != null) {
       CameraUiBridge.refreshActivityCallback = null;
     }
@@ -81,6 +93,29 @@ class _AppShellState extends State<AppShell> {
       CameraUiBridge.switchShellTabCallback = null;
     }
     super.dispose();
+  }
+
+  Future<void> _refreshSettingsAlertBadge() async {
+    if (widget.preview) return;
+    final enabled = await Log.errorNotificationsEnabled();
+    final showBadge = enabled && await Log.hasUnseenRecentError();
+    if (!mounted) return;
+    setState(() {
+      _showSettingsAlertBadge = showBadge;
+    });
+  }
+
+  void _handleTabTap(int index) {
+    final previousIndex = _index;
+    setState(() {
+      _index = index;
+      if (index == 1) {
+        _activityRefreshToken++;
+      }
+    });
+    if (!widget.preview && previousIndex == 3 && index != 3) {
+      Log.markCurrentErrorSeen();
+    }
   }
 
   @override
@@ -184,10 +219,7 @@ class _AppShellState extends State<AppShell> {
                   ),
                 ],
           )
-          : ActivityPage(
-            shellMode: true,
-            refreshToken: _activityRefreshToken,
-          ),
+          : ActivityPage(shellMode: true, refreshToken: _activityRefreshToken),
       widget.preview
           ? ServerPage(
             showBackButton: false,
@@ -221,13 +253,8 @@ class _AppShellState extends State<AppShell> {
                   ? 2
                   : null)
               : null,
-      onTap:
-          (index) => setState(() {
-            _index = index;
-            if (index == 1) {
-              _activityRefreshToken++;
-            }
-          }),
+      settingsAlertBadge: widget.preview ? false : _showSettingsAlertBadge,
+      onTap: _handleTabTap,
     );
 
     return ShellScaffold(

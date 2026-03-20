@@ -510,11 +510,13 @@ class ShellBottomNav extends StatelessWidget {
     required this.currentIndex,
     required this.onTap,
     this.activityBadgeCount,
+    this.settingsAlertBadge = false,
   });
 
   final int currentIndex;
   final ValueChanged<int> onTap;
   final int? activityBadgeCount;
+  final bool settingsAlertBadge;
 
   @override
   Widget build(BuildContext context) {
@@ -580,6 +582,7 @@ class ShellBottomNav extends StatelessWidget {
                         icon: items[i].icon,
                         selected: currentIndex == i,
                         badgeCount: i == 1 ? activityBadgeCount : null,
+                        showAlertBadge: i == 3 ? settingsAlertBadge : false,
                         onTap: () => onTap(i),
                       ),
                     ),
@@ -614,6 +617,7 @@ class _ShellNavItem extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.badgeCount,
+    this.showAlertBadge = false,
   });
 
   final String label;
@@ -621,6 +625,7 @@ class _ShellNavItem extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   final int? badgeCount;
+  final bool showAlertBadge;
 
   @override
   Widget build(BuildContext context) {
@@ -687,6 +692,29 @@ class _ShellNavItem extends StatelessWidget {
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: Colors.white,
                         fontSize: 8,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ),
+                ),
+              if (showAlertBadge)
+                Positioned(
+                  right: 16,
+                  top: 0,
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      '!',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: Colors.white,
+                        fontSize: 10,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0,
                       ),

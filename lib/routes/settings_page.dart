@@ -2,6 +2,7 @@
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -74,12 +75,18 @@ class _SettingsPageState extends State<SettingsPage> {
   bool storageAutoCleanupEnabled = true;
   int? storageRetentionDays = StorageManager.defaultRetentionDays;
   StorageSummary? storageSummary;
+  bool _showRecentErrorHint = false;
+  late final VoidCallback _logErrorListener;
 
   bool get _isPreviewMode => widget.previewNightTheme != null;
 
   @override
   void initState() {
     super.initState();
+    _logErrorListener = () {
+      unawaited(_refreshRecentErrorHint());
+    };
+    Log.errorNotifier.addListener(_logErrorListener);
     if (_isPreviewMode) {
       isNightTheme = widget.previewNightTheme!;
       isNotificationsOn = widget.previewNotificationsOn ?? true;
@@ -89,6 +96,7 @@ class _SettingsPageState extends State<SettingsPage> {
       storageAutoCleanupEnabled = true;
       storageRetentionDays = StorageManager.defaultRetentionDays;
       storageSummary = _previewStorageSummary;
+      _showRecentErrorHint = false;
       return;
     }
     _loadSettings();
@@ -138,6 +146,8 @@ class _SettingsPageState extends State<SettingsPage> {
     final loadedAutoCleanupEnabled =
         await StorageManager.isAutoCleanupEnabled();
     final loadedRetentionDays = await StorageManager.getRetentionDays();
+    final hasRecentError = await Log.hasRecentError();
+    final errorNotificationsEnabled = await Log.errorNotificationsEnabled();
     if (!mounted) return;
     setState(() {
       isNightTheme = prefs.getBool('darkTheme') ?? true;
@@ -149,6 +159,17 @@ class _SettingsPageState extends State<SettingsPage> {
       storageAutoCleanupEnabled = loadedAutoCleanupEnabled;
       storageRetentionDays = loadedRetentionDays;
       storageSummary = loadedStorageSummary;
+      _showRecentErrorHint = errorNotificationsEnabled && hasRecentError;
+    });
+  }
+
+  Future<void> _refreshRecentErrorHint() async {
+    if (_isPreviewMode) return;
+    final enabled = await Log.errorNotificationsEnabled();
+    final hasRecentError = await Log.hasRecentError();
+    if (!mounted) return;
+    setState(() {
+      _showRecentErrorHint = enabled && hasRecentError;
     });
   }
 
@@ -162,6 +183,7 @@ class _SettingsPageState extends State<SettingsPage> {
     await prefs.setBool('motionAlerts', motionAlerts);
     await prefs.setBool('biometricLock', biometricLock);
     await prefs.setBool('showErrorNotifications', showErrorNotifications);
+    Log.errorNotifier.value++;
   }
 
   Future<void> _copyLogs() async {
@@ -177,6 +199,41 @@ class _SettingsPageState extends State<SettingsPage> {
               : 'Logs copied to clipboard.',
         ),
       ),
+    );
+  }
+
+  Future<void> _triggerDebugSampleError() async {
+    await _leaveSettingsThen(() async {
+      Log.e(
+        'Debug sample error trigger from Settings.',
+        customLocation: 'settings_page.dart:debug',
+      );
+    });
+  }
+
+  Future<void> _triggerDebugSampleBackgroundError() async {
+    await _leaveSettingsThen(() async {
+      Log.e(
+        'Debug sample background error trigger from Settings.',
+        customLocation: 'settings_page.dart:debug-bg',
+      );
+      await Log.saveBackgroundSnapshot(reason: 'Debug sample background error');
+      CameraUiBridge.showBackgroundLogDialogCallback?.call();
+    });
+  }
+
+  Future<void> _leaveSettingsThen(Future<void> Function() action) async {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (widget.showShellChrome &&
+        CameraUiBridge.switchShellTabCallback != null) {
+      CameraUiBridge.switchShellTabCallback!(0);
+    } else if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    await action();
+    messenger?.showSnackBar(
+      const SnackBar(content: Text('Sample error triggered.')),
     );
   }
 
@@ -208,6 +265,10 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   void dispose() {
+    Log.errorNotifier.removeListener(_logErrorListener);
+    if (!_isPreviewMode && _showRecentErrorHint) {
+      unawaited(Log.markCurrentErrorSeen());
+    }
     _scrollController.dispose();
     super.dispose();
   }
@@ -673,6 +734,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             ShellSettingsRow(
               title: 'Export Logs',
+              value: _showRecentErrorHint ? 'RECENT ERROR' : null,
               onTap: _copyLogs,
               height: shell ? shellMetrics.rowHeight : 56,
               horizontalPadding: shell ? shellMetrics.rowHorizontalPadding : 18,
@@ -683,11 +745,89 @@ class _SettingsPageState extends State<SettingsPage> {
               chevronSize: shell ? shellMetrics.chevronSize : 24,
               valueChevronGap: shell ? 8 : 10,
               titleColor: shell ? shellPrimaryTextColor : null,
+              valueColor: const Color(0xFFEF4444),
               chevronColor: shell ? shellChevronColor : null,
               titleStyle: shellRowTitleStyle,
+              valueStyle:
+                  _showRecentErrorHint
+                      ? (shell
+                          ? GoogleFonts.inter(
+                            color: const Color(0xFFEF4444),
+                            fontSize: 9,
+                            fontWeight: FontWeight.w500,
+                            fontStyle: FontStyle.normal,
+                            letterSpacing: 0.3,
+                            height: 13 / 9,
+                          )
+                          : theme.textTheme.titleMedium?.copyWith(
+                            color: const Color(0xFFEF4444),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0.3,
+                          ))
+                      : null,
             ),
           ],
         ),
+        if (kDebugMode && !_isPreviewMode) ...[
+          SizedBox(height: shell ? shellMetrics.sectionGap : 22),
+          ShellSettingsGroup(
+            title: 'Developer Settings',
+            titleStyle: sectionTitleStyle,
+            titleGap: shell ? shellMetrics.sectionTitleGap : 12,
+            radius: shell ? shellMetrics.groupRadius : 22,
+            cardColor: shell ? shellSurfaceColor : null,
+            borderColor: shell ? shellSurfaceBorderColor : null,
+            dividerColor: shell ? shellDividerColor : null,
+            boxShadow: shell ? shellCardShadow : null,
+            children: [
+              ShellSettingsRow(
+                title: 'Trigger Sample Error',
+                value: 'debug only',
+                onTap: _triggerDebugSampleError,
+                height: shell ? shellMetrics.rowHeight : 56,
+                horizontalPadding:
+                    shell ? shellMetrics.rowHorizontalPadding : 18,
+                titleFontSize: shell ? shellMetrics.rowTitleSize : 16,
+                valueFontSize: shell ? shellMetrics.rowValueSize : 16,
+                titleWeight: shell ? FontWeight.w400 : FontWeight.w500,
+                valueWeight: shell ? FontWeight.w400 : FontWeight.w500,
+                chevronSize: shell ? shellMetrics.chevronSize : 24,
+                valueChevronGap: shell ? 8 : 10,
+                titleColor: shell ? shellPrimaryTextColor : null,
+                valueColor:
+                    shell
+                        ? Colors.white.withValues(alpha: 0.36)
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.52),
+                chevronColor: shell ? shellChevronColor : null,
+                titleStyle: shellRowTitleStyle,
+                valueStyle: shell ? shellRowValueStyle : null,
+              ),
+              ShellSettingsRow(
+                title: 'Trigger Sample BG Error',
+                value: 'debug only',
+                onTap: _triggerDebugSampleBackgroundError,
+                height: shell ? shellMetrics.rowHeight : 56,
+                horizontalPadding:
+                    shell ? shellMetrics.rowHorizontalPadding : 18,
+                titleFontSize: shell ? shellMetrics.rowTitleSize : 16,
+                valueFontSize: shell ? shellMetrics.rowValueSize : 16,
+                titleWeight: shell ? FontWeight.w400 : FontWeight.w500,
+                valueWeight: shell ? FontWeight.w400 : FontWeight.w500,
+                chevronSize: shell ? shellMetrics.chevronSize : 24,
+                valueChevronGap: shell ? 8 : 10,
+                titleColor: shell ? shellPrimaryTextColor : null,
+                valueColor:
+                    shell
+                        ? Colors.white.withValues(alpha: 0.36)
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.52),
+                chevronColor: shell ? shellChevronColor : null,
+                titleStyle: shellRowTitleStyle,
+                valueStyle: shell ? shellRowValueStyle : null,
+              ),
+            ],
+          ),
+        ],
         SizedBox(height: shell ? shellMetrics.sectionGap : 22),
         ShellSettingsGroup(
           title: 'About',
