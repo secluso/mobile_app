@@ -596,13 +596,13 @@ class PushNotificationService {
           }
           if (response == 'Download') {
             Log.d("Downloading video");
-            final bool useMobile = true;
+            final bool allowCellular = true;
 
             final statuses = await Connectivity().checkConnectivity();
             final bool isMetered = statuses.contains(ConnectivityResult.mobile);
             final bool isRestricted = false;
 
-            if (!isMetered || (useMobile && !isRestricted)) {
+            if (!isMetered || (allowCellular && !isRestricted)) {
               unawaited(
                 DownloadScheduler.scheduleVideoDownload(cameraName),
               ); // Don't await, as the lock may freeze this up

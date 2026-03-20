@@ -813,10 +813,16 @@ class HttpClientService {
   Future<bool> background() async {
     var currentContextId = Log.currentContextId();
     Log.d("Checking current context: $currentContextId");
-    return currentContextId.startsWith("sched-") ||
-        currentContextId.startsWith("fcm-") ||
-        currentContextId.startsWith("dl-") ||
-        currentContextId.startsWith("thumb-");
+    final segments = currentContextId
+        .split('/')
+        .where((segment) => segment.isNotEmpty);
+    return segments.any(
+      (segment) =>
+          segment.startsWith("sched-") ||
+          segment.startsWith("fcm-") ||
+          segment.startsWith("dl-") ||
+          segment.startsWith("thumb-"),
+    );
   }
 
   Future<String> _groupName(String cameraName, String clientTag) async {
