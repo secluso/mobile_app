@@ -645,13 +645,21 @@ class _VideoViewPageState extends State<VideoViewPage> {
                   fit: StackFit.expand,
                   children: [
                     media,
-                    Center(
-                      child: _ClipPlayOverlayButton(
-                        size: metrics.playButtonSize,
-                        dark: dark,
-                        onTap: onTogglePlay,
+                    if (isPlaying)
+                      Positioned.fill(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: onTogglePlay,
+                        ),
                       ),
-                    ),
+                    if (!isPlaying)
+                      Center(
+                        child: _ClipPlayOverlayButton(
+                          size: metrics.playButtonSize,
+                          dark: dark,
+                          onTap: onTogglePlay,
+                        ),
+                      ),
                   ],
                 ),
               ),
