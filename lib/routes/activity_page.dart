@@ -500,7 +500,10 @@ class _ActivityPageState extends State<ActivityPage>
               canDownload: false,
               isLivestream: !entry.motion,
               previewAssetPath:
-                  entry.previewAssetPath ?? SeclusoPreviewAssets.hallwayEvent,
+                  _isPreviewMode
+                      ? (entry.previewAssetPath ??
+                          SeclusoPreviewAssets.hallwayEvent)
+                      : entry.previewAssetPath,
               previewDetections: entry.detections,
             ),
       ),
