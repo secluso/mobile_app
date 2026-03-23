@@ -22,7 +22,9 @@ class RustLibGuard {
   static Future<void> shutdownOnce() async {
     if (!_initialized) return;
     _initialized = false;
-    try { await shutdownApp(); } catch (_) {}
+    try {
+      await shutdownApp();
+    } catch (_) {}
   }
 
   static bool get isInitialized => _initialized;

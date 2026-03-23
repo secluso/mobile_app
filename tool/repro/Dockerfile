@@ -1,7 +1,7 @@
 FROM ubuntu:24.04
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG FLUTTER_REVISION=c23637390482d4cf9598c3ce3f2be31aa7332daf
+ARG FLUTTER_REVISION=8defaa71a781ceec2bc5502374f876d52f0d2910
 ARG RUST_TOOLCHAIN=1.90.0
 ARG ANDROID_CMDLINE_TOOLS_ZIP=commandlinetools-linux-11076708_latest.zip
 ARG ANDROID_BUILD_TOOLS=35.0.0
@@ -10,6 +10,7 @@ ARG ANDROID_BUILD_TOOLS_COMPAT=34.0.0
 ARG ANDROID_PLATFORM_31=android-31
 ARG ANDROID_PLATFORM_33=android-33
 ARG ANDROID_PLATFORM_34=android-34
+ARG ANDROID_PLATFORM_36=android-36
 ARG ANDROID_NDK=27.0.12077973
 ARG ANDROID_CMAKE=3.22.1
 
@@ -55,6 +56,7 @@ RUN mkdir -p /opt/android-sdk/cmdline-tools \
         "platforms;${ANDROID_PLATFORM_31}" \
         "platforms;${ANDROID_PLATFORM_33}" \
         "platforms;${ANDROID_PLATFORM_34}" \
+        "platforms;${ANDROID_PLATFORM_36}" \
     && rm -f /tmp/android-tools.zip
 
 RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain "${RUST_TOOLCHAIN}" \

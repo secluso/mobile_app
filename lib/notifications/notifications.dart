@@ -32,7 +32,7 @@ Future<void> initLocalNotifications() async {
     ),
   );
   await _notifs.initialize(
-    initSettings,
+    settings: initSettings,
     // optional deep-link handler
     onDidReceiveNotificationResponse: (resp) async {
       if (resp.payload != null) {
@@ -193,10 +193,10 @@ Future<void> showMotionNotification({
   final details = NotificationDetails(android: androidDetails, iOS: iosDetails);
 
   await _notifs.show(
-    id, // unique id
-    cameraName, // title
-    'Motion at $formatted', // body
-    details,
+    id: id, // unique id
+    title: cameraName, // title
+    body: 'Motion at $formatted', // body
+    notificationDetails: details,
     payload: jsonEncode({"cameraName": cameraName, "timestamp": timestamp}),
   );
 }
@@ -270,10 +270,10 @@ Future<void> showCameraStatusNotification({
   Log.d("Sent camera status notification!");
 
   await _notifs.show(
-    DateTime.now().millisecondsSinceEpoch ~/ 1000, // unique id
-    cameraName, // title
-    msg, // body
-    details,
+    id: DateTime.now().millisecondsSinceEpoch ~/ 1000, // unique id
+    title: cameraName, // title
+    body: msg, // body
+    notificationDetails: details,
   );
 }
 
@@ -304,10 +304,10 @@ Future<void> showSupportLogNotification() async {
   final details = NotificationDetails(android: androidDetails, iOS: iosDetails);
 
   await _notifs.show(
-    DateTime.now().millisecondsSinceEpoch ~/ 1000,
-    'Secluso support',
-    'An error occurred in the background. Open the app to copy logs for support.',
-    details,
+    id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    title: 'Secluso support',
+    body: 'An error occurred in the background. Open the app to copy logs for support.',
+    notificationDetails: details,
   );
 }
 
@@ -338,9 +338,9 @@ Future<void> showOutdatedNotification() async {
   final details = NotificationDetails(android: androidDetails, iOS: iosDetails);
 
   await _notifs.show(
-    DateTime.now().millisecondsSinceEpoch ~/ 1000,
-    'Secluso support',
-    'Your app is outdated. Please update to continue receiving notifications and use your cameras',
-    details,
+    id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    title: 'Secluso support',
+    body: 'Your app is outdated. Please update to continue receiving notifications and use your cameras',
+    notificationDetails: details,
   );
 }
