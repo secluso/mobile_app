@@ -1,0 +1,8 @@
+.dart_tool
+.git
+.idea
+.vscode
+android/local.properties
+build
+ios/Pods
+rust/target

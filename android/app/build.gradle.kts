@@ -11,6 +11,8 @@ import java.io.FileInputStream
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 val requiredKeystoreKeys = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+val allowUnsignedRelease =
+    providers.environmentVariable("SECLUSO_ALLOW_UNSIGNED_RELEASE").orNull == "1"
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
@@ -24,12 +26,17 @@ if (!hasValidKeystore) {
     } else {
         "missing key.properties"
     }
-    logger.warn("Android release signing disabled ($missingParts). Debug builds will still work.")
+    val releaseBehavior = if (allowUnsignedRelease) {
+        "Unsigned release builds are enabled for verification."
+    } else {
+        "Debug builds will still work."
+    }
+    logger.warn("Android release signing disabled ($missingParts). $releaseBehavior")
 }
 
 gradle.taskGraph.whenReady {
     val wantsRelease = allTasks.any { it.name.contains("Release", ignoreCase = true) }
-    if (wantsRelease && !hasValidKeystore) {
+    if (wantsRelease && !hasValidKeystore && !allowUnsignedRelease) {
         val missingParts = if (keystorePropertiesFile.exists()) {
             "missing keys: ${missingKeystoreKeys.joinToString(", ")}"
         } else {
@@ -37,7 +44,8 @@ gradle.taskGraph.whenReady {
         }
         throw org.gradle.api.GradleException(
             "Release build requires signing config ($missingParts). " +
-                "Create key.properties with storeFile, storePassword, keyAlias, keyPassword."
+                "Create key.properties with storeFile, storePassword, keyAlias, keyPassword, " +
+                "or set SECLUSO_ALLOW_UNSIGNED_RELEASE=1 for a verification-only unsigned build."
         )
     }
 }

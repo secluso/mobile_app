@@ -103,4 +103,22 @@ This will build and launch the app on your connected device.
 | Rust compilation errors | Ensure targets and NDK are properly set 
 ---
 
+## 7. Early-Stage Android Reproducible Build
+
+The Android project includes a containerized reproducible-build path under tool/repro.
+
+To compare an official Secluso Android release installed on a phone against a local rebuild:
+
+```bash
+tool/repro/build_with_docker.sh
+tool/repro/pull_device_apk.sh
+python3 tool/repro/apkdiff.py \
+  build/reproducible/device.apk \
+  build/reproducible/app-release-unsigned.apk
+```
+
+For the full reproducible-build workflow, signed-release path, and internal reproducibility test (`tool/repro/check_reproducibility.sh`), see `tool/repro/README.md`.
+
+---
+
 > Need help or want to contribute? Visit the [Secluso GitHub Repository](https://github.com/secluso/secluso).
