@@ -15,6 +15,33 @@ import 'package:workmanager/workmanager.dart';
 const String _bgTaskId = 'com.secluso.task'; // Matches Info.plist
 const String _periodicTaskName = 'periodic_heartbeat_task';
 
+Future<void> _scheduleDownloadBackgroundTask({
+  required int retry,
+  required Duration initialDelay,
+}) async {
+  final constraints = Constraints(networkType: NetworkType.connected);
+
+  if (Platform.isIOS) {
+    await Workmanager().registerProcessingTask(
+      _bgTaskId,
+      _bgTaskId,
+      inputData: {'retry': retry},
+      initialDelay: initialDelay,
+      constraints: constraints,
+    );
+    return;
+  }
+
+  await Workmanager().registerOneOffTask(
+    _bgTaskId,
+    _bgTaskId,
+    inputData: {'retry': retry},
+    existingWorkPolicy: ExistingWorkPolicy.keep,
+    constraints: constraints,
+    initialDelay: initialDelay,
+  );
+}
+
 class OneOffHelper {
   static bool _initialized = false;
 
@@ -59,12 +86,8 @@ void callbackDispatcher() {
           final nextRetry = retry + 1;
           final delayMin = nextRetry * nextRetry * 15;
 
-          await Workmanager().registerOneOffTask(
-            _bgTaskId, // Unique name (we only ever want one of these to run concurrently)
-            _bgTaskId, // Task id
-            inputData: {'retry': nextRetry},
-            existingWorkPolicy: ExistingWorkPolicy.keep,
-            constraints: Constraints(networkType: NetworkType.connected),
+          await _scheduleDownloadBackgroundTask(
+            retry: nextRetry,
             initialDelay:
                 Platform.isIOS ? Duration(minutes: delayMin) : Duration.zero,
           );
@@ -98,7 +121,7 @@ class HeartbeatScheduler {
     ); // debug mode only on android
 
     await Workmanager().registerPeriodicTask(
-      'heartbeat',
+      _periodicTaskName,
       _periodicTaskName,
       frequency: Duration(hours: 6),
       existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
@@ -123,12 +146,8 @@ class DownloadScheduler {
     ); // debug mode only on android
 
     // Send one BG task so force-quit users recover on next launch
-    await Workmanager().registerOneOffTask(
-      _bgTaskId, // Unique name (we only ever want one of these to run concurrently)
-      _bgTaskId, // Task id
-      inputData: {'retry': 0},
-      existingWorkPolicy: ExistingWorkPolicy.keep,
-      constraints: Constraints(networkType: NetworkType.connected),
+    await _scheduleDownloadBackgroundTask(
+      retry: 0,
       initialDelay:
           Platform.isIOS ? const Duration(minutes: 15) : Duration.zero,
     );
@@ -207,12 +226,8 @@ class DownloadScheduler {
         await Workmanager().cancelByUniqueName(
           _bgTaskId,
         ); // ensure none pending
-        await Workmanager().registerOneOffTask(
-          _bgTaskId, // Unique name (we only ever want one of these to run concurrently)
-          _bgTaskId, // Task id
-          inputData: {'retry': 0},
-          existingWorkPolicy: ExistingWorkPolicy.keep,
-          constraints: Constraints(networkType: NetworkType.connected),
+        await _scheduleDownloadBackgroundTask(
+          retry: 0,
           initialDelay:
               Platform.isIOS
                   ? const Duration(minutes: 15)

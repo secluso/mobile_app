@@ -14,6 +14,8 @@ import 'package:secluso_flutter/ui/secluso_shell_ui.dart';
 part 'shell_home_empty_state.dart';
 part 'shell_home_setup_state.dart';
 
+const String _seclusoLogoArtPath = 'assets/design/secluso_logo.jpg';
+
 class ShellHomeCamera {
   const ShellHomeCamera({
     required this.name,
@@ -486,54 +488,58 @@ class _FirstCameraAwaitingEventState extends StatelessWidget {
         MediaQuery.sizeOf(context).width -
         (metrics.pageInset * 2) -
         (metrics.headerInsetDelta * 2);
-    final cardWidth = math.min(metrics.scaled(258), availableWidth);
+    final contentWidth = availableWidth;
 
-    return Column(
-      children: [
-        Center(
-          child: SizedBox(
-            width: cardWidth,
-            child: _FirstCameraAwaitingEventCard(
-              camera: camera,
-              metrics: metrics,
-            ),
-          ),
-        ),
-        SizedBox(height: metrics.scaled(18)),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+    return Center(
+      child: SizedBox(
+        width: contentWidth,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              width: metrics.scaled(6),
-              height: metrics.scaled(6),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF59E0B).withValues(alpha: 0.6),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
-                    blurRadius: metrics.scaled(6),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(width: metrics.scaled(16)),
+            _FirstCameraAwaitingEventCard(camera: camera, metrics: metrics),
+            SizedBox(height: metrics.scaled(22)),
             Text(
-              'AWAITING FIRST EVENT',
+              'RECENT ACTIVITY',
               style: GoogleFonts.inter(
                 color:
                     isDark
-                        ? Colors.white.withValues(alpha: 0.25)
-                        : const Color(0xFF6B7280),
-                fontSize: metrics.scaled(9),
+                        ? Colors.white.withValues(alpha: 0.28)
+                        : const Color(0xFF9CA3AF),
+                fontSize: metrics.scaled(10),
                 fontWeight: FontWeight.w500,
-                height: 13.5 / 9,
-                letterSpacing: metrics.scaled(1.8),
+                letterSpacing: metrics.scaled(2.0),
+              ),
+            ),
+            SizedBox(height: metrics.scaled(16)),
+            _AwaitingRecentActivitySkeletonCard(
+              metrics: metrics,
+              delay: 0,
+              titleWidth: 112,
+              subtitleWidth: 64,
+            ),
+            SizedBox(height: metrics.scaled(12)),
+            _AwaitingRecentActivitySkeletonCard(
+              metrics: metrics,
+              delay: 1,
+              titleWidth: 128,
+              subtitleWidth: 80,
+            ),
+            SizedBox(height: metrics.scaled(16)),
+            Text(
+              'All quiet — no events yet',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                color:
+                    isDark
+                        ? Colors.white.withValues(alpha: 0.22)
+                        : const Color(0xFF6B7280).withValues(alpha: 0.72),
+                fontSize: metrics.scaled(11),
+                fontStyle: FontStyle.italic,
               ),
             ),
           ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -550,6 +556,8 @@ class _FirstCameraAwaitingEventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final radius = metrics.scaled(16);
+    final hasPreviewAsset =
+        camera.previewAssetPath != null && camera.previewAssetPath!.isNotEmpty;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -562,19 +570,67 @@ class _FirstCameraAwaitingEventCard extends StatelessWidget {
               ),
             ),
         child: AspectRatio(
-          aspectRatio: 258 / 344,
+          aspectRatio: 258 / 145.13,
           child: Container(
             decoration: BoxDecoration(
               color: const Color(0xFF050505),
               borderRadius: BorderRadius.circular(radius),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.04)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  blurRadius: metrics.scaled(15),
+                  offset: const Offset(0, 10),
+                ),
+              ],
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(radius),
               child: Stack(
                 children: [
-                  const Positioned.fill(
-                    child: ColoredBox(color: Color(0xFF050505)),
+                  Positioned.fill(
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        const DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Color(0xFF0F172A),
+                                Color(0xFF0C1220),
+                                Color(0xFF0F172A),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Opacity(
+                          opacity: 0.12,
+                          child: Image.asset(
+                            _seclusoLogoArtPath,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (hasPreviewAsset)
+                    Positioned.fill(
+                      child: Opacity(
+                        opacity: 0.08,
+                        child: Image.asset(
+                          camera.previewAssetPath!,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: _CameraSweepShimmer(
+                        borderRadius: BorderRadius.circular(radius),
+                      ),
+                    ),
                   ),
                   Positioned.fill(
                     child: DecoratedBox(
@@ -583,134 +639,58 @@ class _FirstCameraAwaitingEventCard extends StatelessWidget {
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            Colors.black.withValues(alpha: 0.05),
-                            Colors.black.withValues(alpha: 0.1),
-                            Colors.black.withValues(alpha: 0.78),
-                          ],
-                          stops: const [0.0, 0.54, 1.0],
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned.fill(
-                    child: Padding(
-                      padding: EdgeInsets.all(metrics.scaled(12)),
-                      child: _AnimatedFirstEventShieldGridArt(
-                        scale: metrics.scaled(1),
-                      ),
-                    ),
-                  ),
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: RadialGradient(
-                          center: const Alignment(0, -0.05),
-                          radius: 1.0,
-                          colors: [
+                            Colors.black.withValues(alpha: 0.18),
                             Colors.transparent,
-                            Colors.transparent,
-                            Colors.black.withValues(alpha: 0.68),
+                            Colors.black.withValues(alpha: 0.58),
                           ],
-                          stops: const [0.0, 0.62, 1.0],
                         ),
                       ),
                     ),
                   ),
                   Positioned(
-                    top: metrics.scaled(18),
-                    left: metrics.scaled(18),
-                    child: _HomeLockIcon(
-                      size: metrics.scaled(10),
-                      color: Colors.white.withValues(alpha: 0.7),
-                    ),
+                    left: metrics.scaled(12),
+                    top: metrics.scaled(12),
+                    child: _AwaitingLivePill(metrics: metrics),
                   ),
+                  if (camera.hasLock)
+                    Positioned(
+                      top: metrics.scaled(12),
+                      right: metrics.scaled(12),
+                      child: _HomeLockIcon(
+                        size: metrics.scaled(16),
+                        color: Colors.white.withValues(alpha: 0.5),
+                      ),
+                    ),
                   Positioned(
-                    top: metrics.scaled(18),
-                    right: metrics.scaled(18),
-                    child: Row(
+                    left: metrics.scaled(14),
+                    right: metrics.scaled(14),
+                    bottom: metrics.scaled(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          width: metrics.scaled(6),
-                          height: metrics.scaled(6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF59E0B),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(
-                                  0xFFF59E0B,
-                                ).withValues(alpha: 0.6),
-                                blurRadius: metrics.scaled(8),
-                              ),
-                            ],
+                        Text(
+                          camera.name,
+                          style: GoogleFonts.inter(
+                            color: Colors.white.withValues(alpha: 0.96),
+                            fontSize: metrics.scaled(14),
+                            fontWeight: FontWeight.w600,
+                            height: 1.2,
+                            letterSpacing: metrics.scaled(0.35),
                           ),
                         ),
-                        SizedBox(width: metrics.scaled(6)),
-                        Text(
-                          'NEW',
-                          style: GoogleFonts.inter(
-                            color: Colors.white.withValues(alpha: 0.5),
-                            fontSize: metrics.scaled(7),
-                            fontWeight: FontWeight.w600,
-                            height: 10.5 / 7,
-                            letterSpacing: metrics.scaled(1.75),
-                          ),
+                        SizedBox(height: metrics.scaled(12)),
+                        _AwaitingStatusPill(
+                          metrics: metrics,
+                          label: camera.isOffline ? 'Offline' : 'Quiet',
+                          activeColor:
+                              camera.isOffline
+                                  ? const Color(0xFFF59E0B)
+                                  : const Color(0xFF22C55E),
                         ),
                       ],
                     ),
                   ),
-                  Positioned(
-                    left: metrics.scaled(97),
-                    right: metrics.scaled(97),
-                    top: metrics.scaled(229.5),
-                    child: Container(
-                      height: 1,
-                      color: Colors.white.withValues(alpha: 0.15),
-                    ),
-                  ),
-                  Positioned(
-                    left: metrics.scaled(28),
-                    right: metrics.scaled(28),
-                    top: metrics.scaled(238),
-                    child: Text(
-                      camera.name,
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.playfairDisplay(
-                        color: Colors.white.withValues(alpha: 0.9),
-                        fontSize: metrics.scaled(18),
-                        fontWeight: FontWeight.w500,
-                        height: 27 / 18,
-                        letterSpacing: metrics.scaled(0.45),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    top: metrics.scaled(271.5),
-                    child: Text(
-                      'NEW',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
-                        color: const Color(0xFFF59E0B).withValues(alpha: 0.7),
-                        fontSize: metrics.scaled(9),
-                        fontWeight: FontWeight.w500,
-                        height: 13.5 / 9,
-                        letterSpacing: metrics.scaled(2.7),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: metrics.scaled(97),
-                    right: metrics.scaled(97),
-                    top: metrics.scaled(301),
-                    child: Container(
-                      height: 1,
-                      color: Colors.white.withValues(alpha: 0.15),
-                    ),
-                  ),
-                  ..._cornerBorders(),
                 ],
               ),
             ),
@@ -719,81 +699,436 @@ class _FirstCameraAwaitingEventCard extends StatelessWidget {
       ),
     );
   }
-
-  List<Widget> _cornerBorders() {
-    final stroke = Colors.white.withValues(alpha: 0.1);
-    final size = metrics.scaled(20);
-    final inset = metrics.scaled(12);
-    return [
-      Positioned(
-        top: inset,
-        left: inset,
-        child: _CornerBorder(size: size, top: true, left: true, color: stroke),
-      ),
-      Positioned(
-        top: inset,
-        right: inset,
-        child: _CornerBorder(
-          size: size,
-          top: true,
-          right: true,
-          color: stroke,
-        ),
-      ),
-      Positioned(
-        bottom: inset,
-        left: inset,
-        child: _CornerBorder(
-          size: size,
-          bottom: true,
-          left: true,
-          color: stroke,
-        ),
-      ),
-      Positioned(
-        bottom: inset,
-        right: inset,
-        child: _CornerBorder(
-          size: size,
-          bottom: true,
-          right: true,
-          color: stroke,
-        ),
-      ),
-    ];
-  }
 }
 
-class _CornerBorder extends StatelessWidget {
-  const _CornerBorder({
-    required this.size,
-    required this.color,
-    this.top = false,
-    this.left = false,
-    this.right = false,
-    this.bottom = false,
-  });
+class _AwaitingLivePill extends StatelessWidget {
+  const _AwaitingLivePill({required this.metrics});
 
-  final double size;
-  final Color color;
-  final bool top;
-  final bool left;
-  final bool right;
-  final bool bottom;
+  final _ShellHomeMetrics metrics;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: size,
-      height: size,
+      padding: EdgeInsets.symmetric(
+        horizontal: metrics.scaled(10),
+        vertical: metrics.scaled(6),
+      ),
       decoration: BoxDecoration(
-        border: Border(
-          top: top ? BorderSide(color: color) : BorderSide.none,
-          left: left ? BorderSide(color: color) : BorderSide.none,
-          right: right ? BorderSide(color: color) : BorderSide.none,
-          bottom: bottom ? BorderSide(color: color) : BorderSide.none,
+        color: Colors.black.withValues(alpha: 0.48),
+        borderRadius: BorderRadius.circular(metrics.scaled(999)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: metrics.scaled(8),
+            height: metrics.scaled(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEF4444),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFEF4444).withValues(alpha: 0.75),
+                  blurRadius: metrics.scaled(6),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: metrics.scaled(7)),
+          Text(
+            'LIVE',
+            style: GoogleFonts.inter(
+              color: Colors.white.withValues(alpha: 0.94),
+              fontSize: metrics.scaled(10),
+              fontWeight: FontWeight.w700,
+              letterSpacing: metrics.scaled(0.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AwaitingStatusPill extends StatelessWidget {
+  const _AwaitingStatusPill({
+    required this.metrics,
+    required this.label,
+    required this.activeColor,
+  });
+
+  final _ShellHomeMetrics metrics;
+  final String label;
+  final Color activeColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: metrics.scaled(12),
+        vertical: metrics.scaled(6),
+      ),
+      decoration: BoxDecoration(
+        color: activeColor.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(metrics.scaled(999)),
+        border: Border.all(color: activeColor.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: metrics.scaled(7),
+            height: metrics.scaled(7),
+            decoration: BoxDecoration(
+              color: activeColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+          SizedBox(width: metrics.scaled(8)),
+          Text(
+            label.toUpperCase(),
+            style: GoogleFonts.inter(
+              color: activeColor.withValues(alpha: 0.95),
+              fontSize: metrics.scaled(8),
+              fontWeight: FontWeight.w700,
+              letterSpacing: metrics.scaled(1.6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AwaitingRecentActivitySkeletonCard extends StatelessWidget {
+  const _AwaitingRecentActivitySkeletonCard({
+    required this.metrics,
+    required this.delay,
+    required this.titleWidth,
+    required this.subtitleWidth,
+  });
+
+  final _ShellHomeMetrics metrics;
+  final int delay;
+  final double titleWidth;
+  final double subtitleWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return _GhostBreathing(
+      delay: Duration(milliseconds: delay * 800),
+      child: Container(
+        height: metrics.scaled(62),
+        decoration: BoxDecoration(
+          color: dark ? const Color(0xFF0B0B0C) : const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(metrics.scaled(12)),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(metrics.scaled(12)),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: _DashedRoundedRectPainter(
+                      color:
+                          dark
+                              ? Colors.white.withValues(alpha: 0.1)
+                              : const Color(0xFFD1D5DB),
+                      radius: metrics.scaled(12),
+                      strokeWidth: 1,
+                      dashLength: metrics.scaled(5.5),
+                      gapLength: metrics.scaled(4.5),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: _GhostSweepShimmer(
+                    borderRadius: BorderRadius.circular(metrics.scaled(12)),
+                    delay: Duration(milliseconds: delay * 1200),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: metrics.scaled(14),
+                  vertical: metrics.scaled(14),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: metrics.scaled(32),
+                      height: metrics.scaled(32),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.05),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    SizedBox(width: metrics.scaled(14)),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SizedBox(
+                            width: metrics.scaled(titleWidth),
+                            child: Container(
+                              height: metrics.scaled(8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(
+                                  metrics.scaled(999),
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: metrics.scaled(10)),
+                          SizedBox(
+                            width: metrics.scaled(subtitleWidth),
+                            child: Container(
+                              height: metrics.scaled(8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.04),
+                                borderRadius: BorderRadius.circular(
+                                  metrics.scaled(999),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
+    );
+  }
+}
+
+class _GhostBreathing extends StatefulWidget {
+  const _GhostBreathing({required this.child, this.delay = Duration.zero});
+
+  final Widget child;
+  final Duration delay;
+
+  @override
+  State<_GhostBreathing> createState() => _GhostBreathingState();
+}
+
+class _GhostBreathingState extends State<_GhostBreathing>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  bool _started = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3000),
+    );
+    _start();
+  }
+
+  Future<void> _start() async {
+    if (widget.delay > Duration.zero) {
+      await Future<void>.delayed(widget.delay);
+      if (!mounted) return;
+    }
+    setState(() {
+      _started = true;
+    });
+    _controller.repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_started && widget.delay > Duration.zero) {
+      return const SizedBox.shrink();
+    }
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final opacity = lerpDouble(0.4, 0.7, Curves.easeInOut.transform(_controller.value))!;
+        return Opacity(
+          opacity: opacity,
+          child: widget.child,
+        );
+      },
+    );
+  }
+}
+
+class _GhostSweepShimmer extends StatefulWidget {
+  const _GhostSweepShimmer({
+    required this.borderRadius,
+    this.delay = Duration.zero,
+  });
+
+  final BorderRadius borderRadius;
+  final Duration delay;
+
+  @override
+  State<_GhostSweepShimmer> createState() => _GhostSweepShimmerState();
+}
+
+class _GhostSweepShimmerState extends State<_GhostSweepShimmer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  bool _started = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 4000),
+    );
+    _start();
+  }
+
+  Future<void> _start() async {
+    if (widget.delay > Duration.zero) {
+      await Future<void>.delayed(widget.delay);
+      if (!mounted) return;
+    }
+    setState(() {
+      _started = true;
+    });
+    _controller.repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_started && widget.delay > Duration.zero) {
+      return const SizedBox.shrink();
+    }
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final t = _controller.value;
+        final leftFactor = t <= 0.4 ? lerpDouble(-2.0, 2.0, t / 0.4)! : 2.0;
+        return ClipRRect(
+          borderRadius: widget.borderRadius,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: FractionalTranslation(
+              translation: Offset(leftFactor, 0),
+              child: Transform(
+                transform: Matrix4.skewX(-20 * math.pi / 180),
+                alignment: Alignment.center,
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        Colors.transparent,
+                        Colors.white.withValues(alpha: 0.015),
+                        Colors.white.withValues(alpha: 0.06),
+                        Colors.white.withValues(alpha: 0.015),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _CameraSweepShimmer extends StatefulWidget {
+  const _CameraSweepShimmer({required this.borderRadius});
+
+  final BorderRadius borderRadius;
+
+  @override
+  State<_CameraSweepShimmer> createState() => _CameraSweepShimmerState();
+}
+
+class _CameraSweepShimmerState extends State<_CameraSweepShimmer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 10000),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final t = _controller.value;
+        final leftFactor = t <= 0.3 ? lerpDouble(-1.5, 1.5, t / 0.3)! : 1.5;
+        return ClipRRect(
+          borderRadius: widget.borderRadius,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: FractionallySizedBox(
+              widthFactor: 0.8,
+              child: FractionalTranslation(
+                translation: Offset(leftFactor, 0),
+                child: Transform(
+                  transform: Matrix4.skewX(-15 * math.pi / 180),
+                  alignment: Alignment.center,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          Colors.transparent,
+                          Colors.white.withValues(alpha: 0.01),
+                          Colors.white.withValues(alpha: 0.06),
+                          Colors.white.withValues(alpha: 0.01),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

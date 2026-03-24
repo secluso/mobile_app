@@ -5,7 +5,7 @@ import NetworkExtension
 import SystemConfiguration.CaptiveNetwork
 import UIKit
 import UserNotifications
-import workmanager
+import workmanager_apple
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -13,8 +13,11 @@ import workmanager
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
-        // REQUIRED so iOS knows which task id belongs to Workmanager
-        WorkmanagerPlugin.registerTask(withIdentifier: "com.secluso.task")
+        WorkmanagerPlugin.registerPeriodicTask(
+            withIdentifier: "periodic_heartbeat_task",
+            frequency: NSNumber(value: 6 * 60 * 60)
+        )
+        WorkmanagerPlugin.registerBGProcessingTask(withIdentifier: "com.secluso.task")
 
         // Ensures all plugins (http, path_provider …) are available
         WorkmanagerPlugin.setPluginRegistrantCallback { registry in
