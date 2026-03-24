@@ -41,7 +41,10 @@ class ThumbnailNotifier {
   final _controller = StreamController<String>.broadcast();
   Stream<String> get stream => _controller.stream;
 
-  void notify(String cameraName) => _controller.add(cameraName);
+  void notify(String cameraName) {
+    _controller.add(cameraName);
+    CameraUiBridge.refreshActivityCallback?.call();
+  }
 }
 
 class CameraListNotifier {
@@ -87,6 +90,7 @@ class HomeRecentEventPreviewData {
     this.detections = const <String>{},
     this.motion = true,
     this.canDownload = false,
+    this.hasVideoFile = true,
   });
 
   final String title;
@@ -98,6 +102,7 @@ class HomeRecentEventPreviewData {
   final Set<String> detections;
   final bool motion;
   final bool canDownload;
+  final bool hasVideoFile;
 }
 
 class CamerasPage extends StatefulWidget {
@@ -984,7 +989,9 @@ class CamerasPageState extends State<CamerasPage>
       if (latestDisplayableEventByCamera.containsKey(video.camera)) {
         continue;
       }
-      if (!await _videoFileExists(video.camera, video.video)) {
+      final hasVideoFile = await _videoFileExists(video.camera, video.video);
+      if (!hasVideoFile &&
+          await _eventThumbnailBytes(video.camera, video.video) == null) {
         continue;
       }
       final detections = await detectionsForVideo(video.video);
@@ -1052,7 +1059,12 @@ class CamerasPageState extends State<CamerasPage>
       if (!seenRecentKeys.add(eventKey)) {
         continue;
       }
-      if (!await _videoFileExists(video.camera, video.video)) {
+      final hasVideoFile = await _videoFileExists(video.camera, video.video);
+      final thumbnailBytes = await _eventThumbnailBytes(
+        video.camera,
+        video.video,
+      );
+      if (!hasVideoFile && thumbnailBytes == null) {
         continue;
       }
       final detections = await detectionsForVideo(video.video);
@@ -1068,7 +1080,8 @@ class CamerasPageState extends State<CamerasPage>
         "detections": detections,
         "motion": video.motion,
         "canDownload": video.received,
-        "thumbnailBytes": await _eventThumbnailBytes(video.camera, video.video),
+        "hasVideoFile": hasVideoFile,
+        "thumbnailBytes": thumbnailBytes,
         "accentColor": _accentColorForVideo(detections),
       });
       if (recentEvents.length == 2) {
@@ -1163,7 +1176,9 @@ class CamerasPageState extends State<CamerasPage>
     query.close();
 
     for (final video in videos) {
-      if (!await _videoFileExists(video.camera, video.video)) {
+      final hasVideoFile = await _videoFileExists(video.camera, video.video);
+      if (!hasVideoFile &&
+          await _eventThumbnailBytes(video.camera, video.video) == null) {
         continue;
       }
       final detections = await _detectionTypesForVideo(
@@ -1732,6 +1747,7 @@ class CamerasPageState extends State<CamerasPage>
                       detections: event.detections,
                       motion: event.motion,
                       canDownload: event.canDownload,
+                      hasVideoFile: event.hasVideoFile,
                     ),
                   )
                   .toList()
@@ -1750,6 +1766,7 @@ class CamerasPageState extends State<CamerasPage>
                           const <String>{},
                       motion: event['motion'] as bool? ?? true,
                       canDownload: event['canDownload'] as bool? ?? false,
+                      hasVideoFile: event['hasVideoFile'] as bool? ?? true,
                     ),
                   )
                   .toList();

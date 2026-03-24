@@ -54,6 +54,7 @@ class ShellHomeEvent {
     this.detections = const <String>{},
     this.motion = true,
     this.canDownload = false,
+    this.hasVideoFile = true,
   });
 
   final String title;
@@ -66,6 +67,7 @@ class ShellHomeEvent {
   final Set<String> detections;
   final bool motion;
   final bool canDownload;
+  final bool hasVideoFile;
 }
 
 class ShellHomePage extends StatelessWidget {
@@ -179,6 +181,7 @@ class ShellHomePage extends StatelessWidget {
         context,
       ).showSnackBar(const SnackBar(content: Text('Not implemented yet')));
     }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -267,6 +270,7 @@ class ShellHomePage extends StatelessWidget {
                 detections: event.detections,
                 motion: event.motion,
                 canDownload: event.canDownload,
+                hasVideoFile: event.hasVideoFile,
               ),
             )
             .toList() ??
@@ -451,6 +455,7 @@ class ShellHomePage extends StatelessWidget {
                   )
                   ? const <String>{}
                   : const <String>{'human'},
+          hasVideoFile: true,
         ),
       );
       if (items.length == 2) {
@@ -963,11 +968,13 @@ class _GhostBreathingState extends State<_GhostBreathing>
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
-        final opacity = lerpDouble(0.4, 0.7, Curves.easeInOut.transform(_controller.value))!;
-        return Opacity(
-          opacity: opacity,
-          child: widget.child,
-        );
+        final opacity =
+            lerpDouble(
+              0.4,
+              0.7,
+              Curves.easeInOut.transform(_controller.value),
+            )!;
+        return Opacity(opacity: opacity, child: widget.child);
       },
     );
   }
@@ -1132,7 +1139,6 @@ class _CameraSweepShimmerState extends State<_CameraSweepShimmer>
     );
   }
 }
-
 
 class _HeaderRow extends StatelessWidget {
   const _HeaderRow({
@@ -1439,9 +1445,7 @@ class _SecondaryCameraGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final tiles = [...cameras];
     if (tiles.length.isOdd) {
-      tiles.add(
-        const ShellHomeCamera(name: '__add__', previewAssetPath: ''),
-      );
+      tiles.add(const ShellHomeCamera(name: '__add__', previewAssetPath: ''));
     }
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1964,14 +1968,54 @@ class _AnimatedFirstEventShieldGridArtState
   static const _centerColumn = 3;
   static const _centerRow = 4;
   static const _delayGrid = <double>[
-    2.8, 2.4, 2.0, 1.6, 2.0, 2.4,
-    2.4, 2.0, 1.6, 1.2, 1.6, 2.0,
-    2.0, 1.6, 1.2, 0.8, 1.2, 1.6,
-    1.6, 1.2, 0.8, 0.4, 0.8, 1.2,
-    1.2, 0.8, 0.4, -1.0, 0.4, 0.8,
-    1.6, 1.2, 0.8, 0.4, 0.8, 1.2,
-    2.0, 1.6, 1.2, 0.8, 1.2, 1.6,
-    2.4, 2.0, 1.6, 1.2, 1.6, 2.0,
+    2.8,
+    2.4,
+    2.0,
+    1.6,
+    2.0,
+    2.4,
+    2.4,
+    2.0,
+    1.6,
+    1.2,
+    1.6,
+    2.0,
+    2.0,
+    1.6,
+    1.2,
+    0.8,
+    1.2,
+    1.6,
+    1.6,
+    1.2,
+    0.8,
+    0.4,
+    0.8,
+    1.2,
+    1.2,
+    0.8,
+    0.4,
+    -1.0,
+    0.4,
+    0.8,
+    1.6,
+    1.2,
+    0.8,
+    0.4,
+    0.8,
+    1.2,
+    2.0,
+    1.6,
+    1.2,
+    0.8,
+    1.2,
+    1.6,
+    2.4,
+    2.0,
+    1.6,
+    1.2,
+    1.6,
+    2.0,
   ];
 
   late final AnimationController _controller = AnimationController(
@@ -2028,7 +2072,9 @@ class _AnimatedFirstEventShieldGridArtState
                         height: glowSize,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: const Color(0xFFB45309).withValues(alpha: 0.038),
+                          color: const Color(
+                            0xFFB45309,
+                          ).withValues(alpha: 0.038),
                         ),
                       ),
                     ),
@@ -2186,6 +2232,7 @@ class _ShellRecentEvent {
     this.detections = const <String>{},
     this.motion = true,
     this.canDownload = false,
+    this.hasVideoFile = true,
   });
 
   final String title;
@@ -2198,6 +2245,7 @@ class _ShellRecentEvent {
   final Set<String> detections;
   final bool motion;
   final bool canDownload;
+  final bool hasVideoFile;
 }
 
 class _EventAccentPainter extends CustomPainter {
@@ -2256,7 +2304,9 @@ class _RecentEventCard extends StatelessWidget {
     final canOpenClip =
         (event.previewAssetPath != null &&
             event.previewAssetPath!.isNotEmpty) ||
-        (event.videoName != null && event.videoName!.isNotEmpty);
+        (event.hasVideoFile &&
+            event.videoName != null &&
+            event.videoName!.isNotEmpty);
     return Material(
       color: Colors.transparent,
       child: InkWell(

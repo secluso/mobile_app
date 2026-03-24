@@ -73,6 +73,7 @@ class _ActivityEntry {
     this.sectionLabel,
     this.durationLabel,
     this.isSystem = false,
+    this.hasVideoFile = true,
   });
 
   final String cameraName;
@@ -86,6 +87,7 @@ class _ActivityEntry {
   final String? sectionLabel;
   final String? durationLabel;
   final bool isSystem;
+  final bool hasVideoFile;
 }
 
 class _ActivityPageState extends State<ActivityPage>
@@ -202,6 +204,7 @@ class _ActivityPageState extends State<ActivityPage>
             sectionLabel: item.sectionLabel,
             durationLabel: item.durationLabel,
             isSystem: item.isSystem,
+            hasVideoFile: true,
           ),
         ),
       );
@@ -316,7 +319,12 @@ class _ActivityPageState extends State<ActivityPage>
         if (!video.motion && detections.isEmpty) {
           continue;
         }
-        if (!await _videoFileExists(video.camera, video.video)) {
+        final hasVideoFile = await _videoFileExists(video.camera, video.video);
+        final thumbnailBytes = await _eventThumbnailBytes(
+          video.camera,
+          video.video,
+        );
+        if (!hasVideoFile && thumbnailBytes == null) {
           continue;
         }
 
@@ -326,10 +334,8 @@ class _ActivityPageState extends State<ActivityPage>
             videoName: video.video,
             detections: detections,
             motion: video.motion,
-            thumbnailBytes: await _eventThumbnailBytes(
-              video.camera,
-              video.video,
-            ),
+            thumbnailBytes: thumbnailBytes,
+            hasVideoFile: hasVideoFile,
           ),
         );
         loadedKeys.add(videoKey);
@@ -486,6 +492,12 @@ class _ActivityPageState extends State<ActivityPage>
                 previewDetectionsByVideo: const {},
               ),
         ),
+      );
+      return;
+    }
+    if (!entry.hasVideoFile) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Clip is still downloading.')),
       );
       return;
     }
