@@ -10,8 +10,11 @@ import 'package:path/path.dart' as p;
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
+import 'package:secluso_flutter/notifications/alert_preferences.dart';
+import 'package:secluso_flutter/notifications/notifications.dart';
 import 'package:secluso_flutter/routes/camera/camera_ui_bridge.dart';
 import 'package:secluso_flutter/routes/camera/view_camera.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Map<String, dynamic> _collectPendingWork(String baseDirPath) {
   final items = <Map<String, dynamic>>[];
@@ -33,8 +36,9 @@ Map<String, dynamic> _collectPendingWork(String baseDirPath) {
       continue;
     }
 
-    final cameraName =
-        p.basename(p.dirname(entry.path)).replaceFirst('camera_', '');
+    final cameraName = p
+        .basename(p.dirname(entry.path))
+        .replaceFirst('camera_', '');
 
     final baseName = p.basenameWithoutExtension(videoFile);
     final ts = baseName.startsWith("video_") ? baseName.substring(6) : baseName;
@@ -208,7 +212,8 @@ class QueueProcessor {
     final existingVideos = existingVideosQuery.find();
     existingVideosQuery.close();
     final videoByCameraAndFile = {
-      for (final video in existingVideos) '${video.camera}\n${video.video}': video,
+      for (final video in existingVideos)
+        '${video.camera}\n${video.video}': video,
     };
 
     final videosToPut = <Video>[];
@@ -217,6 +222,7 @@ class QueueProcessor {
     final updatedCameraNames = <String>{};
     final pendingPathsToDelete = <String>[];
     final metaPathsToDelete = <String>[];
+    final notificationsToRefresh = <Map<String, dynamic>>[];
 
     for (final item in items) {
       final cameraName = item['cameraName'] as String?;
@@ -288,6 +294,12 @@ class QueueProcessor {
         );
       }
 
+      notificationsToRefresh.add({
+        'cameraName': cameraName,
+        'videoFile': videoFile,
+        'detections': detections,
+      });
+
       if (!camera.unreadMessages) {
         camera.unreadMessages = true;
         camerasToUpdate.add(camera);
@@ -310,6 +322,48 @@ class QueueProcessor {
     }
     if (camerasToUpdate.isNotEmpty) {
       await cameraBox.putManyAsync(camerasToUpdate);
+    }
+
+    if (notificationsToRefresh.isNotEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      for (final item in notificationsToRefresh) {
+        final cameraName = item['cameraName'] as String;
+        final videoFile = item['videoFile'] as String;
+        final timestampToken = _timestampTokenFromVideoFile(videoFile);
+        if (timestampToken == null) {
+          continue;
+        }
+        final detections =
+            (item['detections'] as List?)?.cast<String>() ?? const <String>[];
+        final provisionalShown = shouldShowProvisionalMotionAlert(
+          prefs,
+          cameraName,
+        );
+        final decision = evaluateMotionAlertPreferences(
+          prefs,
+          cameraName,
+          motion: true,
+          detections: detections,
+        );
+
+        if (!decision.shouldShow) {
+          if (provisionalShown) {
+            await cancelMotionNotification(
+              cameraName: cameraName,
+              timestamp: timestampToken,
+            );
+          }
+          continue;
+        }
+
+        await showMotionNotification(
+          cameraName: cameraName,
+          timestamp: timestampToken,
+          notificationId: motionNotificationId(cameraName, timestampToken),
+          onlyAlertOnce: decision.shouldAlertOnce,
+          alertLabel: decision.label ?? 'Motion',
+        );
+      }
     }
 
     for (final path in pendingPathsToDelete) {
@@ -344,4 +398,11 @@ class QueueProcessor {
   void dispose() {
     _signalController.close();
   }
+}
+
+String? _timestampTokenFromVideoFile(String videoFile) {
+  if (!videoFile.startsWith('video_') || !videoFile.endsWith('.mp4')) {
+    return null;
+  }
+  return videoFile.substring(6, videoFile.length - 4);
 }

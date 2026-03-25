@@ -87,8 +87,31 @@ class _SettingsPageState extends State<SettingsPage> {
         PrefKeys.firmwareVersionPrefix + widget.cameraName,
       );
       notificationsEnabled =
-          prefs.getBool(PrefKeys.notificationsEnabled) ?? notificationsEnabled;
+          prefs.getBool(
+            PrefKeys.cameraNotificationsEnabledPrefix + widget.cameraName,
+          ) ??
+          notificationsEnabled;
+      selectedNotificationEvents =
+          prefs.getStringList(
+            PrefKeys.cameraNotificationEventsPrefix + widget.cameraName,
+          ) ??
+          selectedNotificationEvents;
     });
+  }
+
+  Future<void> _saveLiveUiState() async {
+    if (_isPreviewMode) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(
+      PrefKeys.cameraNotificationsEnabledPrefix + widget.cameraName,
+      notificationsEnabled,
+    );
+    await prefs.setStringList(
+      PrefKeys.cameraNotificationEventsPrefix + widget.cameraName,
+      selectedNotificationEvents.isEmpty
+          ? const ['All']
+          : selectedNotificationEvents,
+    );
   }
 
   Future<void> _confirmRemoveCamera() async {
@@ -261,22 +284,38 @@ class _SettingsPageState extends State<SettingsPage> {
               _buildGroup(
                 context,
                 metrics: metrics,
-                title: 'DETECTION',
+                title: 'NOTIFICATIONS',
                 titleStyle: sectionTitleStyle,
                 cardShadow: cardShadow,
                 rows: [
                   ShellSettingsRow(
-                    title: 'Motion Sensitivity',
-                    value: 'Medium',
-                    trailing: const SizedBox.shrink(),
-                    height: metrics.shortRowHeight,
+                    title: 'Alerts',
+                    trailing: ShellToggle(
+                      value: notificationsEnabled,
+                      onChanged: (value) {
+                        setState(() => notificationsEnabled = value);
+                        _saveLiveUiState();
+                      },
+                      width: metrics.toggleWidth,
+                      height: metrics.toggleHeight,
+                      padding: metrics.togglePadding,
+                      thumbSize: metrics.toggleThumbSize,
+                      activeColor: const Color(0xFF8BB3EE),
+                      inactiveColor: const Color(0xFFD1D5DB),
+                      thumbShadow: const [
+                        BoxShadow(
+                          color: Color(0x0D000000),
+                          blurRadius: 2,
+                          offset: Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    height: metrics.toggleRowHeight,
                     horizontalPadding: metrics.rowHorizontalPadding,
                     titleStyle: rowTitleStyle,
-                    valueStyle: rowValueStyle,
-                    valueChevronGap: 0,
                   ),
                   ShellSettingsRow(
-                    title: 'Person Detection',
+                    title: 'Person Alerts',
                     trailing: ShellToggle(
                       value: personDetectionEnabled,
                       onChanged: (value) {
@@ -297,6 +336,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             selectedNotificationEvents.remove('All');
                           }
                         });
+                        _saveLiveUiState();
                       },
                       width: metrics.toggleWidth,
                       height: metrics.toggleHeight,
@@ -315,6 +355,26 @@ class _SettingsPageState extends State<SettingsPage> {
                     height: metrics.toggleRowHeight,
                     horizontalPadding: metrics.rowHorizontalPadding,
                     titleStyle: rowTitleStyle,
+                  ),
+                ],
+              ),
+              SizedBox(height: metrics.sectionGap),
+              _buildGroup(
+                context,
+                metrics: metrics,
+                title: 'DETECTION',
+                titleStyle: sectionTitleStyle,
+                cardShadow: cardShadow,
+                rows: [
+                  ShellSettingsRow(
+                    title: 'Motion Sensitivity',
+                    value: 'Medium',
+                    trailing: const SizedBox.shrink(),
+                    height: metrics.shortRowHeight,
+                    horizontalPadding: metrics.rowHorizontalPadding,
+                    titleStyle: rowTitleStyle,
+                    valueStyle: rowValueStyle,
+                    valueChevronGap: 0,
                   ),
                   ShellSettingsRow(
                     title: 'Detection Zones',

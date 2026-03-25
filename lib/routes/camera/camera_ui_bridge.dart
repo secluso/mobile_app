@@ -36,6 +36,8 @@ class CameraUiBridge {
     await prefs.remove(PrefKeys.numHeartbeatNotificationsPrefix + cameraName);
     await prefs.remove(PrefKeys.lastHeartbeatTimestampPrefix + cameraName);
     await prefs.remove(PrefKeys.firmwareVersionPrefix + cameraName);
+    await prefs.remove(PrefKeys.cameraNotificationsEnabledPrefix + cameraName);
+    await prefs.remove(PrefKeys.cameraNotificationEventsPrefix + cameraName);
 
     await deregisterCamera(cameraName: cameraName);
     invalidateCameraInit(cameraName);

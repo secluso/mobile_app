@@ -119,15 +119,21 @@ int _motionNotifId(String cameraName, String timestamp) {
   return cameraName.hashCode ^ ts;
 }
 
+int motionNotificationId(String cameraName, String timestamp) {
+  return _motionNotifId(cameraName, timestamp);
+}
+
 Future<void> showMotionNotification({
   required String cameraName,
   required String timestamp, // unix seconds
   String? thumbnailPath, // local file path
   int? notificationId, // optional explicit id
   bool onlyAlertOnce = false,
+  String alertLabel = 'Motion',
 }) async {
   final formatted = _formatTimestamp(timestamp);
   final id = notificationId ?? _motionNotifId(cameraName, timestamp);
+  final bodyText = '$alertLabel at $formatted';
 
   // Android
   AndroidNotificationDetails androidDetails;
@@ -136,7 +142,7 @@ Future<void> showMotionNotification({
       FilePathAndroidBitmap(thumbnailPath),
       hideExpandedLargeIcon: true,
       contentTitle: cameraName,
-      summaryText: 'Motion at $formatted',
+      summaryText: bodyText,
     );
 
     androidDetails = AndroidNotificationDetails(
@@ -195,10 +201,17 @@ Future<void> showMotionNotification({
   await _notifs.show(
     id: id, // unique id
     title: cameraName, // title
-    body: 'Motion at $formatted', // body
+    body: bodyText, // body
     notificationDetails: details,
     payload: jsonEncode({"cameraName": cameraName, "timestamp": timestamp}),
   );
+}
+
+Future<void> cancelMotionNotification({
+  required String cameraName,
+  required String timestamp,
+}) async {
+  await _notifs.cancel(id: _motionNotifId(cameraName, timestamp));
 }
 
 Future<void> _ensureMotionChannelAndroid() async {
@@ -306,7 +319,8 @@ Future<void> showSupportLogNotification() async {
   await _notifs.show(
     id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
     title: 'Secluso support',
-    body: 'An error occurred in the background. Open the app to copy logs for support.',
+    body:
+        'An error occurred in the background. Open the app to copy logs for support.',
     notificationDetails: details,
   );
 }
@@ -340,7 +354,8 @@ Future<void> showOutdatedNotification() async {
   await _notifs.show(
     id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
     title: 'Secluso support',
-    body: 'Your app is outdated. Please update to continue receiving notifications and use your cameras',
+    body:
+        'Your app is outdated. Please update to continue receiving notifications and use your cameras',
     notificationDetails: details,
   );
 }

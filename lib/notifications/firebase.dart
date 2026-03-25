@@ -8,6 +8,7 @@ import 'dart:ui';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:secluso_flutter/notifications/ios_notification_relay.dart';
+import 'package:secluso_flutter/notifications/alert_preferences.dart';
 import 'package:secluso_flutter/utilities/firebase_init.dart';
 import 'package:secluso_flutter/notifications/heartbeat_task.dart';
 import 'package:secluso_flutter/notifications/notifications.dart';
@@ -617,9 +618,11 @@ class PushNotificationService {
               0,
             );
           } else if (!response.startsWith('Error') && response != 'None') {
-            var sendNotificationGlobal =
-                prefs.getBool(PrefKeys.notificationsEnabled) ?? true;
-            if (sendNotificationGlobal &&
+            final shouldShowProvisional = shouldShowProvisionalMotionAlert(
+              prefs,
+              cameraName,
+            );
+            if (shouldShowProvisional &&
                 await _cameraStillExists(prefs, cameraName)) {
               final notifId = _motionNotifId(cameraName, response);
 
@@ -628,15 +631,16 @@ class PushNotificationService {
                 timestamp: response,
                 notificationId: notifId,
                 onlyAlertOnce: false,
+                alertLabel: 'Motion',
               );
 
               unawaited(_tryAttachThumbLater(cameraName, response, notifId));
-            } else if (!sendNotificationGlobal) {
-              Log.d("Not showing motion notification due to preference");
-            } else {
+            } else if (!await _cameraStillExists(prefs, cameraName)) {
               Log.d(
                 "[FCM] Camera deleted before motion notification for $cameraName; skipping.",
               );
+            } else {
+              Log.d("Not showing motion notification due to preference");
             }
 
             final nowTimestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;

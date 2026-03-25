@@ -38,4 +38,7 @@ class PrefKeys {
   static const lastHeartbeatTimestampPrefix = "last_heartbeat_timestamp_";
   static const firmwareVersionPrefix = "firmware_version_";
   static const lastOutdatedNotification = "last_outdated_notification";
+  static const cameraNotificationsEnabledPrefix =
+      "camera_notifications_enabled_";
+  static const cameraNotificationEventsPrefix = "camera_notification_events_";
 }
