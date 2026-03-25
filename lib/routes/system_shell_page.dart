@@ -172,7 +172,7 @@ class _UnpairedRelaySetupDarkCard extends StatelessWidget {
             _SystemDarkSetupOption(
               metrics: metrics,
               title: 'Self-Hosted',
-              subtitle: 'Run on your own server\n(DigitalOcean, Pi, NAS)',
+              subtitle: 'Run on your own server\n(VPS or dedicated host)',
               icon: const _SystemSelfHostedIcon(
                 size: 16,
                 color: Color(0xFF8BB3EE),
@@ -1103,7 +1103,7 @@ class _UnpairedRelaySetupCard extends StatelessWidget {
             _SystemSetupOption(
               metrics: metrics,
               title: 'Self-Hosted',
-              subtitle: 'Run on your own server\n(DigitalOcean, Pi, NAS)',
+              subtitle: 'Run on your own server\n(VPS or dedicated host)',
               icon: Icons.terminal_rounded,
               iconBackground: const Color(0xFFEFF6FF),
               backgroundColor: const Color(0xFFF9FAFB),
@@ -2105,11 +2105,7 @@ class _CameraListLightCard extends StatelessWidget {
                       : () => onOpenCamera!(cameraNames[i]),
             ),
             if (i != cameraNames.length - 1)
-              Divider(
-                height: 1,
-                thickness: 1,
-                color: const Color(0x0A000000),
-              ),
+              Divider(height: 1, thickness: 1, color: const Color(0x0A000000)),
           ],
         ],
       ),

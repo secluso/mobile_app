@@ -232,9 +232,9 @@ class _ServerPageState extends State<ServerPage> {
           final fetchedError = fetched.error?.toString() ?? '';
           final failureMessage =
               fetchedError.contains('401 Unauthorized') ||
-                  fetchedError.contains('Failed to fetch fcm config: 401')
-              ? 'This QR code is not authorized in the server.'
-              : 'Failed to fetch FCM config. Server settings not saved.';
+                      fetchedError.contains('Failed to fetch fcm config: 401')
+                  ? 'This QR code is not authorized in the server.'
+                  : 'Failed to fetch FCM config. Server settings not saved.';
 
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
@@ -612,7 +612,7 @@ class _ServerPageState extends State<ServerPage> {
               _setupOptionCard(
                 theme,
                 title: 'Self-Hosted',
-                subtitle: 'Run on your own server (DigitalOcean, Pi, NAS)',
+                subtitle: 'Run on your own server (VPS or dedicated host)',
                 icon: Icons.terminal_rounded,
                 highlighted: false,
                 onTap: () {},

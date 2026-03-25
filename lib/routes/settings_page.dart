@@ -429,19 +429,9 @@ class _SettingsPageState extends State<SettingsPage> {
           children: [
             ShellSettingsRow(
               title: 'Biometric Lock',
-              trailing: ShellToggle(
-                value: biometricLock,
-                onChanged: (value) {
-                  setState(() => biometricLock = value);
-                  _saveSettings();
-                },
-                width: shell ? shellMetrics.toggleWidth : 50,
-                height: shell ? shellMetrics.toggleHeight : 30,
-                padding: shell ? shellMetrics.togglePadding : 3,
-                thumbSize: shell ? shellMetrics.toggleThumbSize : 24,
-                activeColor: shell ? shellToggleActiveColor : null,
-                inactiveColor: shell ? shellToggleInactiveColor : null,
-                thumbShadow: shell ? shellToggleThumbShadow : null,
+              trailing: const ShellBadge(
+                label: 'UNIMPLEMENTED',
+                color: Color(0xFF9CA3AF),
               ),
               height: shell ? shellMetrics.rowHeight : 56,
               horizontalPadding: shell ? shellMetrics.rowHorizontalPadding : 18,
@@ -455,7 +445,10 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             ShellSettingsRow(
               title: 'Auto-Lock Timeout',
-              value: 'Immediately',
+              trailing: const ShellBadge(
+                label: 'UNIMPLEMENTED',
+                color: Color(0xFF9CA3AF),
+              ),
               height: shell ? shellMetrics.rowHeight : 56,
               horizontalPadding: shell ? shellMetrics.rowHorizontalPadding : 18,
               titleFontSize: shell ? shellMetrics.rowTitleSize : 16,
@@ -517,7 +510,10 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             ShellSettingsRow(
               title: 'App Icon',
-              value: 'Default',
+              trailing: const ShellBadge(
+                label: 'UNIMPLEMENTED',
+                color: Color(0xFF9CA3AF),
+              ),
               height: shell ? shellMetrics.rowHeight : 56,
               horizontalPadding: shell ? shellMetrics.rowHorizontalPadding : 18,
               titleFontSize: shell ? shellMetrics.rowTitleSize : 16,
@@ -842,6 +838,10 @@ class _SettingsPageState extends State<SettingsPage> {
             ShellSettingsRow(
               title: 'Version',
               value: '1.0.0 (24)',
+              trailing: const ShellBadge(
+                label: 'UNIMPLEMENTED',
+                color: Color(0xFF9CA3AF),
+              ),
               height: shell ? shellMetrics.aboutVersionRowHeight : 56,
               horizontalPadding: shell ? shellMetrics.rowHorizontalPadding : 18,
               titleFontSize: shell ? shellMetrics.rowTitleSize : 16,
@@ -856,6 +856,10 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             ShellSettingsRow(
               title: 'Terms of Service',
+              trailing: const ShellBadge(
+                label: 'UNIMPLEMENTED',
+                color: Color(0xFF9CA3AF),
+              ),
               height: shell ? shellMetrics.aboutLinkRowHeight : 56,
               horizontalPadding: shell ? shellMetrics.rowHorizontalPadding : 18,
               titleFontSize: shell ? shellMetrics.rowTitleSize : 16,
@@ -870,6 +874,10 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             ShellSettingsRow(
               title: 'Privacy Policy',
+              trailing: const ShellBadge(
+                label: 'UNIMPLEMENTED',
+                color: Color(0xFF9CA3AF),
+              ),
               height: shell ? shellMetrics.aboutLinkRowHeight : 56,
               horizontalPadding: shell ? shellMetrics.rowHorizontalPadding : 18,
               titleFontSize: shell ? shellMetrics.rowTitleSize : 16,

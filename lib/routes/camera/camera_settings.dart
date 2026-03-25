@@ -270,13 +270,13 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ShellSettingsRow(
                     title: 'Location',
-                    value: 'Front',
-                    trailing: const SizedBox.shrink(),
+                    trailing: const ShellBadge(
+                      label: 'UNIMPLEMENTED',
+                      color: Color(0xFF9CA3AF),
+                    ),
                     height: metrics.shortRowHeight + metrics.shortRowDelta,
                     horizontalPadding: metrics.rowHorizontalPadding,
                     titleStyle: rowTitleStyle,
-                    valueStyle: rowValueStyle,
-                    valueChevronGap: 0,
                   ),
                 ],
               ),
@@ -368,24 +368,23 @@ class _SettingsPageState extends State<SettingsPage> {
                 rows: [
                   ShellSettingsRow(
                     title: 'Motion Sensitivity',
-                    value: 'Medium',
-                    trailing: const SizedBox.shrink(),
+                    trailing: const ShellBadge(
+                      label: 'UNIMPLEMENTED',
+                      color: Color(0xFF9CA3AF),
+                    ),
                     height: metrics.shortRowHeight,
                     horizontalPadding: metrics.rowHorizontalPadding,
                     titleStyle: rowTitleStyle,
-                    valueStyle: rowValueStyle,
-                    valueChevronGap: 0,
                   ),
                   ShellSettingsRow(
                     title: 'Detection Zones',
+                    trailing: const ShellBadge(
+                      label: 'UNIMPLEMENTED',
+                      color: Color(0xFF9CA3AF),
+                    ),
                     height: metrics.bottomRowHeight,
                     horizontalPadding: metrics.rowHorizontalPadding,
                     titleStyle: rowTitleStyle,
-                    chevronSize: metrics.chevronSize,
-                    chevronColor:
-                        dark
-                            ? Colors.white.withValues(alpha: 0.2)
-                            : const Color(0xFF9CA3AF),
                   ),
                 ],
               ),
@@ -399,33 +398,19 @@ class _SettingsPageState extends State<SettingsPage> {
                 rows: [
                   ShellSettingsRow(
                     title: 'Clip Length',
-                    value: '15s',
-                    trailing: const SizedBox.shrink(),
+                    trailing: const ShellBadge(
+                      label: 'UNIMPLEMENTED',
+                      color: Color(0xFF9CA3AF),
+                    ),
                     height: metrics.shortRowHeight,
                     horizontalPadding: metrics.rowHorizontalPadding,
                     titleStyle: rowTitleStyle,
-                    valueStyle: rowValueStyle,
-                    valueChevronGap: 0,
                   ),
                   ShellSettingsRow(
                     title: 'Pre-roll',
-                    trailing: ShellToggle(
-                      value: preRollEnabled,
-                      onChanged:
-                          (value) => setState(() => preRollEnabled = value),
-                      width: metrics.toggleWidth,
-                      height: metrics.toggleHeight,
-                      padding: metrics.togglePadding,
-                      thumbSize: metrics.toggleThumbSize,
-                      activeColor: const Color(0xFF8BB3EE),
-                      inactiveColor: const Color(0xFFD1D5DB),
-                      thumbShadow: const [
-                        BoxShadow(
-                          color: Color(0x0D000000),
-                          blurRadius: 2,
-                          offset: Offset(0, 1),
-                        ),
-                      ],
+                    trailing: const ShellBadge(
+                      label: 'UNIMPLEMENTED',
+                      color: Color(0xFF9CA3AF),
                     ),
                     height: metrics.toggleRowHeight + metrics.shortRowDelta,
                     horizontalPadding: metrics.rowHorizontalPadding,
@@ -443,7 +428,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 rows: [
                   ShellSettingsRow(
                     title: 'Restart Camera',
-                    trailing: const SizedBox.shrink(),
+                    trailing: const ShellBadge(
+                      label: 'UNIMPLEMENTED',
+                      color: Color(0xFF9CA3AF),
+                    ),
                     height: metrics.shortRowHeight,
                     horizontalPadding: metrics.rowHorizontalPadding,
                     titleStyle: rowTitleStyle,
