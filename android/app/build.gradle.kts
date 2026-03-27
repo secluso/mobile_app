@@ -5,8 +5,64 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+import groovy.json.JsonSlurper
 import java.util.Properties
 import java.io.FileInputStream
+import org.gradle.jvm.tasks.Jar
+
+fun androidDevDependencyPluginNames(flutterProjectDir: File): Set<String> {
+    val pluginsFile = flutterProjectDir.resolve(".flutter-plugins-dependencies")
+    if (!pluginsFile.exists()) {
+        return emptySet()
+    }
+
+    val parsed = JsonSlurper().parseText(pluginsFile.readText()) as? Map<*, *> ?: return emptySet()
+    val plugins = (parsed["plugins"] as? Map<*, *>) ?: return emptySet()
+    val androidPlugins = plugins["android"] as? List<*> ?: return emptySet()
+
+    return androidPlugins.mapNotNull { plugin ->
+        val pluginMap = plugin as? Map<*, *> ?: return@mapNotNull null
+        val isDevDependency = pluginMap["dev_dependency"] as? Boolean ?: false
+        if (isDevDependency) pluginMap["name"] as? String else null
+    }.toSet()
+}
+
+fun stripReleaseOnlyDevPluginsFromRegistrant(
+    projectLogger: org.gradle.api.logging.Logger,
+    appProjectDir: File,
+    flutterProjectDir: File,
+) {
+    val devPluginNames = androidDevDependencyPluginNames(flutterProjectDir)
+    if (devPluginNames.isEmpty()) {
+        return
+    }
+
+    val registrantFile = appProjectDir.resolve("src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java")
+    if (!registrantFile.exists()) {
+        return
+    }
+
+    var content = registrantFile.readText()
+    var changed = false
+    for (pluginName in devPluginNames) {
+        val pattern = Regex(
+            """(?ms)^\s*try \{\R\s*flutterEngine\.getPlugins\(\)\.add\(new .*?\);\R\s*\} catch \(Exception e\) \{\R\s*Log\.e\(TAG, "Error registering plugin ${Regex.escape(pluginName)}, .*?\);\R\s*\}\R?"""
+        )
+        val updated = content.replace(pattern, "")
+        if (updated != content) {
+            changed = true
+            content = updated
+        }
+    }
+
+    if (changed) {
+        registrantFile.writeText(content)
+        projectLogger.lifecycle(
+            "Stripped release-only dev dependency plugins from GeneratedPluginRegistrant: " +
+                devPluginNames.joinToString(", ")
+        )
+    }
+}
 
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
@@ -107,6 +163,23 @@ android {
 
 flutter {
     source = "../.."
+}
+
+tasks.matching { it.name == "compileReleaseJavaWithJavac" }.configureEach {
+    doFirst {
+        stripReleaseOnlyDevPluginsFromRegistrant(
+            projectLogger = logger,
+            appProjectDir = projectDir,
+            flutterProjectDir = rootProject.projectDir.parentFile,
+        )
+    }
+}
+
+tasks.withType<Jar>().configureEach {
+    if (name.startsWith("packJniLibsflutterBuild")) {
+        isPreserveFileTimestamps = false
+        isReproducibleFileOrder = true
+    }
 }
 
 dependencies {

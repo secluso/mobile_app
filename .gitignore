@@ -77,3 +77,10 @@ android/key.properties
 tool/*
 !tool/device_farm_design_capture.sh
 !tool/design_targets_android.txt
+!tool/repro/
+!tool/repro/**
+!tool/app_review/
+!tool/app_review/**
+tool/repro/__pycache__/
+.secluso-repro-cache/
+.secluso-repro-build.lock

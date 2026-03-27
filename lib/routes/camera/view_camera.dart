@@ -40,8 +40,10 @@ class CameraViewPage extends StatefulWidget {
   final List<Video>? previewVideos;
   final Map<String, Set<String>>? previewDetectionsByVideo;
   final Map<String, String>? previewThumbAssetsByVideo;
+  final Map<String, String>? previewVideoAssetsByVideo;
   final Map<String, Duration>? previewDurationByVideo;
   final String? previewHeroAssetPath;
+  final String? previewHeroVideoAssetPath;
   final bool previewDownloadActive;
 
   const CameraViewPage({
@@ -50,8 +52,10 @@ class CameraViewPage extends StatefulWidget {
     this.previewVideos,
     this.previewDetectionsByVideo,
     this.previewThumbAssetsByVideo,
+    this.previewVideoAssetsByVideo,
     this.previewDurationByVideo,
     this.previewHeroAssetPath,
+    this.previewHeroVideoAssetPath,
     this.previewDownloadActive = false,
   });
 
@@ -691,6 +695,8 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
             (_) => LivestreamPage(
               cameraName: widget.cameraName,
               previewAssetPath: _isPreviewMode ? _previewHeroAssetPath() : null,
+              previewVideoAssetPath:
+                  _isPreviewMode ? _previewHeroVideoAssetPath() : null,
             ),
       ),
     );
@@ -1683,10 +1689,23 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
               videoTitle: video.video,
               visibleVideoTitle: repackageVideoTitle(video.video),
               isLivestream: !video.motion,
-              canDownload: _isPreviewMode ? false : video.received,
+              canDownload:
+                  _isPreviewMode
+                      ? _previewVideoAsset(video) != null
+                      : video.received,
               previewAssetPath:
                   _isPreviewMode ? _previewThumbAsset(video) : null,
+              previewVideoAssetPath:
+                  _isPreviewMode ? _previewVideoAsset(video) : null,
               previewDetections: _isPreviewMode ? detections : null,
+              previewDuration:
+                  _isPreviewMode && _previewVideoAsset(video) != null
+                      ? const Duration(seconds: 16)
+                      : const Duration(seconds: 42),
+              previewPosition:
+                  _isPreviewMode && _previewVideoAsset(video) != null
+                      ? Duration.zero
+                      : const Duration(seconds: 12),
             ),
       ),
     );
@@ -1891,8 +1910,20 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     return _previewThumbAsset(_videos.first);
   }
 
+  String? _previewHeroVideoAssetPath() {
+    if (widget.previewHeroVideoAssetPath != null) {
+      return widget.previewHeroVideoAssetPath;
+    }
+    if (_videos.isEmpty) return null;
+    return _previewVideoAsset(_videos.first);
+  }
+
   String? _previewThumbAsset(Video video) {
     return widget.previewThumbAssetsByVideo?[video.video];
+  }
+
+  String? _previewVideoAsset(Video video) {
+    return widget.previewVideoAssetsByVideo?[video.video];
   }
 
   Color _sectionLabelColor(BuildContext context) {

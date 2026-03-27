@@ -5,9 +5,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 DOCKER_PLATFORM="${SECLUSO_DOCKER_PLATFORM:-linux/amd64}"
-WORK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/secluso-mobile-repro.XXXXXX")"
+WORK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/secluso-mobile-apks-repro.XXXXXX")"
 KEEP_WORK_ROOT="${KEEP_WORK_ROOT:-0}"
 SOURCE_DATE_EPOCH_VALUE="${SOURCE_DATE_EPOCH:-}"
+DEVICE_SPEC_SOURCE="${1:-${SECLUSO_DEVICE_SPEC_JSON:-}}"
 REPRO_CHECK_PARALLEL="${SECLUSO_REPRO_CHECK_PARALLEL:-0}"
 REPRO_CHECK_STRICT="${SECLUSO_REPRO_CHECK_STRICT:-0}"
 
@@ -55,6 +56,17 @@ IMAGE_TAG="${SECLUSO_REPRO_IMAGE_TAG:-$DEFAULT_IMAGE_TAG}"
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "docker is required" >&2
+  exit 1
+fi
+
+if [[ -z "$DEVICE_SPEC_SOURCE" ]]; then
+  echo "Usage: $(basename "$0") <device-spec.json>" >&2
+  echo "Or set SECLUSO_DEVICE_SPEC_JSON." >&2
+  exit 1
+fi
+
+if [[ ! -f "$DEVICE_SPEC_SOURCE" ]]; then
+  echo "Device spec JSON not found at $DEVICE_SPEC_SOURCE" >&2
   exit 1
 fi
 
@@ -128,7 +140,20 @@ run_build() {
     "${docker_cache_volumes[@]}" \
     "$IMAGE_TAG" \
     /workspace/tool/repro/run_build_in_container_workspace.sh \
-      tool/repro/build_unsigned_android_release.sh
+      tool/repro/build_unsigned_android_appbundle.sh
+}
+
+run_apk_set() {
+  local workspace="$1"
+  local device_spec_path="$2"
+  docker run --rm \
+    --platform "$DOCKER_PLATFORM" \
+    -v "$workspace":/workspace \
+    "$IMAGE_TAG" \
+    /workspace/tool/repro/generate_device_apk_set_from_aab.sh \
+      /workspace/build/reproducible/app-release-unsigned.aab \
+      "$device_spec_path" \
+      /workspace/build/reproducible/device.apks
 }
 
 warm_source_workspace() {
@@ -141,7 +166,7 @@ warm_source_workspace() {
     return
   fi
   echo "==> Warming source workspace caches"
-  "$SCRIPT_DIR/build_with_docker.sh"
+  "$SCRIPT_DIR/build_aab_with_docker.sh"
 }
 
 BUILD_ONE="$WORK_ROOT/build-one"
@@ -150,6 +175,10 @@ BUILD_TWO="$WORK_ROOT/build-two"
 warm_source_workspace
 copy_workspace "$BUILD_ONE"
 copy_workspace "$BUILD_TWO"
+
+mkdir -p "$BUILD_ONE/tool/repro/device_specs" "$BUILD_TWO/tool/repro/device_specs"
+cp "$DEVICE_SPEC_SOURCE" "$BUILD_ONE/tool/repro/device_specs/repro-device.json"
+cp "$DEVICE_SPEC_SOURCE" "$BUILD_TWO/tool/repro/device_specs/repro-device.json"
 
 if [[ "${SECLUSO_REPRO_FORCE_IMAGE_BUILD:-0}" == "1" ]] || ! docker image inspect "$IMAGE_TAG" >/dev/null 2>&1; then
   docker build --platform "$DOCKER_PLATFORM" -f "$SCRIPT_DIR/Dockerfile" -t "$IMAGE_TAG" "$REPO_ROOT"
@@ -164,16 +193,20 @@ if [[ "$REPRO_CHECK_PARALLEL" == "1" ]]; then
   PID_TWO=$!
   wait "$PID_ONE"
   wait "$PID_TWO"
+  run_apk_set "$BUILD_ONE" /workspace/tool/repro/device_specs/repro-device.json &
+  PID_APKS_ONE=$!
+  run_apk_set "$BUILD_TWO" /workspace/tool/repro/device_specs/repro-device.json &
+  PID_APKS_TWO=$!
+  wait "$PID_APKS_ONE"
+  wait "$PID_APKS_TWO"
 else
   run_build "$BUILD_ONE"
   run_build "$BUILD_TWO"
+  run_apk_set "$BUILD_ONE" /workspace/tool/repro/device_specs/repro-device.json
+  run_apk_set "$BUILD_TWO" /workspace/tool/repro/device_specs/repro-device.json
 fi
 
-FIRST_APK="$BUILD_ONE/build/reproducible/app-release-unsigned.apk"
-SECOND_APK="$BUILD_TWO/build/reproducible/app-release-unsigned.apk"
+FIRST_APKS="$BUILD_ONE/build/reproducible/device.apks"
+SECOND_APKS="$BUILD_TWO/build/reproducible/device.apks"
 
-python3 "$REPO_ROOT/tool/repro/apkdiff.py" "$FIRST_APK" "$SECOND_APK"
-echo "First build sha256:"
-cat "$FIRST_APK.sha256"
-echo "Second build sha256:"
-cat "$SECOND_APK.sha256"
+python3 "$REPO_ROOT/tool/repro/apksdiff.py" "$FIRST_APKS" "$SECOND_APKS"

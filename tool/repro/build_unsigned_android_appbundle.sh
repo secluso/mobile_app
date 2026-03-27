@@ -42,7 +42,6 @@ export PUB_CACHE="${PUB_CACHE:-/opt/pub-cache}"
 export RUSTUP_HOME="${RUSTUP_HOME:-/opt/rustup}"
 export CARGOKIT_RUST_TOOLCHAIN="${CARGOKIT_RUST_TOOLCHAIN:-1.90.0}"
 export SECLUSO_FLUTTER_VERBOSE="${SECLUSO_FLUTTER_VERBOSE:-0}"
-export SECLUSO_ANDROID_TARGET_PLATFORM="${SECLUSO_ANDROID_TARGET_PLATFORM:-android-arm64}"
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$SECLUSO_REPRO_MAX_WORKERS}"
 export CARGO_INCREMENTAL=0
 export SECLUSO_REPRO_CLEAN="${SECLUSO_REPRO_CLEAN:-0}"
@@ -111,23 +110,23 @@ log_step "Running flutter pub get"
 flutter pub get --enforce-lockfile
 
 export SECLUSO_ALLOW_UNSIGNED_RELEASE=1
-log_step "Building Android release APK"
+log_step "Building Android release app bundle"
 if [[ "$SECLUSO_FLUTTER_VERBOSE" == "1" ]]; then
-  run_flutter_build flutter build apk --release --no-pub --target-platform="$SECLUSO_ANDROID_TARGET_PLATFORM" -v
+  run_flutter_build flutter build appbundle --release --no-pub -v
 else
-  run_flutter_build flutter build apk --release --no-pub --target-platform="$SECLUSO_ANDROID_TARGET_PLATFORM"
+  run_flutter_build flutter build appbundle --release --no-pub
 fi
 
 OUTPUT_DIR="$REPO_ROOT/build/reproducible"
 mkdir -p "$OUTPUT_DIR"
 log_step "Collecting reproducible build artifact"
-cp "$REPO_ROOT/build/app/outputs/flutter-apk/app-release.apk" \
-  "$OUTPUT_DIR/app-release-unsigned.apk"
+cp "$REPO_ROOT/build/app/outputs/bundle/release/app-release.aab" \
+  "$OUTPUT_DIR/app-release-unsigned.aab"
 
 if command -v sha256sum >/dev/null 2>&1; then
-  sha256sum "$OUTPUT_DIR/app-release-unsigned.apk" \
-    | tee "$OUTPUT_DIR/app-release-unsigned.apk.sha256"
+  sha256sum "$OUTPUT_DIR/app-release-unsigned.aab" \
+    | tee "$OUTPUT_DIR/app-release-unsigned.aab.sha256"
 else
-  shasum -a 256 "$OUTPUT_DIR/app-release-unsigned.apk" \
-    | tee "$OUTPUT_DIR/app-release-unsigned.apk.sha256"
+  shasum -a 256 "$OUTPUT_DIR/app-release-unsigned.aab" \
+    | tee "$OUTPUT_DIR/app-release-unsigned.aab.sha256"
 fi

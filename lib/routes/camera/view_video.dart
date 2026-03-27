@@ -2,6 +2,7 @@
 
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -24,6 +25,7 @@ class VideoViewPage extends StatefulWidget {
   final String cameraName;
   final bool isLivestream;
   final String? previewAssetPath;
+  final String? previewVideoAssetPath;
   final Set<String>? previewDetections;
   final Duration previewDuration;
   final Duration previewPosition;
@@ -36,6 +38,7 @@ class VideoViewPage extends StatefulWidget {
     required this.cameraName,
     required this.isLivestream,
     this.previewAssetPath,
+    this.previewVideoAssetPath,
     this.previewDetections,
     this.previewDuration = const Duration(seconds: 42),
     this.previewPosition = const Duration(seconds: 12),
@@ -46,23 +49,31 @@ class VideoViewPage extends StatefulWidget {
 }
 
 class _VideoViewPageState extends State<VideoViewPage> {
-  late VideoPlayerController _controller;
+  VideoPlayerController? _controller;
   bool _initialized = false;
   String? _loadError;
-  late String _videoPath;
+  String? _videoPath;
   late Box<Detection> _detBox;
   Set<String> _dets = {};
   bool _shareInProgress = false;
   double _playbackSpeed = 1.0;
 
-  bool get _isPreviewMode => widget.previewAssetPath != null;
+  bool get _hasPreviewImage => widget.previewAssetPath != null;
+  bool get _hasPreviewVideo => widget.previewVideoAssetPath != null;
+  bool get _isStaticPreviewMode => _hasPreviewImage && !_hasPreviewVideo;
+  VideoPlayerController get _videoController => _controller!;
 
   @override
   void initState() {
     super.initState();
-    if (_isPreviewMode) {
+    if (_isStaticPreviewMode) {
       _dets = widget.previewDetections ?? const <String>{};
       _initialized = true;
+      return;
+    }
+    if (_hasPreviewVideo) {
+      _dets = widget.previewDetections ?? const <String>{};
+      _initPreviewVideo();
       return;
     }
     _openBoxesAndLoadDetections();
@@ -118,7 +129,8 @@ class _VideoViewPageState extends State<VideoViewPage> {
       );
       Log.d("Found path: $_videoPath");
 
-      final sourceFile = File(_videoPath);
+      final sourcePath = _videoPath!;
+      final sourceFile = File(sourcePath);
       if (!await sourceFile.exists()) {
         if (mounted) {
           setState(() {
@@ -130,7 +142,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
 
       // apply patch only for livestreams, and only once
       if (widget.isLivestream) {
-        final markerPath = '$_videoPath.patched_livestream';
+        final markerPath = '$sourcePath.patched_livestream';
         final marker = File(markerPath);
         final alreadyFixed = await marker.exists();
 
@@ -161,21 +173,10 @@ class _VideoViewPageState extends State<VideoViewPage> {
         Log.d("[fix] not a livestream — skipping patch");
       }
 
-      _controller = VideoPlayerController.file(sourceFile);
-
-      await _controller.initialize();
-      await _controller.setLooping(true);
-      await _controller.setPlaybackSpeed(_playbackSpeed);
-      _controller.addListener(() {
-        if (mounted) setState(() {});
-      });
-      _controller.play();
-      if (mounted) {
-        setState(() {
-          _initialized = true;
-          _loadError = null;
-        });
-      }
+      await _attachController(
+        VideoPlayerController.file(sourceFile),
+        initialPosition: Duration.zero,
+      );
     } catch (e, st) {
       Log.e("Failed to initialize video view: $e\n$st");
       if (mounted) {
@@ -186,17 +187,83 @@ class _VideoViewPageState extends State<VideoViewPage> {
     }
   }
 
+  Future<File> _ensurePreviewVideoFile() async {
+    final tempDir = await getTemporaryDirectory();
+    final cacheDir = Directory(p.join(tempDir.path, 'review_preview_assets'));
+    if (!await cacheDir.exists()) {
+      await cacheDir.create(recursive: true);
+    }
+
+    final assetPath = widget.previewVideoAssetPath!;
+    final targetFile = File(p.join(cacheDir.path, p.basename(assetPath)));
+    if (await targetFile.exists() && await targetFile.length() > 0) {
+      return targetFile;
+    }
+
+    final assetBytes = await rootBundle.load(assetPath);
+    await targetFile.writeAsBytes(assetBytes.buffer.asUint8List(), flush: true);
+    return targetFile;
+  }
+
+  Future<void> _initPreviewVideo() async {
+    try {
+      final previewFile = await _ensurePreviewVideoFile();
+      _videoPath = previewFile.path;
+      await _attachController(
+        VideoPlayerController.file(previewFile),
+        initialPosition: widget.previewPosition,
+      );
+    } catch (e, st) {
+      Log.e('Failed to initialize preview video: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        _loadError = 'Unable to open this review clip.';
+      });
+    }
+  }
+
+  Future<void> _attachController(
+    VideoPlayerController controller, {
+    required Duration initialPosition,
+  }) async {
+    _controller = controller;
+    await controller.initialize();
+    await controller.setLooping(true);
+    await controller.setPlaybackSpeed(_playbackSpeed);
+    if (initialPosition > Duration.zero) {
+      await controller.seekTo(
+        _safeSeekTarget(initialPosition, controller.value.duration),
+      );
+    }
+    controller.addListener(() {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+    await controller.play();
+    if (!mounted) return;
+    setState(() {
+      _initialized = true;
+      _loadError = null;
+    });
+  }
+
   @override
   void dispose() {
-    if (!_isPreviewMode) {
-      _controller.dispose();
-    }
+    _controller?.dispose();
     super.dispose();
   }
 
   Future<void> _downloadVideo() async {
     Log.d("Requested video download");
-    final videoFile = File(_videoPath);
+    final videoPath = _videoPath;
+    if (videoPath == null || videoPath.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Video file not found")));
+      return;
+    }
+    final videoFile = File(videoPath);
     if (!await videoFile.exists()) {
       ScaffoldMessenger.of(
         context,
@@ -258,18 +325,26 @@ class _VideoViewPageState extends State<VideoViewPage> {
   }
 
   void _togglePlayPause() {
+    final controller = _controller;
+    if (controller == null || !_initialized) {
+      return;
+    }
     setState(() {
-      _controller.value.isPlaying ? _controller.pause() : _controller.play();
+      controller.value.isPlaying ? controller.pause() : controller.play();
     });
   }
 
   Future<void> _setPlaybackSpeed(double speed) async {
-    if (_isPreviewMode || !_initialized || _playbackSpeed == speed) {
+    final controller = _controller;
+    if (_isStaticPreviewMode ||
+        controller == null ||
+        !_initialized ||
+        _playbackSpeed == speed) {
       return;
     }
 
     try {
-      await _controller.setPlaybackSpeed(speed);
+      await controller.setPlaybackSpeed(speed);
       if (!mounted) return;
       setState(() {
         _playbackSpeed = speed;
@@ -306,21 +381,30 @@ class _VideoViewPageState extends State<VideoViewPage> {
   }
 
   Future<void> _seekToSafe(Duration requested) async {
-    if (_isPreviewMode || !_initialized) {
+    final controller = _controller;
+    if (_isStaticPreviewMode || controller == null || !_initialized) {
       return;
     }
 
-    final duration = _controller.value.duration;
+    final duration = controller.value.duration;
     final target = _safeSeekTarget(requested, duration);
-    await _controller.seekTo(target);
+    await controller.seekTo(target);
   }
 
   Future<void> _shareVideo() async {
-    if (_isPreviewMode || _shareInProgress) {
+    if (_isStaticPreviewMode || _shareInProgress) {
       return;
     }
 
-    final videoFile = File(_videoPath);
+    final videoPath = _videoPath;
+    if (videoPath == null || videoPath.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Video file not found')));
+      return;
+    }
+    final videoFile = File(videoPath);
     if (!await videoFile.exists()) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -336,11 +420,13 @@ class _VideoViewPageState extends State<VideoViewPage> {
     try {
       if (!mounted) return;
       final box = context.findRenderObject() as RenderBox?;
-      await Share.shareXFiles(
-        [XFile(videoFile.path, mimeType: 'video/mp4')],
-        subject: 'Secluso clip',
-        sharePositionOrigin:
-            box == null ? null : box.localToGlobal(Offset.zero) & box.size,
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(videoFile.path, mimeType: 'video/mp4')],
+          subject: 'Secluso clip',
+          sharePositionOrigin:
+              box == null ? null : box.localToGlobal(Offset.zero) & box.size,
+        ),
       );
     } catch (e, st) {
       Log.e('Failed to share video: $e\n$st');
@@ -373,7 +459,24 @@ class _VideoViewPageState extends State<VideoViewPage> {
         MediaQuery.of(context).orientation == Orientation.landscape;
     final dark = Theme.of(context).brightness == Brightness.dark;
 
-    if (_isPreviewMode) {
+    if (_loadError != null) {
+      return Scaffold(
+        backgroundColor:
+            dark ? const Color(0xFF050505) : const Color(0xFFF2F2F7),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              _loadError!,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_isStaticPreviewMode) {
       return Scaffold(
         backgroundColor:
             dark ? const Color(0xFF050505) : const Color(0xFFF2F2F7),
@@ -381,21 +484,11 @@ class _VideoViewPageState extends State<VideoViewPage> {
       );
     }
 
+    final controller = _controller;
     return Scaffold(
       backgroundColor: dark ? const Color(0xFF050505) : const Color(0xFFF2F2F7),
       body:
-          _loadError != null
-              ? Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    _loadError!,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                ),
-              )
-              : _initialized
+          _initialized && controller != null
               ? isLandscape
                   ? _buildLandscapePlayer()
                   : _buildPortraitContent()
@@ -404,12 +497,13 @@ class _VideoViewPageState extends State<VideoViewPage> {
   }
 
   Widget _buildLandscapePlayer() {
+    final controller = _videoController;
     return Stack(
       children: [
         Center(
           child: AspectRatio(
-            aspectRatio: _controller.value.aspectRatio,
-            child: VideoPlayer(_controller),
+            aspectRatio: controller.value.aspectRatio,
+            child: VideoPlayer(controller),
           ),
         ),
         // Progress bar & time
@@ -425,7 +519,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 VideoProgressIndicator(
-                  _controller,
+                  controller,
                   allowScrubbing: false,
                   colors: const VideoProgressColors(
                     playedColor: SeclusoColors.blue,
@@ -436,11 +530,11 @@ class _VideoViewPageState extends State<VideoViewPage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      _formatDuration(_controller.value.position),
+                      _formatDuration(controller.value.position),
                       style: const TextStyle(fontSize: 12, color: Colors.white),
                     ),
                     Text(
-                      _formatDuration(_controller.value.duration),
+                      _formatDuration(controller.value.duration),
                       style: const TextStyle(fontSize: 12, color: Colors.white),
                     ),
                   ],
@@ -462,7 +556,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
                   iconSize: 36,
                   color: Colors.white,
                   onPressed: () {
-                    final current = _controller.value.position;
+                    final current = controller.value.position;
                     final newPosition = current - const Duration(seconds: 5);
                     _seekToSafe(
                       newPosition >= Duration.zero
@@ -474,9 +568,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
                 const SizedBox(width: 24),
                 IconButton(
                   icon: Icon(
-                    _controller.value.isPlaying
-                        ? Icons.pause
-                        : Icons.play_arrow,
+                    controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
                   ),
                   iconSize: 44,
                   color: Colors.white,
@@ -488,8 +580,8 @@ class _VideoViewPageState extends State<VideoViewPage> {
                   iconSize: 36,
                   color: Colors.white,
                   onPressed: () {
-                    final current = _controller.value.position;
-                    final max = _controller.value.duration;
+                    final current = controller.value.position;
+                    final max = controller.value.duration;
                     final newPosition = current + const Duration(seconds: 5);
                     _seekToSafe(newPosition <= max ? newPosition : max);
                   },
@@ -503,24 +595,25 @@ class _VideoViewPageState extends State<VideoViewPage> {
   }
 
   Widget _buildPortraitContent() {
+    final controller = _videoController;
     return _buildPortraitShell(
-      aspectRatio: _controller.value.aspectRatio,
-      media: VideoPlayer(_controller),
-      position: _controller.value.position,
-      duration: _controller.value.duration,
+      aspectRatio: controller.value.aspectRatio,
+      media: VideoPlayer(controller),
+      position: controller.value.position,
+      duration: controller.value.duration,
       detections: _dets,
       canDownload: widget.canDownload,
       onDownload: _downloadVideo,
-      isPlaying: _controller.value.isPlaying,
+      isPlaying: controller.value.isPlaying,
       onTogglePlay: _togglePlayPause,
       onRewind: () {
-        final current = _controller.value.position;
+        final current = controller.value.position;
         final newPosition = current - const Duration(seconds: 5);
         _seekToSafe(newPosition >= Duration.zero ? newPosition : Duration.zero);
       },
       onFastForward: () {
-        final current = _controller.value.position;
-        final max = _controller.value.duration;
+        final current = controller.value.position;
+        final max = controller.value.duration;
         final newPosition = current + const Duration(seconds: 5);
         _seekToSafe(newPosition <= max ? newPosition : max);
       },
@@ -673,7 +766,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
             height: metrics.progressHeight,
             thumbRadius: metrics.progressThumbRadius,
             onChanged:
-                _isPreviewMode
+                _isStaticPreviewMode
                     ? null
                     : (value) async {
                       await _seekToSafe(Duration(milliseconds: value.round()));
@@ -883,7 +976,10 @@ class _VideoViewPageState extends State<VideoViewPage> {
                           metrics: metrics,
                           dark: dark,
                           label: 'Share',
-                          onTap: _shareInProgress ? () {} : _shareVideo,
+                          onTap:
+                              (_isStaticPreviewMode || _shareInProgress)
+                                  ? () {}
+                                  : _shareVideo,
                           child: _ClipShareIcon(
                             size: metrics.actionIconSize,
                             color:

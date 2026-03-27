@@ -8,6 +8,8 @@ import 'package:secluso_flutter/constants.dart';
 import 'dart:async';
 import 'package:secluso_flutter/routes/camera/new/ip_camera_option.dart';
 import 'package:secluso_flutter/routes/camera/new/proprietary_camera_option.dart';
+import 'package:secluso_flutter/routes/camera/new/proprietary_camera_waiting.dart';
+import 'package:secluso_flutter/utilities/review_environment.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'dart:convert';
 import 'package:secluso_flutter/ui/secluso_surfaces.dart';
@@ -277,7 +279,7 @@ class SeclusoQrScanScreen extends StatelessWidget {
   }
 }
 
-enum GenericCameraQrKind { proprietary, ip }
+enum GenericCameraQrKind { proprietary, ip, review }
 
 class GenericCameraQrPayload {
   const GenericCameraQrPayload._({
@@ -285,12 +287,14 @@ class GenericCameraQrPayload {
     this.rawQrBytes,
     this.initialCameraName,
     this.initialCameraIp,
+    this.reviewPayload,
   });
 
   final GenericCameraQrKind kind;
   final Uint8List? rawQrBytes;
   final String? initialCameraName;
   final String? initialCameraIp;
+  final ReviewCameraQrPayload? reviewPayload;
 
   factory GenericCameraQrPayload.proprietary(Uint8List rawQrBytes) {
     return GenericCameraQrPayload._(
@@ -307,6 +311,13 @@ class GenericCameraQrPayload {
       kind: GenericCameraQrKind.ip,
       initialCameraName: initialCameraName,
       initialCameraIp: initialCameraIp,
+    );
+  }
+
+  factory GenericCameraQrPayload.review(ReviewCameraQrPayload reviewPayload) {
+    return GenericCameraQrPayload._(
+      kind: GenericCameraQrKind.review,
+      reviewPayload: reviewPayload,
     );
   }
 }
@@ -358,6 +369,7 @@ class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage> {
 
       _handlingScan = true;
       await _cameraController.stop();
+      if (!context.mounted) return;
 
       Map<String, Object>? result;
       switch (payload.kind) {
@@ -372,6 +384,39 @@ class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage> {
             context,
             initialCameraName: payload.initialCameraName,
             initialCameraIp: payload.initialCameraIp,
+          );
+        case GenericCameraQrKind.review:
+          final reviewPayload = payload.reviewPayload;
+          if (reviewPayload == null) {
+            result = null;
+            break;
+          }
+          final session = ReviewEnvironment.instance.session;
+          final alreadyAdded =
+              session?.cameras.any(
+                (camera) =>
+                    camera.id == reviewPayload.cameraId ||
+                    camera.name == reviewPayload.cameraName,
+              ) ??
+              false;
+          if (!ReviewEnvironment.instance.isActive) {
+            _showNonSeclusoQrIndicator(
+              'Scan the App Review relay QR before scanning the review camera QR.',
+            );
+            break;
+          }
+          if (alreadyAdded) {
+            _showNonSeclusoQrIndicator(
+              'That App Review camera is already added.',
+            );
+            break;
+          }
+          await Navigator.of(context).push<void>(
+            MaterialPageRoute(
+              builder:
+                  (_) =>
+                      ReviewCameraPairingFlowPage(reviewPayload: reviewPayload),
+            ),
           );
       }
 
@@ -397,6 +442,11 @@ class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage> {
     }
 
     if (decoded is Map) {
+      final reviewPayload = ReviewCameraQrPayload.tryParseMap(decoded);
+      if (reviewPayload != null) {
+        return GenericCameraQrPayload.review(reviewPayload);
+      }
+
       final versionKey = decoded['v'];
       final cameraSecret = decoded['cs'];
       if (versionKey is String &&

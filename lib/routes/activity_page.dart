@@ -23,6 +23,7 @@ class ActivityPreviewItem {
     required this.cameraName,
     required this.videoName,
     this.previewAssetPath,
+    this.previewVideoAssetPath,
     required this.detections,
     this.motion = true,
     this.title,
@@ -35,6 +36,7 @@ class ActivityPreviewItem {
   final String cameraName;
   final String videoName;
   final String? previewAssetPath;
+  final String? previewVideoAssetPath;
   final Set<String> detections;
   final bool motion;
   final String? title;
@@ -68,6 +70,7 @@ class _ActivityEntry {
     required this.motion,
     this.thumbnailBytes,
     this.previewAssetPath,
+    this.previewVideoAssetPath,
     this.title,
     this.subtitle,
     this.sectionLabel,
@@ -82,6 +85,7 @@ class _ActivityEntry {
   final bool motion;
   final Uint8List? thumbnailBytes;
   final String? previewAssetPath;
+  final String? previewVideoAssetPath;
   final String? title;
   final String? subtitle;
   final String? sectionLabel;
@@ -103,6 +107,31 @@ class _ActivityPageState extends State<ActivityPage>
 
   bool get _isPreviewMode => widget.previewItems != null;
   bool get _showSystemExample => _entries.isNotEmpty;
+
+  void _applyPreviewEntries() {
+    _entries
+      ..clear()
+      ..addAll(
+        (widget.previewItems ?? const <ActivityPreviewItem>[]).map(
+          (item) => _ActivityEntry(
+            cameraName: item.cameraName,
+            videoName: item.videoName,
+            previewAssetPath: item.previewAssetPath,
+            previewVideoAssetPath: item.previewVideoAssetPath,
+            detections: item.detections,
+            motion: item.motion,
+            title: item.title,
+            subtitle: item.subtitle,
+            sectionLabel: item.sectionLabel,
+            durationLabel: item.durationLabel,
+            isSystem: item.isSystem,
+            hasVideoFile: true,
+          ),
+        ),
+      );
+    _normalizeCameraSelection();
+    _isLoading = false;
+  }
 
   bool _hasPersonDetection(Set<String> detections) {
     return detections.contains('human') || detections.contains('person');
@@ -191,25 +220,7 @@ class _ActivityPageState extends State<ActivityPage>
       duration: const Duration(seconds: 5),
     )..repeat();
     if (_isPreviewMode) {
-      _entries.addAll(
-        widget.previewItems!.map(
-          (item) => _ActivityEntry(
-            cameraName: item.cameraName,
-            videoName: item.videoName,
-            previewAssetPath: item.previewAssetPath,
-            detections: item.detections,
-            motion: item.motion,
-            title: item.title,
-            subtitle: item.subtitle,
-            sectionLabel: item.sectionLabel,
-            durationLabel: item.durationLabel,
-            isSystem: item.isSystem,
-            hasVideoFile: true,
-          ),
-        ),
-      );
-      _normalizeCameraSelection();
-      _isLoading = false;
+      _applyPreviewEntries();
       return;
     }
     _loadActivity();
@@ -224,7 +235,19 @@ class _ActivityPageState extends State<ActivityPage>
   @override
   void didUpdateWidget(covariant ActivityPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final wasPreviewMode = oldWidget.previewItems != null;
     if (_isPreviewMode) {
+      if (!wasPreviewMode || oldWidget.previewItems != widget.previewItems) {
+        setState(_applyPreviewEntries);
+      }
+      return;
+    }
+    if (wasPreviewMode) {
+      setState(() {
+        _isLoading = true;
+        _entries.clear();
+      });
+      _loadActivity();
       return;
     }
     if (widget.refreshToken != oldWidget.refreshToken) {
@@ -509,14 +532,23 @@ class _ActivityPageState extends State<ActivityPage>
               cameraName: entry.cameraName,
               videoTitle: entry.videoName,
               visibleVideoTitle: _timestampLabel(entry.videoName),
-              canDownload: false,
+              canDownload: entry.previewVideoAssetPath != null,
               isLivestream: !entry.motion,
               previewAssetPath:
                   _isPreviewMode
                       ? (entry.previewAssetPath ??
                           SeclusoPreviewAssets.hallwayEvent)
                       : entry.previewAssetPath,
+              previewVideoAssetPath: entry.previewVideoAssetPath,
               previewDetections: entry.detections,
+              previewDuration:
+                  entry.previewVideoAssetPath != null
+                      ? const Duration(seconds: 16)
+                      : const Duration(seconds: 42),
+              previewPosition:
+                  entry.previewVideoAssetPath != null
+                      ? Duration.zero
+                      : const Duration(seconds: 12),
             ),
       ),
     );

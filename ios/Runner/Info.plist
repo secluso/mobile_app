@@ -20,7 +20,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>secluso_flutter</string>
+	<string>Secluso</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -62,6 +62,8 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>This app requires access to devices on your local network.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
+	<string>We need access to save videos to your photo library</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>We need access to save videos to your photo library</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>

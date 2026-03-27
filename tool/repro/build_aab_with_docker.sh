@@ -65,13 +65,13 @@ docker run --rm \
   "${DOCKER_CACHE_VOLUMES[@]}" \
   "$IMAGE_TAG" \
   /workspace/tool/repro/run_build_in_container_workspace.sh \
-    tool/repro/build_unsigned_android_release.sh
+    tool/repro/build_unsigned_android_appbundle.sh
 
-if [[ -f "$REPO_ROOT/build/reproducible/app-release-unsigned.apk.sha256" ]]; then
-  tmp_sha="$(mktemp "${TMPDIR:-/tmp}/secluso-apk-sha.XXXXXX")"
+if [[ -f "$REPO_ROOT/build/reproducible/app-release-unsigned.aab.sha256" ]]; then
+  tmp_sha="$(mktemp "${TMPDIR:-/tmp}/secluso-aab-sha.XXXXXX")"
   sed "s|/workspace|$REPO_ROOT|g" \
-    "$REPO_ROOT/build/reproducible/app-release-unsigned.apk.sha256" > "$tmp_sha"
-  mv "$tmp_sha" "$REPO_ROOT/build/reproducible/app-release-unsigned.apk.sha256"
+    "$REPO_ROOT/build/reproducible/app-release-unsigned.aab.sha256" > "$tmp_sha"
+  mv "$tmp_sha" "$REPO_ROOT/build/reproducible/app-release-unsigned.aab.sha256"
 fi
 
-printf '\n==> Host artifact ready at %s\n' "$REPO_ROOT/build/reproducible/app-release-unsigned.apk"
+printf '\n==> Host artifact ready at %s\n' "$REPO_ROOT/build/reproducible/app-release-unsigned.aab"

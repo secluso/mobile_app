@@ -66,6 +66,14 @@ class CameraPreviewData {
     this.recentActivityTimeLabel,
     this.isLive = true,
     this.isOffline = false,
+    this.previewVideos,
+    this.previewDetectionsByVideo,
+    this.previewThumbAssetsByVideo,
+    this.previewVideoAssetsByVideo,
+    this.previewDurationByVideo,
+    this.previewHeroAssetPath,
+    this.previewHeroVideoAssetPath,
+    this.previewDownloadActive = false,
   });
 
   final String name;
@@ -77,6 +85,14 @@ class CameraPreviewData {
   final String? recentActivityTimeLabel;
   final bool isLive;
   final bool isOffline;
+  final List<Video>? previewVideos;
+  final Map<String, Set<String>>? previewDetectionsByVideo;
+  final Map<String, String>? previewThumbAssetsByVideo;
+  final Map<String, String>? previewVideoAssetsByVideo;
+  final Map<String, Duration>? previewDurationByVideo;
+  final String? previewHeroAssetPath;
+  final String? previewHeroVideoAssetPath;
+  final bool previewDownloadActive;
 }
 
 class HomeRecentEventPreviewData {
@@ -85,6 +101,7 @@ class HomeRecentEventPreviewData {
     required this.subtitle,
     required this.timeLabel,
     this.previewAssetPath,
+    this.previewVideoAssetPath,
     required this.accentColor,
     this.videoName,
     this.detections = const <String>{},
@@ -97,6 +114,7 @@ class HomeRecentEventPreviewData {
   final String subtitle;
   final String timeLabel;
   final String? previewAssetPath;
+  final String? previewVideoAssetPath;
   final Color accentColor;
   final String? videoName;
   final Set<String> detections;
@@ -442,6 +460,38 @@ class CamerasPageState extends State<CamerasPage>
     return prefs;
   }
 
+  void _applyPreviewState() {
+    _serverHasSyncedState = widget.previewServerHasSynced ?? false;
+    _hasCompletedCameraLoad = true;
+    cameras
+      ..clear()
+      ..addAll(
+        (widget.previewCameras ?? const <CameraPreviewData>[]).map(
+          (camera) => {
+            'name': camera.name,
+            'icon': camera.icon,
+            'unreadMessages': camera.unreadMessages,
+            'previewAsset': camera.previewAssetPath,
+            'statusLabel': camera.statusLabel,
+            'recentActivityTitle': camera.recentActivityTitle,
+            'recentActivityTimeLabel': camera.recentActivityTimeLabel,
+            'isLive': camera.isLive,
+            'isOffline': camera.isOffline,
+            'previewVideos': camera.previewVideos,
+            'previewDetectionsByVideo': camera.previewDetectionsByVideo,
+            'previewThumbAssetsByVideo': camera.previewThumbAssetsByVideo,
+            'previewVideoAssetsByVideo': camera.previewVideoAssetsByVideo,
+            'previewDurationByVideo': camera.previewDurationByVideo,
+            'previewHeroAssetPath': camera.previewHeroAssetPath,
+            'previewHeroVideoAssetPath': camera.previewHeroVideoAssetPath,
+            'previewDownloadActive': camera.previewDownloadActive,
+          },
+        ),
+      );
+    _showNotificationWarning = widget.previewShowNotificationWarning;
+    _showRecentError = widget.previewShowRecentError;
+  }
+
   Future<void> _reloadServerSyncState() async {
     if (_isPreviewMode) {
       _serverHasSyncedState = widget.previewServerHasSynced ?? false;
@@ -599,25 +649,7 @@ class CamerasPageState extends State<CamerasPage>
 
     _prefsFuture = _loadPrefsFresh();
     if (_isPreviewMode) {
-      _serverHasSyncedState = widget.previewServerHasSynced ?? false;
-      _hasCompletedCameraLoad = true;
-      cameras.addAll(
-        (widget.previewCameras ?? const <CameraPreviewData>[]).map(
-          (camera) => {
-            'name': camera.name,
-            'icon': camera.icon,
-            'unreadMessages': camera.unreadMessages,
-            'previewAsset': camera.previewAssetPath,
-            'statusLabel': camera.statusLabel,
-            'recentActivityTitle': camera.recentActivityTitle,
-            'recentActivityTimeLabel': camera.recentActivityTimeLabel,
-            'isLive': camera.isLive,
-            'isOffline': camera.isOffline,
-          },
-        ),
-      );
-      _showNotificationWarning = widget.previewShowNotificationWarning;
-      _showRecentError = widget.previewShowRecentError;
+      _applyPreviewState();
       _errorListener = () {};
       return;
     }
@@ -689,6 +721,30 @@ class CamerasPageState extends State<CamerasPage>
     _eventThumbFutures.clear();
     _loadCamerasFromDatabase(true); // Load this every time we enter the page.
     _checkNotificationStatus();
+  }
+
+  @override
+  void didUpdateWidget(covariant CamerasPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final wasPreviewMode =
+        oldWidget.previewServerHasSynced != null ||
+        oldWidget.previewCameras != null;
+    if (_isPreviewMode) {
+      if (!wasPreviewMode ||
+          oldWidget.previewServerHasSynced != widget.previewServerHasSynced ||
+          oldWidget.previewCameras != widget.previewCameras ||
+          oldWidget.previewRecentEvents != widget.previewRecentEvents ||
+          oldWidget.previewUnreadCount != widget.previewUnreadCount ||
+          oldWidget.previewShowNotificationWarning !=
+              widget.previewShowNotificationWarning ||
+          oldWidget.previewShowRecentError != widget.previewShowRecentError) {
+        setState(_applyPreviewState);
+      }
+      return;
+    }
+    if (wasPreviewMode) {
+      _refreshHomeState();
+    }
   }
 
   @override
@@ -1730,6 +1786,25 @@ class CamerasPageState extends State<CamerasPage>
                       camera['recentActivityTimeLabel'] as String?,
                   isLive: camera['isLive'] as bool? ?? true,
                   isOffline: camera['isOffline'] as bool? ?? false,
+                  previewVideos: camera['previewVideos'] as List<Video>?,
+                  previewDetectionsByVideo:
+                      camera['previewDetectionsByVideo']
+                          as Map<String, Set<String>>?,
+                  previewThumbAssetsByVideo:
+                      camera['previewThumbAssetsByVideo']
+                          as Map<String, String>?,
+                  previewVideoAssetsByVideo:
+                      camera['previewVideoAssetsByVideo']
+                          as Map<String, String>?,
+                  previewDurationByVideo:
+                      camera['previewDurationByVideo']
+                          as Map<String, Duration>?,
+                  previewHeroAssetPath:
+                      camera['previewHeroAssetPath'] as String?,
+                  previewHeroVideoAssetPath:
+                      camera['previewHeroVideoAssetPath'] as String?,
+                  previewDownloadActive:
+                      camera['previewDownloadActive'] as bool? ?? false,
                 ),
               )
               .toList();
@@ -1742,6 +1817,7 @@ class CamerasPageState extends State<CamerasPage>
                       subtitle: event.subtitle,
                       timeLabel: event.timeLabel,
                       previewAssetPath: event.previewAssetPath,
+                      previewVideoAssetPath: event.previewVideoAssetPath,
                       accentColor: event.accentColor,
                       videoName: event.videoName,
                       detections: event.detections,
@@ -1758,6 +1834,7 @@ class CamerasPageState extends State<CamerasPage>
                       subtitle: event['subtitle'] as String,
                       timeLabel: event['timeLabel'] as String,
                       previewAssetPath: null,
+                      previewVideoAssetPath: null,
                       thumbnailBytes: event['thumbnailBytes'] as Uint8List?,
                       accentColor: event['accentColor'] as Color,
                       videoName: event['videoName'] as String?,

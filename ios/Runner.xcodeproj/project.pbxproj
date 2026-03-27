@@ -128,6 +128,7 @@
 		E36A3AB42E8720BB00BEA7BA /* MP4MoovParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MP4MoovParser.swift; path = Runner/MP4MoovParser.swift; sourceTree = "<group>"; };
 		E36A3AB52E8720BB00BEA7BA /* MP4DemuxController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MP4DemuxController.swift; path = Runner/MP4DemuxController.swift; sourceTree = "<group>"; };
 		E38C91122D9C583B009438ED /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
+		E38C91132D9C583B009438ED /* RunnerDebug.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RunnerDebug.entitlements; sourceTree = "<group>"; };
 		E3B7A8232E8875A0001805D9 /* MdatStreamer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MdatStreamer.swift; path = Runner/MdatStreamer.swift; sourceTree = "<group>"; };
 		E3B7A8242E8875A0001805D9 /* FormatDescriptionBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FormatDescriptionBuilder.swift; path = Runner/FormatDescriptionBuilder.swift; sourceTree = "<group>"; };
 		E3B7A8252E8875A0001805D9 /* BoxScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BoxScanner.swift; path = Runner/BoxScanner.swift; sourceTree = "<group>"; };
@@ -259,6 +260,7 @@
 			isa = PBXGroup;
 			children = (
 				E38C91122D9C583B009438ED /* Runner.entitlements */,
+				E38C91132D9C583B009438ED /* RunnerDebug.entitlements */,
 				97C146FA1CF9000F007C117D /* Main.storyboard */,
 				97C146FD1CF9000F007C117D /* Assets.xcassets */,
 				97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */,
@@ -760,7 +762,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
 				CLANG_CXX_LIBRARY = "libc++";
@@ -809,6 +811,7 @@
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -817,7 +820,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
 				CLANG_CXX_LIBRARY = "libc++";
@@ -873,7 +876,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Runner/RunnerDebug.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
@@ -888,6 +891,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.secluso.mobile;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -897,7 +901,7 @@
 		};
 		97C147071CF9000F007C117D /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 78F11F5B2FA040CC00112233 /* Profile.xcconfig */;
+			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;

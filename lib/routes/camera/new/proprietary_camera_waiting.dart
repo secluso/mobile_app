@@ -21,12 +21,14 @@ import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/notifications/firebase.dart';
 import 'package:secluso_flutter/notifications/ios_notification_relay.dart';
 import 'package:secluso_flutter/routes/camera/list_cameras.dart';
+import 'package:secluso_flutter/routes/camera/camera_ui_bridge.dart';
 import 'package:secluso_flutter/routes/camera/new/show_new_camera_options.dart';
 import 'package:secluso_flutter/routes/home_page.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/proprietary_camera_hotspot.dart';
+import 'package:secluso_flutter/utilities/review_environment.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/utilities/result.dart';
 import 'package:secluso_flutter/notifications/notification_permissions.dart';
@@ -1914,6 +1916,175 @@ class ProprietaryCameraPairedPage extends StatelessWidget {
                 ),
               );
             },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class ReviewCameraPairingFlowPage extends StatefulWidget {
+  const ReviewCameraPairingFlowPage({super.key, required this.reviewPayload});
+
+  final ReviewCameraQrPayload reviewPayload;
+
+  @override
+  State<ReviewCameraPairingFlowPage> createState() =>
+      _ReviewCameraPairingFlowPageState();
+}
+
+class _ReviewCameraPairingFlowPageState
+    extends State<ReviewCameraPairingFlowPage> {
+  String _statusText = 'Validating App Review camera QR...';
+  String? _errorMessage;
+  bool _pairingCompleted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_runPairingFlow());
+  }
+
+  Future<void> _runPairingFlow() async {
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    if (!mounted) return;
+    setState(() {
+      _statusText = 'Establishing secure pairing...';
+    });
+
+    await Future<void>.delayed(const Duration(milliseconds: 950));
+    if (!mounted) return;
+    if (!ReviewEnvironment.instance.isActive) {
+      setState(() {
+        _errorMessage =
+            'Scan the App Review relay QR before pairing the review camera.';
+      });
+      return;
+    }
+
+    setState(() {
+      _statusText = 'Finalizing camera setup...';
+    });
+
+    final added = await ReviewEnvironment.instance.addCamera(
+      widget.reviewPayload,
+    );
+    if (!mounted) return;
+    if (!added) {
+      setState(() {
+        _errorMessage =
+            'That App Review camera is already paired on this install.';
+      });
+      return;
+    }
+
+    CameraListNotifier.instance.refreshCallback?.call();
+    CameraUiBridge.refreshActivityCallback?.call();
+
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    if (!mounted) return;
+    setState(() {
+      _pairingCompleted = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    if (_pairingCompleted) {
+      return ProprietaryCameraPairedPage(
+        cameraName: widget.reviewPayload.cameraName,
+      );
+    }
+    if (_errorMessage != null) {
+      return _ReviewCameraPairingErrorPage(
+        message: _errorMessage!,
+        onBack: () => Navigator.of(context).maybePop(),
+      );
+    }
+    return _ProprietaryCameraPairingPage(
+      dark: dark,
+      progress: dark ? 0.69 : 0.66,
+      statusText: _statusText,
+    );
+  }
+}
+
+class _ReviewCameraPairingErrorPage extends StatelessWidget {
+  const _ReviewCameraPairingErrorPage({
+    required this.message,
+    required this.onBack,
+  });
+
+  final String message;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final titleColor = dark ? Colors.white : const Color(0xFF111827);
+    final bodyColor =
+        dark ? Colors.white.withValues(alpha: 0.46) : const Color(0xFF6B7280);
+    return Scaffold(
+      backgroundColor: dark ? const Color(0xFF050505) : const Color(0xFFF2F2F7),
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.32),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.close_rounded,
+                    color: Color(0xFFEF4444),
+                    size: 34,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Camera Pairing Unavailable',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    color: titleColor,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    color: bodyColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 28),
+                FilledButton(
+                  onPressed: onBack,
+                  style: FilledButton.styleFrom(
+                    backgroundColor:
+                        dark ? Colors.white : const Color(0xFF0A0A0A),
+                    foregroundColor:
+                        dark ? const Color(0xFF050505) : Colors.white,
+                    minimumSize: const Size(180, 46),
+                  ),
+                  child: const Text('BACK'),
+                ),
+              ],
+            ),
           ),
         ),
       ),

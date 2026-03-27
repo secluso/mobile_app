@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:video_player/video_player.dart';
 
 import 'package:flutter/services.dart';
 import 'package:secluso_flutter/keys.dart';
@@ -35,6 +36,7 @@ const _livestreamStaleChunkThreshold = Duration(seconds: 4);
 class LivestreamPage extends StatefulWidget {
   final String cameraName;
   final String? previewAssetPath;
+  final String? previewVideoAssetPath;
   final bool previewStreaming;
   final String? previewErrorMessage;
 
@@ -42,6 +44,7 @@ class LivestreamPage extends StatefulWidget {
     super.key,
     required this.cameraName,
     this.previewAssetPath,
+    this.previewVideoAssetPath,
     this.previewStreaming = true,
     this.previewErrorMessage,
   });
@@ -66,6 +69,7 @@ class _LivestreamPageState extends State<LivestreamPage>
   Uint8List? _archiveThumbnailBytes;
   bool _archiveInitialized = false;
   bool _archiveHasWrittenBytes = false;
+  VideoPlayerController? _previewController;
   late final AnimationController _connectingPulseController =
       AnimationController(
         vsync: this,
@@ -86,7 +90,9 @@ class _LivestreamPageState extends State<LivestreamPage>
   Future<void>? _chunkPumpFuture;
 
   bool get _isPreviewMode =>
-      widget.previewAssetPath != null || widget.previewErrorMessage != null;
+      widget.previewAssetPath != null ||
+      widget.previewVideoAssetPath != null ||
+      widget.previewErrorMessage != null;
 
   @override
   void initState() {
@@ -97,6 +103,9 @@ class _LivestreamPageState extends State<LivestreamPage>
       hasFailed = widget.previewErrorMessage != null;
       _errMsg = widget.previewErrorMessage ?? '';
       _aspectRatio = 16 / 9;
+      if (widget.previewVideoAssetPath != null) {
+        unawaited(_initPreviewVideo());
+      }
       return;
     }
     _startLivestream();
@@ -153,8 +162,39 @@ class _LivestreamPageState extends State<LivestreamPage>
     _connectingPulseController.dispose();
     _loadingOrbitController.dispose();
     _loadingAccentController.dispose();
+    _previewController?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  Future<void> _initPreviewVideo() async {
+    try {
+      final controller = VideoPlayerController.asset(
+        widget.previewVideoAssetPath!,
+      );
+      _previewController = controller;
+      await controller.initialize();
+      await controller.setLooping(true);
+      await controller.setVolume(0);
+      await controller.play();
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+      setState(() {
+        _aspectRatio =
+            controller.value.aspectRatio > 0
+                ? controller.value.aspectRatio
+                : 16 / 9;
+      });
+    } catch (e, st) {
+      Log.e('Failed to initialize review livestream preview: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        hasFailed = true;
+        _errMsg = 'Unable to load the App Review live preview.';
+      });
+    }
   }
 
   Future<void> _startLivestream() async {
@@ -803,9 +843,21 @@ class _LivestreamPageState extends State<LivestreamPage>
   }
 
   Widget _buildPortraitPreviewStream() {
-    return _buildPortraitWorkingState(
-      media: Image.asset(widget.previewAssetPath!, fit: BoxFit.cover),
-    );
+    return _buildPortraitWorkingState(media: _buildPreviewMedia());
+  }
+
+  Widget _buildPreviewMedia() {
+    final previewController = _previewController;
+    if (previewController != null && previewController.value.isInitialized) {
+      return _LivestreamCoverMedia(
+        aspectRatio: previewController.value.aspectRatio,
+        child: VideoPlayer(previewController),
+      );
+    }
+    if (widget.previewAssetPath != null) {
+      return Image.asset(widget.previewAssetPath!, fit: BoxFit.cover);
+    }
+    return const ColoredBox(color: Colors.black);
   }
 
   Widget _buildLiveVideoMedia({required bool loading}) {
@@ -1441,7 +1493,7 @@ class _LivestreamPageState extends State<LivestreamPage>
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.asset(widget.previewAssetPath!, fit: BoxFit.cover),
+                  _buildPreviewMedia(),
                   Positioned.fill(
                     child: DecoratedBox(
                       decoration: BoxDecoration(

@@ -22,7 +22,7 @@ if [[ -z "${SECLUSO_ANDROID_SIGNING_DIR:-}" ]]; then
   exit 1
 fi
 
-"$SCRIPT_DIR/build_with_docker.sh"
+"$SCRIPT_DIR/build_aab_with_docker.sh"
 
 docker run --rm \
   --platform "$DOCKER_PLATFORM" \
@@ -30,13 +30,13 @@ docker run --rm \
   -v "$REPO_ROOT":/workspace \
   -v "${SECLUSO_ANDROID_SIGNING_DIR}":/signing:ro \
   "$IMAGE_TAG" \
-  /workspace/tool/repro/sign_android_release.sh
+  /workspace/tool/repro/sign_android_appbundle.sh
 
-if [[ -f "$REPO_ROOT/build/reproducible/app-release-signed.apk.sha256" ]]; then
-  tmp_sha="$(mktemp "${TMPDIR:-/tmp}/secluso-signed-apk-sha.XXXXXX")"
+if [[ -f "$REPO_ROOT/build/reproducible/app-release-signed.aab.sha256" ]]; then
+  tmp_sha="$(mktemp "${TMPDIR:-/tmp}/secluso-signed-aab-sha.XXXXXX")"
   sed "s|/workspace|$REPO_ROOT|g" \
-    "$REPO_ROOT/build/reproducible/app-release-signed.apk.sha256" > "$tmp_sha"
-  mv "$tmp_sha" "$REPO_ROOT/build/reproducible/app-release-signed.apk.sha256"
+    "$REPO_ROOT/build/reproducible/app-release-signed.aab.sha256" > "$tmp_sha"
+  mv "$tmp_sha" "$REPO_ROOT/build/reproducible/app-release-signed.aab.sha256"
 fi
 
-printf '\n==> Host signed artifact ready at %s\n' "$REPO_ROOT/build/reproducible/app-release-signed.apk"
+printf '\n==> Host signed artifact ready at %s\n' "$REPO_ROOT/build/reproducible/app-release-signed.aab"

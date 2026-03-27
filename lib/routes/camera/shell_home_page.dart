@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/routes/camera/new/qr_scan.dart';
 import 'package:secluso_flutter/routes/camera/view_camera.dart';
 import 'package:secluso_flutter/routes/camera/view_video.dart';
@@ -28,6 +29,14 @@ class ShellHomeCamera {
     this.recentActivityTitle,
     this.recentActivityTimeLabel,
     this.hasLock = true,
+    this.previewVideos,
+    this.previewDetectionsByVideo,
+    this.previewThumbAssetsByVideo,
+    this.previewVideoAssetsByVideo,
+    this.previewDurationByVideo,
+    this.previewHeroAssetPath,
+    this.previewHeroVideoAssetPath,
+    this.previewDownloadActive = false,
   });
 
   final String name;
@@ -40,6 +49,34 @@ class ShellHomeCamera {
   final String? recentActivityTitle;
   final String? recentActivityTimeLabel;
   final bool hasLock;
+  final List<Video>? previewVideos;
+  final Map<String, Set<String>>? previewDetectionsByVideo;
+  final Map<String, String>? previewThumbAssetsByVideo;
+  final Map<String, String>? previewVideoAssetsByVideo;
+  final Map<String, Duration>? previewDurationByVideo;
+  final String? previewHeroAssetPath;
+  final String? previewHeroVideoAssetPath;
+  final bool previewDownloadActive;
+}
+
+Future<void> _openHomeCamera(BuildContext context, ShellHomeCamera camera) {
+  return Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder:
+          (_) => CameraViewPage(
+            cameraName: camera.name,
+            previewVideos: camera.previewVideos,
+            previewDetectionsByVideo: camera.previewDetectionsByVideo,
+            previewThumbAssetsByVideo: camera.previewThumbAssetsByVideo,
+            previewVideoAssetsByVideo: camera.previewVideoAssetsByVideo,
+            previewDurationByVideo: camera.previewDurationByVideo,
+            previewHeroAssetPath: camera.previewHeroAssetPath,
+            previewHeroVideoAssetPath: camera.previewHeroVideoAssetPath,
+            previewDownloadActive: camera.previewDownloadActive,
+          ),
+    ),
+  );
 }
 
 class ShellHomeEvent {
@@ -48,6 +85,7 @@ class ShellHomeEvent {
     required this.subtitle,
     required this.timeLabel,
     required this.previewAssetPath,
+    this.previewVideoAssetPath,
     this.thumbnailBytes,
     required this.accentColor,
     this.videoName,
@@ -61,6 +99,7 @@ class ShellHomeEvent {
   final String subtitle;
   final String timeLabel;
   final String? previewAssetPath;
+  final String? previewVideoAssetPath;
   final Uint8List? thumbnailBytes;
   final Color accentColor;
   final String? videoName;
@@ -172,15 +211,8 @@ class ShellHomePage extends StatelessWidget {
   ) {
     final palette = _ShellSetupPalette.of(context);
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final helpButtonRadius = metrics.scaled(15);
-    final helpButtonSize = metrics.scaled(30);
     final securityAccent =
         dark ? const Color(0xFF28D08B) : const Color(0xFF118E5E);
-    void showPlaceholder() {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Not implemented yet')));
-    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -191,28 +223,6 @@ class ShellHomePage extends StatelessWidget {
           titleSize: metrics.titleSize,
           titleLetterSpacing: metrics.titleLetterSpacing,
           titleColor: palette.headerTitleColor,
-          trailing: Transform.translate(
-            offset: Offset(0, metrics.scaled(1.5)),
-            child: InkWell(
-              onTap: showPlaceholder,
-              customBorder: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(helpButtonRadius),
-              ),
-              child: SizedBox(
-                width: helpButtonSize,
-                height: helpButtonSize,
-                child: Center(
-                  child: _HeaderHelpIcon(
-                    size: metrics.scaled(15),
-                    color:
-                        dark
-                            ? Colors.white.withValues(alpha: 0.18)
-                            : const Color(0xFFD1D5DB),
-                  ),
-                ),
-              ),
-            ),
-          ),
         ),
         SizedBox(height: metrics.headerToEyebrowGap),
         Text(
@@ -264,6 +274,7 @@ class ShellHomePage extends StatelessWidget {
                 subtitle: event.subtitle,
                 timeLabel: event.timeLabel,
                 previewAssetPath: event.previewAssetPath,
+                previewVideoAssetPath: event.previewVideoAssetPath,
                 thumbnailBytes: event.thumbnailBytes,
                 accentColor: event.accentColor,
                 videoName: event.videoName,
@@ -567,13 +578,7 @@ class _FirstCameraAwaitingEventCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(radius),
-        onTap:
-            () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => CameraViewPage(cameraName: camera.name),
-              ),
-            ),
+        onTap: () => _openHomeCamera(context, camera),
         child: AspectRatio(
           aspectRatio: 258 / 145.13,
           child: Container(
@@ -1148,7 +1153,6 @@ class _HeaderRow extends StatelessWidget {
     this.titleSize,
     this.titleLetterSpacing,
     this.titleColor,
-    this.trailing,
   });
 
   final bool showAdd;
@@ -1157,7 +1161,6 @@ class _HeaderRow extends StatelessWidget {
   final double? titleSize;
   final double? titleLetterSpacing;
   final Color? titleColor;
-  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -1177,9 +1180,7 @@ class _HeaderRow extends StatelessWidget {
             ),
           ),
         ),
-        if (trailing != null)
-          trailing!
-        else if (showAdd)
+        if (showAdd)
           Material(
             color: dark ? Colors.white.withValues(alpha: 0.06) : Colors.white,
             shape: RoundedRectangleBorder(
@@ -1321,13 +1322,7 @@ class _FeaturedCameraCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(metrics.cameraCardRadius),
-        onTap:
-            () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => CameraViewPage(cameraName: camera.name),
-              ),
-            ),
+        onTap: () => _openHomeCamera(context, camera),
         child: AspectRatio(
           aspectRatio: 2,
           child: Container(
@@ -2226,6 +2221,7 @@ class _ShellRecentEvent {
     required this.subtitle,
     required this.timeLabel,
     required this.previewAssetPath,
+    this.previewVideoAssetPath,
     required this.thumbnailBytes,
     required this.accentColor,
     this.videoName,
@@ -2239,6 +2235,7 @@ class _ShellRecentEvent {
   final String subtitle;
   final String timeLabel;
   final String? previewAssetPath;
+  final String? previewVideoAssetPath;
   final Uint8List? thumbnailBytes;
   final Color accentColor;
   final String? videoName;
@@ -2325,7 +2322,16 @@ class _RecentEventCard extends StatelessWidget {
                           isLivestream: !event.motion,
                           canDownload: event.canDownload,
                           previewAssetPath: event.previewAssetPath,
+                          previewVideoAssetPath: event.previewVideoAssetPath,
                           previewDetections: event.detections,
+                          previewDuration:
+                              event.previewVideoAssetPath != null
+                                  ? const Duration(seconds: 16)
+                                  : const Duration(seconds: 42),
+                          previewPosition:
+                              event.previewVideoAssetPath != null
+                                  ? Duration.zero
+                                  : const Duration(seconds: 12),
                         ),
                   ),
                 ),
@@ -3033,22 +3039,6 @@ class _HomeLockIcon extends StatelessWidget {
   }
 }
 
-class _HeaderHelpIcon extends StatelessWidget {
-  const _HeaderHelpIcon({required this.size, required this.color});
-
-  final double size;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: CustomPaint(painter: _HeaderHelpIconPainter(color)),
-    );
-  }
-}
-
 class _HomeShieldIcon extends StatelessWidget {
   const _HomeShieldIcon({required this.size, required this.color});
 
@@ -3296,87 +3286,6 @@ class _HomeLockIconPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _HomeLockIconPainter oldDelegate) =>
-      oldDelegate.color != color;
-}
-
-class _HeaderHelpIconPainter extends CustomPainter {
-  const _HeaderHelpIconPainter(this.color);
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final stroke =
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = size.width * (0.9375 / 15)
-          ..color = color
-          ..strokeCap = StrokeCap.round
-          ..strokeJoin = StrokeJoin.round
-          ..isAntiAlias = true;
-    canvas.drawCircle(
-      Offset(size.width * (7.5 / 15), size.height * (7.5 / 15)),
-      size.width * (6.25 / 15),
-      stroke,
-    );
-
-    final question =
-        Path()
-          ..moveTo(size.width * (5.68125 / 15), size.height * (5.625 / 15))
-          ..cubicTo(
-            size.width * (5.82819 / 15),
-            size.height * (5.20729 / 15),
-            size.width * (6.11822 / 15),
-            size.height * (4.85507 / 15),
-            size.width * (6.49997 / 15),
-            size.height * (4.63071 / 15),
-          )
-          ..cubicTo(
-            size.width * (6.88172 / 15),
-            size.height * (4.40635 / 15),
-            size.width * (7.33056 / 15),
-            size.height * (4.32434 / 15),
-            size.width * (7.76699 / 15),
-            size.height * (4.3992 / 15),
-          )
-          ..cubicTo(
-            size.width * (8.20341 / 15),
-            size.height * (4.47405 / 15),
-            size.width * (8.59926 / 15),
-            size.height * (4.70095 / 15),
-            size.width * (8.88442 / 15),
-            size.height * (5.03971 / 15),
-          )
-          ..cubicTo(
-            size.width * (9.16959 / 15),
-            size.height * (5.37846 / 15),
-            size.width * (9.32566 / 15),
-            size.height * (5.8072 / 15),
-            size.width * (9.325 / 15),
-            size.height * (6.25 / 15),
-          )
-          ..cubicTo(
-            size.width * (9.325 / 15),
-            size.height * (7.5 / 15),
-            size.width * (7.45 / 15),
-            size.height * (8.125 / 15),
-            size.width * (7.45 / 15),
-            size.height * (8.125 / 15),
-          );
-    canvas.drawPath(question, stroke);
-
-    canvas.drawCircle(
-      Offset(size.width * (7.5 / 15), size.height * (10.625 / 15)),
-      size.width * (0.2 / 15),
-      Paint()
-        ..style = PaintingStyle.fill
-        ..color = color
-        ..isAntiAlias = true,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _HeaderHelpIconPainter oldDelegate) =>
       oldDelegate.color != color;
 }
 

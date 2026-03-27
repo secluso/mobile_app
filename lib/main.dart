@@ -35,6 +35,7 @@ import 'package:secluso_flutter/utilities/lock.dart';
 import 'package:secluso_flutter/utilities/storage_manager.dart';
 import 'package:secluso_flutter/utilities/version_gate.dart';
 import 'package:secluso_flutter/utilities/ui_state.dart';
+import 'package:secluso_flutter/utilities/review_environment.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/ui/secluso_surfaces.dart';
@@ -306,6 +307,7 @@ Future<void> _initializeApp(ThemeProvider themeProvider) async {
   }
 
   Log.d("After createLogStream().listen()");
+  await ReviewEnvironment.instance.ensureLoaded();
   await AppStores.init();
   await runMigrations(); // Must run right after App Store initialization
 

@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -23,6 +24,7 @@ import 'package:secluso_flutter/ui/secluso_shell_ui.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/version_gate.dart';
 import 'package:secluso_flutter/routes/camera/camera_ui_bridge.dart';
+import 'package:secluso_flutter/utilities/review_environment.dart';
 import 'camera/new/qr_scan.dart';
 import 'camera/view_camera.dart';
 
@@ -30,13 +32,42 @@ class UserCredentialsQrPayload {
   final String serverUsername;
   final String serverPassword;
   final String serverAddress;
+  final String? reviewRelayId;
+  final String? reviewRelayLabel;
 
   UserCredentialsQrPayload({
     required this.serverUsername,
     required this.serverPassword,
     required this.serverAddress,
+    this.reviewRelayId,
+    this.reviewRelayLabel,
   });
+
+  factory UserCredentialsQrPayload.review({
+    required String relayId,
+    required String relayLabel,
+    required String relayAddress,
+  }) {
+    return UserCredentialsQrPayload(
+      serverUsername: '',
+      serverPassword: '',
+      serverAddress: relayAddress,
+      reviewRelayId: relayId,
+      reviewRelayLabel: relayLabel,
+    );
+  }
+
+  bool get isReviewRelay => reviewRelayId != null;
 }
+
+const String _officialRelayConnectionKind = 'official';
+const String _selfHostedRelayConnectionKind = 'self_hosted';
+final Uri _seclusoWebsiteUri = Uri.parse('https://secluso.com');
+final Uri _seclusoSupportEmailUri = Uri(
+  scheme: 'mailto',
+  path: 'secluso@proton.me',
+  queryParameters: const {'subject': 'Secluso Support'},
+);
 
 class ServerPage extends StatefulWidget {
   final bool showBackButton;
@@ -71,21 +102,26 @@ class _ServerPageState extends State<ServerPage> {
   final ValueNotifier<bool> _isDialogOpen = ValueNotifier(false);
   bool _didAutoOpenRelayScan = false;
   int _lastHandledRelayScanRequestId = -1;
+  String? _pendingRelayConnectionKind;
 
   bool get _isPreviewMode => widget.previewHasSynced != null;
+
+  void _applyPreviewState() {
+    hasSynced = widget.previewHasSynced!;
+    serverAddr = widget.previewServerAddr;
+    _cameraNames =
+        widget.previewCameraNames ??
+        (hasSynced && !widget.showShellChrome
+            ? const ['Front Door', 'Living Room', 'Backyard']
+            : const []);
+    _ipController.text = widget.previewServerAddr ?? '';
+  }
 
   @override
   void initState() {
     super.initState();
     if (_isPreviewMode) {
-      hasSynced = widget.previewHasSynced!;
-      serverAddr = widget.previewServerAddr;
-      _cameraNames =
-          widget.previewCameraNames ??
-          (hasSynced && !widget.showShellChrome
-              ? const ['Front Door', 'Living Room', 'Backyard']
-              : const []);
-      _ipController.text = widget.previewServerAddr ?? '';
+      _applyPreviewState();
       _maybeAutoOpenRelayScan();
       return;
     }
@@ -111,6 +147,17 @@ class _ServerPageState extends State<ServerPage> {
   @override
   void didUpdateWidget(covariant ServerPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final wasPreviewMode = oldWidget.previewHasSynced != null;
+    if (_isPreviewMode) {
+      if (!wasPreviewMode ||
+          oldWidget.previewHasSynced != widget.previewHasSynced ||
+          oldWidget.previewServerAddr != widget.previewServerAddr ||
+          oldWidget.previewCameraNames != widget.previewCameraNames) {
+        setState(_applyPreviewState);
+      }
+    } else if (wasPreviewMode) {
+      unawaited(_loadServerSettings());
+    }
     if (oldWidget.relayScanRequestId != widget.relayScanRequestId ||
         (!oldWidget.openRelayScanOnLoad && widget.openRelayScanOnLoad)) {
       _maybeAutoOpenRelayScan();
@@ -156,16 +203,78 @@ class _ServerPageState extends State<ServerPage> {
     return parsed;
   }
 
+  Future<bool> _connectReviewRelayWithFlow(ReviewRelayQrPayload payload) async {
+    final connected = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        fullscreenDialog: true,
+        builder: (_) => _ReviewRelayConnectionPage(payload: payload),
+      ),
+    );
+    return connected ?? false;
+  }
+
   Future<void> _saveServerSettings(
     UserCredentialsQrPayload credentialsFull,
   ) async {
+    final relayConnectionKind = _resolvedRelayConnectionKind();
     try {
+      if (credentialsFull.isReviewRelay) {
+        final prefs = await SharedPreferences.getInstance();
+        final prevServerAddr = prefs.getString(PrefKeys.serverAddr);
+        final currentCameraNames =
+            _isPreviewMode ? _cameraNames : await _fetchCameraNames();
+        final hasExistingRelay =
+            prevServerAddr != null && prevServerAddr.isNotEmpty;
+        if (hasExistingRelay || currentCameraNames.isNotEmpty) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'The App Review relay QR only works on a clean app state. Remove your current relay and cameras first.',
+              ),
+            ),
+          );
+          return;
+        }
+
+        final reviewPayload = ReviewRelayQrPayload(
+          relayId: credentialsFull.reviewRelayId!,
+          relayLabel: credentialsFull.reviewRelayLabel ?? 'Review Relay',
+          relayAddress: credentialsFull.serverAddress,
+        );
+        final connected = await _connectReviewRelayWithFlow(reviewPayload);
+        if (!connected || !mounted) return;
+        await _persistRelayConnectionKind(relayConnectionKind);
+        if (!mounted) return;
+        setState(() {
+          serverAddr = credentialsFull.serverAddress;
+          hasSynced = true;
+          _cameraNames =
+              ReviewEnvironment.instance.session?.cameraNames ?? const [];
+          _ipController.text = credentialsFull.serverAddress;
+        });
+        CameraUiBridge.refreshCameraListCallback?.call();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${credentialsFull.reviewRelayLabel ?? 'Review relay'} connected.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      if (ReviewEnvironment.instance.isActive) {
+        await ReviewEnvironment.instance.clear();
+      }
+
       // TODO: Check how this handles on failure... bad QR code
       if (credentialsFull.serverUsername.length != Constants.usernameLength ||
           credentialsFull.serverPassword.length != Constants.passwordLength) {
         Log.e(
           "Server Page Save: User credentials should be more than 28 characters.",
         );
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("Error processing QR code. Please try again"),
@@ -254,6 +363,7 @@ class _ServerPageState extends State<ServerPage> {
       await prefs.setString(PrefKeys.serverAddr, normalizedServerAddr);
       await prefs.setString(PrefKeys.serverUsername, serverUsername);
       await prefs.setString(PrefKeys.serverPassword, serverPassword);
+      await prefs.setString(PrefKeys.relayConnectionKind, relayConnectionKind);
       await prefs.setBool(PrefKeys.needUpdateFcmToken, true);
       await prefs.setBool(PrefKeys.needUpdateIosRelayBinding, true);
       await prefs.remove(PrefKeys.needUploadIosNotificationTarget);
@@ -325,10 +435,17 @@ class _ServerPageState extends State<ServerPage> {
         ),
       );
       return;
+    } finally {
+      _pendingRelayConnectionKind = null;
     }
   }
 
   Future<void> _removeServerConnection() async {
+    if (_isPreviewMode && ReviewEnvironment.instance.isActive) {
+      await _resetReviewEnvironment();
+      return;
+    }
+
     final currentCameraNames =
         _isPreviewMode ? _cameraNames : await _fetchCameraNames();
     if (currentCameraNames.isNotEmpty) {
@@ -349,6 +466,7 @@ class _ServerPageState extends State<ServerPage> {
     await prefs.remove(PrefKeys.serverAddr);
     await prefs.remove(PrefKeys.serverUsername);
     await prefs.remove(PrefKeys.serverPassword);
+    await prefs.remove(PrefKeys.relayConnectionKind);
     await prefs.remove(PrefKeys.fcmConfigJson);
     await prefs.remove(PrefKeys.needUpdateFcmToken);
     await prefs.remove(PrefKeys.needUpdateIosRelayBinding);
@@ -393,6 +511,16 @@ class _ServerPageState extends State<ServerPage> {
   }
 
   Future<void> _checkForUpdates() async {
+    if (ReviewEnvironment.instance.isActive) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Review relay is up to date.'),
+        ),
+      );
+      return;
+    }
+
     final serverVersionResult =
         await HttpClientService.instance.fetchServerVersion();
     if (!mounted) return;
@@ -418,18 +546,61 @@ class _ServerPageState extends State<ServerPage> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  void _showPlaceholderMessage(String message) {
+  Future<void> _openExternalUrl(Uri uri) async {
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!mounted || launched) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ).showSnackBar(SnackBar(content: Text('Unable to open ${uri.toString()}')));
   }
 
-  Future<void> _openRelayScanFlow() async {
+  Future<void> _contactSupport() {
+    return _openExternalUrl(_seclusoSupportEmailUri);
+  }
+
+  Future<void> _visitWebsite() {
+    return _openExternalUrl(_seclusoWebsiteUri);
+  }
+
+  Future<void> _persistRelayConnectionKind(String relayConnectionKind) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(PrefKeys.relayConnectionKind, relayConnectionKind);
+  }
+
+  String _resolvedRelayConnectionKind() =>
+      _pendingRelayConnectionKind ?? _officialRelayConnectionKind;
+
+  Future<void> _resetReviewEnvironment() async {
+    await ReviewEnvironment.instance.clear();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(PrefKeys.relayConnectionKind);
+    _pendingRelayConnectionKind = null;
+    _isDialogOpen.value = false;
+    if (!mounted) return;
+    setState(() {
+      serverAddr = null;
+      hasSynced = false;
+      _cameraNames = const [];
+      _ipController.clear();
+    });
+    CameraUiBridge.refreshCameraListCallback?.call();
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Review environment reset.')));
+  }
+
+  Future<void> _openRelayScanFlow({
+    String relayConnectionKind = _officialRelayConnectionKind,
+  }) async {
+    _pendingRelayConnectionKind = relayConnectionKind;
     final credentialsFull = await Navigator.push<UserCredentialsQrPayload?>(
       context,
       MaterialPageRoute(builder: (_) => const _RelayQrScanPage()),
     );
-    if (credentialsFull == null || !mounted) return;
+    if (credentialsFull == null || !mounted) {
+      _pendingRelayConnectionKind = null;
+      return;
+    }
     await _saveServerSettings(credentialsFull);
   }
 
@@ -564,7 +735,7 @@ class _ServerPageState extends State<ServerPage> {
               Expanded(
                 child: _SystemActionButton(
                   label: 'Check for Updates',
-                  onTap: () {},
+                  onTap: _checkForUpdates,
                 ),
               ),
             ],
@@ -606,7 +777,10 @@ class _ServerPageState extends State<ServerPage> {
                 subtitle: 'Scan the QR code from your Secluso account',
                 icon: Icons.qr_code_2_rounded,
                 highlighted: true,
-                onTap: _openRelayScanFlow,
+                onTap:
+                    () => _openRelayScanFlow(
+                      relayConnectionKind: _officialRelayConnectionKind,
+                    ),
               ),
               const SizedBox(height: 14),
               _setupOptionCard(
@@ -615,7 +789,10 @@ class _ServerPageState extends State<ServerPage> {
                 subtitle: 'Run on your own server (VPS or dedicated host)',
                 icon: Icons.terminal_rounded,
                 highlighted: false,
-                onTap: () {},
+                onTap:
+                    () => _openRelayScanFlow(
+                      relayConnectionKind: _selfHostedRelayConnectionKind,
+                    ),
               ),
             ],
           ),
@@ -706,34 +883,28 @@ class _ServerPageState extends State<ServerPage> {
         body:
             dark
                 ? SystemShellUnpairedPage(
-                  onUseSeclusoRelay: _openRelayScanFlow,
+                  onUseSeclusoRelay:
+                      () => _openRelayScanFlow(
+                        relayConnectionKind: _officialRelayConnectionKind,
+                      ),
                   onUseSelfHosted:
-                      () => _showPlaceholderMessage(
-                        'Self-hosted relay setup is not wired in this preview yet.',
+                      () => _openRelayScanFlow(
+                        relayConnectionKind: _selfHostedRelayConnectionKind,
                       ),
-                  onContactSupport:
-                      () => _showPlaceholderMessage(
-                        'Support links are not wired in this preview yet.',
-                      ),
-                  onVisitWebsite:
-                      () => _showPlaceholderMessage(
-                        'Website links are not wired in this preview yet.',
-                      ),
+                  onContactSupport: () => unawaited(_contactSupport()),
+                  onVisitWebsite: () => unawaited(_visitWebsite()),
                 )
                 : SystemShellUnpairedLightPage(
-                  onUseSeclusoRelay: _openRelayScanFlow,
+                  onUseSeclusoRelay:
+                      () => _openRelayScanFlow(
+                        relayConnectionKind: _officialRelayConnectionKind,
+                      ),
                   onUseSelfHosted:
-                      () => _showPlaceholderMessage(
-                        'Self-hosted relay setup is not wired in this preview yet.',
+                      () => _openRelayScanFlow(
+                        relayConnectionKind: _selfHostedRelayConnectionKind,
                       ),
-                  onContactSupport:
-                      () => _showPlaceholderMessage(
-                        'Support links are not wired in this preview yet.',
-                      ),
-                  onVisitWebsite:
-                      () => _showPlaceholderMessage(
-                        'Website links are not wired in this preview yet.',
-                      ),
+                  onContactSupport: () => unawaited(_contactSupport()),
+                  onVisitWebsite: () => unawaited(_visitWebsite()),
                 ),
       );
     }
@@ -745,18 +916,19 @@ class _ServerPageState extends State<ServerPage> {
           body: SystemShellNoCamerasLightPage(
             endpoint: serverAddr ?? 'relay.local:8443',
             cameraNames: _cameraNames,
-            onRestartRelay: _removeServerConnection,
+            onRestartRelay:
+                ReviewEnvironment.instance.isActive
+                    ? _resetReviewEnvironment
+                    : _removeServerConnection,
             onCheckForUpdates: _checkForUpdates,
             onAddCamera: _openAddCameraFlow,
             onOpenCamera: _openCameraDetails,
-            onContactSupport:
-                () => _showPlaceholderMessage(
-                  'Support links are not wired in this preview yet.',
-                ),
-            onVisitWebsite:
-                () => _showPlaceholderMessage(
-                  'Website links are not wired in this preview yet.',
-                ),
+            onContactSupport: () => unawaited(_contactSupport()),
+            onVisitWebsite: () => unawaited(_visitWebsite()),
+            restartRelayLabel:
+                ReviewEnvironment.instance.isActive
+                    ? 'Reset Review'
+                    : 'Remove Relay',
           ),
         );
       }
@@ -766,18 +938,19 @@ class _ServerPageState extends State<ServerPage> {
         body: SystemShellNoCamerasPage(
           endpoint: serverAddr ?? 'relay.local:8443',
           cameraNames: _cameraNames,
-          onRestartRelay: _removeServerConnection,
+          onRestartRelay:
+              ReviewEnvironment.instance.isActive
+                  ? _resetReviewEnvironment
+                  : _removeServerConnection,
           onCheckForUpdates: _checkForUpdates,
           onAddCamera: _openAddCameraFlow,
           onOpenCamera: _openCameraDetails,
-          onContactSupport:
-              () => _showPlaceholderMessage(
-                'Support links are not wired in this preview yet.',
-              ),
-          onVisitWebsite:
-              () => _showPlaceholderMessage(
-                'Website links are not wired in this preview yet.',
-              ),
+          onContactSupport: () => unawaited(_contactSupport()),
+          onVisitWebsite: () => unawaited(_visitWebsite()),
+          restartRelayLabel:
+              ReviewEnvironment.instance.isActive
+                  ? 'Reset Review'
+                  : 'Remove Relay',
         ),
       );
     }
@@ -929,6 +1102,166 @@ class _ServerPageState extends State<ServerPage> {
   }
 }
 
+class _ReviewRelayConnectionPage extends StatefulWidget {
+  const _ReviewRelayConnectionPage({required this.payload});
+
+  final ReviewRelayQrPayload payload;
+
+  @override
+  State<_ReviewRelayConnectionPage> createState() =>
+      _ReviewRelayConnectionPageState();
+}
+
+class _ReviewRelayConnectionPageState
+    extends State<_ReviewRelayConnectionPage> {
+  String _statusText = 'Validating App Review relay QR...';
+  bool _completed = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_runConnectionFlow());
+  }
+
+  Future<void> _runConnectionFlow() async {
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    if (!mounted) return;
+    setState(() {
+      _statusText = 'Establishing secure relay link...';
+    });
+
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+    try {
+      await ReviewEnvironment.instance.activateRelay(widget.payload);
+    } catch (e, st) {
+      Log.e('Failed to activate review relay: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = 'Unable to connect the App Review relay.';
+      });
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _completed = true;
+      _statusText = 'Relay connected.';
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 550));
+    if (!mounted) return;
+    Navigator.of(context).pop(true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final titleColor = dark ? Colors.white : const Color(0xFF111827);
+    final subtitleColor =
+        dark ? Colors.white.withValues(alpha: 0.4) : const Color(0xFF6B7280);
+    final cardColor = dark ? const Color(0xFF111113) : Colors.white;
+    final borderColor =
+        dark ? Colors.white.withValues(alpha: 0.06) : const Color(0x14000000);
+    return Scaffold(
+      backgroundColor: dark ? const Color(0xFF050505) : const Color(0xFFF2F2F7),
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            child: Container(
+              width: 360,
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: borderColor),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color:
+                          _completed
+                              ? const Color(0xFF10B981).withValues(alpha: 0.16)
+                              : const Color(0xFF8BB3EE).withValues(alpha: 0.16),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child:
+                          _completed
+                              ? const Icon(
+                                Icons.check_rounded,
+                                color: Color(0xFF10B981),
+                                size: 34,
+                              )
+                              : const SizedBox(
+                                width: 28,
+                                height: 28,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Color(0xFF8BB3EE),
+                                ),
+                              ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    _completed ? 'Relay Connected' : 'Connecting Relay',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      color: titleColor,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    _errorMessage ?? _statusText,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color:
+                          _errorMessage != null
+                              ? const Color(0xFFEF4444)
+                              : subtitleColor,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Text(
+                    widget.payload.relayAddress,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color:
+                          dark
+                              ? Colors.white.withValues(alpha: 0.22)
+                              : const Color(0xFF9CA3AF),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (_errorMessage != null) ...[
+                    const SizedBox(height: 24),
+                    FilledButton(
+                      onPressed: () => Navigator.of(context).maybePop(false),
+                      child: const Text('Back'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _RelayQrScanPage extends StatefulWidget {
   const _RelayQrScanPage();
 
@@ -965,14 +1298,24 @@ class _RelayQrScanPageState extends State<_RelayQrScanPage> {
         decoded = null;
       }
 
-      var credentials = null;
+      UserCredentialsQrPayload? credentials;
 
       if (decoded is Map) {
+        final reviewRelayPayload = ReviewRelayQrPayload.tryParseMap(decoded);
+        if (reviewRelayPayload != null) {
+          credentials = UserCredentialsQrPayload.review(
+            relayId: reviewRelayPayload.relayId,
+            relayLabel: reviewRelayPayload.relayLabel,
+            relayAddress: reviewRelayPayload.relayAddress,
+          );
+        }
+
         final versionKey = decoded['v'];
         final serverUsername = decoded['u'];
         final serverPassword = decoded['p'];
         final serverAddress = decoded['sa'];
-        if (versionKey is String &&
+        if (credentials == null &&
+            versionKey is String &&
             serverUsername is String &&
             serverPassword is String &&
             serverAddress is String &&

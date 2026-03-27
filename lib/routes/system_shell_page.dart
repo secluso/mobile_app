@@ -1619,6 +1619,8 @@ class SystemShellNoCamerasLightPage extends StatelessWidget {
     this.onOpenCamera,
     required this.onContactSupport,
     required this.onVisitWebsite,
+    this.restartRelayLabel = 'Remove Relay',
+    this.checkForUpdatesLabel = 'Check for Updates',
     this.cameraNames = const [],
   });
 
@@ -1629,6 +1631,8 @@ class SystemShellNoCamerasLightPage extends StatelessWidget {
   final ValueChanged<String>? onOpenCamera;
   final VoidCallback onContactSupport;
   final VoidCallback onVisitWebsite;
+  final String restartRelayLabel;
+  final String checkForUpdatesLabel;
   final List<String> cameraNames;
 
   @override
@@ -1683,6 +1687,8 @@ class SystemShellNoCamerasLightPage extends StatelessWidget {
                   endpoint: endpoint,
                   onRestartRelay: onRestartRelay,
                   onCheckForUpdates: onCheckForUpdates,
+                  restartRelayLabel: restartRelayLabel,
+                  checkForUpdatesLabel: checkForUpdatesLabel,
                 ),
               ),
               SizedBox(height: metrics.sectionTopGap),
@@ -1769,12 +1775,16 @@ class _RelayConnectedLightCard extends StatelessWidget {
     required this.endpoint,
     required this.onRestartRelay,
     required this.onCheckForUpdates,
+    required this.restartRelayLabel,
+    required this.checkForUpdatesLabel,
   });
 
   final _SystemShellConnectedLightMetrics metrics;
   final String endpoint;
   final VoidCallback onRestartRelay;
   final VoidCallback onCheckForUpdates;
+  final String restartRelayLabel;
+  final String checkForUpdatesLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -1876,7 +1886,7 @@ class _RelayConnectedLightCard extends StatelessWidget {
               Expanded(
                 child: _LightActionButton(
                   metrics: metrics,
-                  label: 'Remove Relay',
+                  label: restartRelayLabel,
                   onTap: onRestartRelay,
                 ),
               ),
@@ -1884,7 +1894,7 @@ class _RelayConnectedLightCard extends StatelessWidget {
               Expanded(
                 child: _LightActionButton(
                   metrics: metrics,
-                  label: 'Check for Updates',
+                  label: checkForUpdatesLabel,
                   onTap: onCheckForUpdates,
                 ),
               ),
@@ -2557,6 +2567,8 @@ class SystemShellNoCamerasPage extends StatelessWidget {
     this.onOpenCamera,
     required this.onContactSupport,
     required this.onVisitWebsite,
+    this.restartRelayLabel = 'Remove Relay',
+    this.checkForUpdatesLabel = 'Check for Updates',
     this.cameraNames = const [],
   });
 
@@ -2567,6 +2579,8 @@ class SystemShellNoCamerasPage extends StatelessWidget {
   final ValueChanged<String>? onOpenCamera;
   final VoidCallback onContactSupport;
   final VoidCallback onVisitWebsite;
+  final String restartRelayLabel;
+  final String checkForUpdatesLabel;
   final List<String> cameraNames;
 
   @override
@@ -2619,6 +2633,8 @@ class SystemShellNoCamerasPage extends StatelessWidget {
                   endpoint: endpoint,
                   onRestartRelay: onRestartRelay,
                   onCheckForUpdates: onCheckForUpdates,
+                  restartRelayLabel: restartRelayLabel,
+                  checkForUpdatesLabel: checkForUpdatesLabel,
                 ),
               ),
               SizedBox(height: metrics.sectionTopGap),
@@ -2704,12 +2720,16 @@ class _RelayConnectedCard extends StatelessWidget {
     required this.endpoint,
     required this.onRestartRelay,
     required this.onCheckForUpdates,
+    required this.restartRelayLabel,
+    required this.checkForUpdatesLabel,
   });
 
   final _SystemShellMetrics metrics;
   final String endpoint;
   final VoidCallback onRestartRelay;
   final VoidCallback onCheckForUpdates;
+  final String restartRelayLabel;
+  final String checkForUpdatesLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -2827,7 +2847,7 @@ class _RelayConnectedCard extends StatelessWidget {
               Expanded(
                 child: _ActionButton(
                   metrics: metrics,
-                  label: 'Remove Relay',
+                  label: restartRelayLabel,
                   onTap: onRestartRelay,
                 ),
               ),
@@ -2835,7 +2855,7 @@ class _RelayConnectedCard extends StatelessWidget {
               Expanded(
                 child: _ActionButton(
                   metrics: metrics,
-                  label: 'Check for Updates',
+                  label: checkForUpdatesLabel,
                   onTap: onCheckForUpdates,
                 ),
               ),

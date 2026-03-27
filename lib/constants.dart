@@ -19,6 +19,10 @@ class Constants {
       "v1.1"; // The version string to match against for compatibility for camera QR codes
   static const userCredentialsQrCodeVersion =
       "uc-v1.0"; // The version string to match against for compatibility for user credentials QR codes
+  static const reviewRelayQrCodeVersion =
+      "review-relay-v1"; // The version string to match against for App Review relay QR codes
+  static const reviewCameraQrCodeVersion =
+      "review-camera-v1"; // The version string to match against for App Review camera QR codes
 }
 
 // Types to be used for groups in Rust

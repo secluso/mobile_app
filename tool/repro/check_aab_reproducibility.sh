@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 DOCKER_PLATFORM="${SECLUSO_DOCKER_PLATFORM:-linux/amd64}"
-WORK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/secluso-mobile-repro.XXXXXX")"
+WORK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/secluso-mobile-aab-repro.XXXXXX")"
 KEEP_WORK_ROOT="${KEEP_WORK_ROOT:-0}"
 SOURCE_DATE_EPOCH_VALUE="${SOURCE_DATE_EPOCH:-}"
 REPRO_CHECK_PARALLEL="${SECLUSO_REPRO_CHECK_PARALLEL:-0}"
@@ -128,7 +128,7 @@ run_build() {
     "${docker_cache_volumes[@]}" \
     "$IMAGE_TAG" \
     /workspace/tool/repro/run_build_in_container_workspace.sh \
-      tool/repro/build_unsigned_android_release.sh
+      tool/repro/build_unsigned_android_appbundle.sh
 }
 
 warm_source_workspace() {
@@ -141,7 +141,7 @@ warm_source_workspace() {
     return
   fi
   echo "==> Warming source workspace caches"
-  "$SCRIPT_DIR/build_with_docker.sh"
+  "$SCRIPT_DIR/build_aab_with_docker.sh"
 }
 
 BUILD_ONE="$WORK_ROOT/build-one"
@@ -169,11 +169,15 @@ else
   run_build "$BUILD_TWO"
 fi
 
-FIRST_APK="$BUILD_ONE/build/reproducible/app-release-unsigned.apk"
-SECOND_APK="$BUILD_TWO/build/reproducible/app-release-unsigned.apk"
+FIRST_AAB="$BUILD_ONE/build/reproducible/app-release-unsigned.aab"
+SECOND_AAB="$BUILD_TWO/build/reproducible/app-release-unsigned.aab"
 
-python3 "$REPO_ROOT/tool/repro/apkdiff.py" "$FIRST_APK" "$SECOND_APK"
+if cmp -s "$FIRST_AAB" "$SECOND_AAB"; then
+  echo "AABs are byte-for-byte identical."
+else
+  python3 "$REPO_ROOT/tool/repro/aabdiff.py" "$FIRST_AAB" "$SECOND_AAB"
+fi
 echo "First build sha256:"
-cat "$FIRST_APK.sha256"
+cat "$FIRST_AAB.sha256"
 echo "Second build sha256:"
-cat "$SECOND_APK.sha256"
+cat "$SECOND_AAB.sha256"

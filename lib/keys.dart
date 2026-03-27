@@ -20,6 +20,7 @@ class PrefKeys {
   static const serverAddr = "server_addr";
   static const serverUsername = "server_username";
   static const serverPassword = "server_password";
+  static const relayConnectionKind = "relay_connection_kind";
   static const recordingMotionVideosPrefix = "recording_motion_videos_";
   static const lastRecordingTimestampPrefix = "last_recording_timestamp_";
   static const cameraNameKey = "camera_name_key";
@@ -41,4 +42,5 @@ class PrefKeys {
   static const cameraNotificationsEnabledPrefix =
       "camera_notifications_enabled_";
   static const cameraNotificationEventsPrefix = "camera_notification_events_";
+  static const reviewEnvironmentJson = "review_environment_json";
 }

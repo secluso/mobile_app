@@ -1,8 +1,9 @@
 FROM ubuntu:24.04
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG FLUTTER_REVISION=8defaa71a781ceec2bc5502374f876d52f0d2910
+ARG FLUTTER_REVISION=8defaa71a77c16e8547abdbfad2053ce3a6e2d5b
 ARG RUST_TOOLCHAIN=1.90.0
+ARG BUNDLETOOL_VERSION=1.18.2
 ARG ANDROID_CMDLINE_TOOLS_ZIP=commandlinetools-linux-11076708_latest.zip
 ARG ANDROID_BUILD_TOOLS=35.0.0
 ARG ANDROID_PLATFORM=android-35
@@ -17,6 +18,7 @@ ARG ANDROID_CMAKE=3.22.1
 ENV ANDROID_HOME=/opt/android-sdk
 ENV ANDROID_SDK_ROOT=/opt/android-sdk
 ENV CARGO_HOME=/opt/cargo
+ENV BUNDLETOOL_JAR=/opt/bundletool.jar
 ENV FLUTTER_HOME=/opt/flutter
 ENV GRADLE_USER_HOME=/opt/gradle-home
 ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
@@ -66,6 +68,10 @@ RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-to
         armv7-linux-androideabi \
         i686-linux-android \
         x86_64-linux-android
+
+RUN curl -fsSL \
+      "https://github.com/google/bundletool/releases/download/${BUNDLETOOL_VERSION}/bundletool-all-${BUNDLETOOL_VERSION}.jar" \
+      -o /opt/bundletool.jar
 
 RUN git clone https://github.com/flutter/flutter.git /opt/flutter \
     && cd /opt/flutter \

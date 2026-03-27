@@ -83,56 +83,65 @@ class MainActivity : FlutterActivity() {
                         val passphrase = call.argument<String>("password")!!
                         Log.e("WIFI", "SSID = $ssid, passphrase = $passphrase")
 
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            Log.e("WIFI", "Using new version of SSID connect");
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                Log.e("WIFI", "Using new version of SSID connect");
 
-                            val builder = WifiNetworkSpecifier.Builder();
+                                val builder = WifiNetworkSpecifier.Builder();
 
-                            builder.setSsid(ssid);
-                            builder.setIsHiddenSsid(true);
-                            builder.setWpa2Passphrase(passphrase);
+                                builder.setSsid(ssid);
+                                builder.setIsHiddenSsid(true);
+                                builder.setWpa2Passphrase(passphrase);
 
-                            val wifiNetworkSpecifier = builder.build();
-                            val networkRequestBuilder = NetworkRequest.Builder();
-                            networkRequestBuilder.addTransportType(NetworkCapabilities.TRANSPORT_WIFI);
-                            networkRequestBuilder.setNetworkSpecifier(wifiNetworkSpecifier);
+                                val wifiNetworkSpecifier = builder.build();
+                                val networkRequestBuilder = NetworkRequest.Builder();
+                                networkRequestBuilder.addTransportType(NetworkCapabilities.TRANSPORT_WIFI);
+                                networkRequestBuilder.setNetworkSpecifier(wifiNetworkSpecifier);
 
-                            var resultReturned = false
-                            val networkRequest = networkRequestBuilder.build();
-                            val cm = applicationContext
-                                .getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager;
-                            val callback = object : ConnectivityManager.NetworkCallback() {
-                                override fun onAvailable(network: Network) {
-                                    cm.bindProcessToNetwork(network);
-                                    if(!resultReturned) {
-                                        connectedNetwork = network;
-                                        resultReturned = true
-                                        result.success("connected");
+                                var resultReturned = false
+                                val networkRequest = networkRequestBuilder.build();
+                                val cm = applicationContext
+                                    .getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager;
+                                val callback = object : ConnectivityManager.NetworkCallback() {
+                                    override fun onAvailable(network: Network) {
+                                        cm.bindProcessToNetwork(network);
+                                        if(!resultReturned) {
+                                            connectedNetwork = network;
+                                            resultReturned = true
+                                            result.success("connected");
+                                        }
+                                    }
+
+                                    override fun onUnavailable() {
+                                        connectedNetwork = null;
+                                        if(!resultReturned) {
+                                            resultReturned = true
+                                            result.success("failed");
+                                        }
+                                        cm.unregisterNetworkCallback(this);
                                     }
                                 }
-
-                                override fun onUnavailable() {
-                                    connectedNetwork = null;
-                                    if(!resultReturned) {
-                                        resultReturned = true
-                                        result.success("failed");
-                                    }
-                                    cm.unregisterNetworkCallback(this);
+                                cm.requestNetwork(networkRequest, callback);
+                                activeNetworkCallback = callback;
+                            } else { // Below version 10
+                                Log.e("WIFI", "Using old version of SSID connect");
+                                val wifiMgr =
+                                    context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+                                val config = WifiConfiguration().apply {
+                                    SSID = ssid
+                                    preSharedKey = passphrase
                                 }
+                                val netId = wifiMgr.addNetwork(config)
+                                val success = wifiMgr.enableNetwork(netId, true)
+                                result.success(if (success) "connected" else "failed")
                             }
-                            cm.requestNetwork(networkRequest, callback);
-                            activeNetworkCallback = callback;
-                        } else { // Below version 10
-                            Log.e("WIFI", "Using old version of SSID connect");
-                            val wifiMgr =
-                                context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-                            val config = WifiConfiguration().apply {
-                                SSID = ssid
-                                preSharedKey = passphrase
-                            }
-                            val netId = wifiMgr.addNetwork(config)
-                            val success = wifiMgr.enableNetwork(netId, true)
-                            result.success(if (success) "connected" else "failed")
+                        } catch (e: SecurityException) {
+                            Log.e("WIFI", "Missing Wi-Fi pairing permission", e)
+                            result.error(
+                                "WIFI_PERMISSION_MISSING",
+                                "Nearby Wi-Fi Devices or Location permission is required to pair with the camera.",
+                                null
+                            )
                         }
                     }
 

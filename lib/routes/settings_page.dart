@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/keys.dart';
@@ -16,8 +17,11 @@ import 'package:secluso_flutter/ui/secluso_surfaces.dart';
 import 'package:secluso_flutter/ui/secluso_shell_ui.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/storage_manager.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 enum SettingsPreviewScrollPosition { top, bottom, veryBottom }
+
+final Uri _privacyPolicyUri = Uri.parse('https://secluso.com/privacy-policy');
 
 String _formatStorageDisplayBytes(int bytes) {
   if (bytes <= 0) return '0 B';
@@ -76,6 +80,7 @@ class _SettingsPageState extends State<SettingsPage> {
   int? storageRetentionDays = StorageManager.defaultRetentionDays;
   StorageSummary? storageSummary;
   bool _showRecentErrorHint = false;
+  String _appVersionDisplay = 'Loading...';
   late final VoidCallback _logErrorListener;
 
   bool get _isPreviewMode => widget.previewNightTheme != null;
@@ -97,8 +102,10 @@ class _SettingsPageState extends State<SettingsPage> {
       storageRetentionDays = StorageManager.defaultRetentionDays;
       storageSummary = _previewStorageSummary;
       _showRecentErrorHint = false;
+      unawaited(_loadAppVersionDisplay());
       return;
     }
+    unawaited(_loadAppVersionDisplay());
     _loadSettings();
   }
 
@@ -173,6 +180,22 @@ class _SettingsPageState extends State<SettingsPage> {
     });
   }
 
+  Future<void> _loadAppVersionDisplay() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (!mounted) return;
+      setState(() {
+        _appVersionDisplay = '${info.version} (${info.buildNumber})';
+      });
+    } catch (e) {
+      Log.w('Failed to load app version display: $e');
+      if (!mounted) return;
+      setState(() {
+        _appVersionDisplay = 'Unavailable';
+      });
+    }
+  }
+
   Future<void> _saveSettings() async {
     if (_isPreviewMode) return;
     final prefs = await SharedPreferences.getInstance();
@@ -200,6 +223,14 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _openExternalUrl(Uri uri) async {
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (launched || !mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Could not open $uri')));
   }
 
   Future<void> _triggerDebugSampleError() async {
@@ -349,6 +380,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 offset: const Offset(0, 1),
               ),
             ];
+    final showDevOnlyRows = kDebugMode;
     final storageManageRowStyle = GoogleFonts.inter(
       color: shell ? shellPrimaryTextColor : theme.colorScheme.onSurface,
       fontSize: shell ? shellMetrics.rowTitleSize : 11.05,
@@ -417,55 +449,59 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
         ),
         SizedBox(height: shell ? shellMetrics.headerBottomGap : 26),
-        ShellSettingsGroup(
-          title: 'Security',
-          titleStyle: sectionTitleStyle,
-          titleGap: shell ? shellMetrics.sectionTitleGap : 12,
-          radius: shell ? shellMetrics.groupRadius : 22,
-          cardColor: shell ? shellSurfaceColor : null,
-          borderColor: shell ? shellSurfaceBorderColor : null,
-          dividerColor: shell ? shellDividerColor : null,
-          boxShadow: shell ? shellCardShadow : null,
-          children: [
-            ShellSettingsRow(
-              title: 'Biometric Lock',
-              trailing: const ShellBadge(
-                label: 'UNIMPLEMENTED',
-                color: Color(0xFF9CA3AF),
+        if (showDevOnlyRows) ...[
+          ShellSettingsGroup(
+            title: 'Security',
+            titleStyle: sectionTitleStyle,
+            titleGap: shell ? shellMetrics.sectionTitleGap : 12,
+            radius: shell ? shellMetrics.groupRadius : 22,
+            cardColor: shell ? shellSurfaceColor : null,
+            borderColor: shell ? shellSurfaceBorderColor : null,
+            dividerColor: shell ? shellDividerColor : null,
+            boxShadow: shell ? shellCardShadow : null,
+            children: [
+              ShellSettingsRow(
+                title: 'Biometric Lock',
+                trailing: const ShellBadge(
+                  label: 'UNIMPLEMENTED',
+                  color: Color(0xFF9CA3AF),
+                ),
+                height: shell ? shellMetrics.rowHeight : 56,
+                horizontalPadding:
+                    shell ? shellMetrics.rowHorizontalPadding : 18,
+                titleFontSize: shell ? shellMetrics.rowTitleSize : 16,
+                valueFontSize: shell ? shellMetrics.rowValueSize : 16,
+                titleWeight: shell ? FontWeight.w400 : FontWeight.w500,
+                valueWeight: shell ? FontWeight.w400 : FontWeight.w500,
+                chevronSize: shell ? shellMetrics.chevronSize : 24,
+                titleColor: shell ? shellPrimaryTextColor : null,
+                titleStyle: shellRowTitleStyle,
               ),
-              height: shell ? shellMetrics.rowHeight : 56,
-              horizontalPadding: shell ? shellMetrics.rowHorizontalPadding : 18,
-              titleFontSize: shell ? shellMetrics.rowTitleSize : 16,
-              valueFontSize: shell ? shellMetrics.rowValueSize : 16,
-              titleWeight: shell ? FontWeight.w400 : FontWeight.w500,
-              valueWeight: shell ? FontWeight.w400 : FontWeight.w500,
-              chevronSize: shell ? shellMetrics.chevronSize : 24,
-              titleColor: shell ? shellPrimaryTextColor : null,
-              titleStyle: shellRowTitleStyle,
-            ),
-            ShellSettingsRow(
-              title: 'Auto-Lock Timeout',
-              trailing: const ShellBadge(
-                label: 'UNIMPLEMENTED',
-                color: Color(0xFF9CA3AF),
+              ShellSettingsRow(
+                title: 'Auto-Lock Timeout',
+                trailing: const ShellBadge(
+                  label: 'UNIMPLEMENTED',
+                  color: Color(0xFF9CA3AF),
+                ),
+                height: shell ? shellMetrics.rowHeight : 56,
+                horizontalPadding:
+                    shell ? shellMetrics.rowHorizontalPadding : 18,
+                titleFontSize: shell ? shellMetrics.rowTitleSize : 16,
+                valueFontSize: shell ? shellMetrics.rowValueSize : 16,
+                titleWeight: shell ? FontWeight.w400 : FontWeight.w500,
+                valueWeight: shell ? FontWeight.w400 : FontWeight.w500,
+                chevronSize: shell ? shellMetrics.chevronSize : 24,
+                valueChevronGap: shell ? 8 : 10,
+                titleColor: shell ? shellPrimaryTextColor : null,
+                valueColor: shell ? shellSecondaryTextColor : null,
+                chevronColor: shell ? shellChevronColor : null,
+                titleStyle: shellRowTitleStyle,
+                valueStyle: shellRowValueStyle,
               ),
-              height: shell ? shellMetrics.rowHeight : 56,
-              horizontalPadding: shell ? shellMetrics.rowHorizontalPadding : 18,
-              titleFontSize: shell ? shellMetrics.rowTitleSize : 16,
-              valueFontSize: shell ? shellMetrics.rowValueSize : 16,
-              titleWeight: shell ? FontWeight.w400 : FontWeight.w500,
-              valueWeight: shell ? FontWeight.w400 : FontWeight.w500,
-              chevronSize: shell ? shellMetrics.chevronSize : 24,
-              valueChevronGap: shell ? 8 : 10,
-              titleColor: shell ? shellPrimaryTextColor : null,
-              valueColor: shell ? shellSecondaryTextColor : null,
-              chevronColor: shell ? shellChevronColor : null,
-              titleStyle: shellRowTitleStyle,
-              valueStyle: shellRowValueStyle,
-            ),
-          ],
-        ),
-        SizedBox(height: shell ? shellMetrics.sectionGap : 22),
+            ],
+          ),
+          SizedBox(height: shell ? shellMetrics.sectionGap : 22),
+        ],
         ShellSettingsGroup(
           title: 'Appearance',
           titleStyle: sectionTitleStyle,
@@ -508,24 +544,26 @@ class _SettingsPageState extends State<SettingsPage> {
               titleColor: shell ? shellPrimaryTextColor : null,
               titleStyle: shellRowTitleStyle,
             ),
-            ShellSettingsRow(
-              title: 'App Icon',
-              trailing: const ShellBadge(
-                label: 'UNIMPLEMENTED',
-                color: Color(0xFF9CA3AF),
+            if (showDevOnlyRows)
+              ShellSettingsRow(
+                title: 'App Icon',
+                trailing: const ShellBadge(
+                  label: 'UNIMPLEMENTED',
+                  color: Color(0xFF9CA3AF),
+                ),
+                height: shell ? shellMetrics.rowHeight : 56,
+                horizontalPadding:
+                    shell ? shellMetrics.rowHorizontalPadding : 18,
+                titleFontSize: shell ? shellMetrics.rowTitleSize : 16,
+                valueFontSize: shell ? shellMetrics.rowValueSize : 16,
+                titleWeight: shell ? FontWeight.w400 : FontWeight.w500,
+                valueWeight: shell ? FontWeight.w400 : FontWeight.w500,
+                valueChevronGap: shell ? 8 : 10,
+                titleColor: shell ? shellPrimaryTextColor : null,
+                valueColor: shell ? shellSecondaryTextColor : null,
+                titleStyle: shellRowTitleStyle,
+                valueStyle: shellRowValueStyle,
               ),
-              height: shell ? shellMetrics.rowHeight : 56,
-              horizontalPadding: shell ? shellMetrics.rowHorizontalPadding : 18,
-              titleFontSize: shell ? shellMetrics.rowTitleSize : 16,
-              valueFontSize: shell ? shellMetrics.rowValueSize : 16,
-              titleWeight: shell ? FontWeight.w400 : FontWeight.w500,
-              valueWeight: shell ? FontWeight.w400 : FontWeight.w500,
-              valueChevronGap: shell ? 8 : 10,
-              titleColor: shell ? shellPrimaryTextColor : null,
-              valueColor: shell ? shellSecondaryTextColor : null,
-              titleStyle: shellRowTitleStyle,
-              valueStyle: shellRowValueStyle,
-            ),
           ],
         ),
         SizedBox(height: shell ? shellMetrics.sectionGap : 22),
@@ -837,11 +875,8 @@ class _SettingsPageState extends State<SettingsPage> {
           children: [
             ShellSettingsRow(
               title: 'Version',
-              value: '1.0.0 (24)',
-              trailing: const ShellBadge(
-                label: 'UNIMPLEMENTED',
-                color: Color(0xFF9CA3AF),
-              ),
+              value: _appVersionDisplay,
+              trailing: const SizedBox.shrink(),
               height: shell ? shellMetrics.aboutVersionRowHeight : 56,
               horizontalPadding: shell ? shellMetrics.rowHorizontalPadding : 18,
               titleFontSize: shell ? shellMetrics.rowTitleSize : 16,
@@ -854,30 +889,29 @@ class _SettingsPageState extends State<SettingsPage> {
               titleStyle: shellRowTitleStyle,
               valueStyle: shellRowValueStyle,
             ),
-            ShellSettingsRow(
-              title: 'Terms of Service',
-              trailing: const ShellBadge(
-                label: 'UNIMPLEMENTED',
-                color: Color(0xFF9CA3AF),
+            if (showDevOnlyRows)
+              ShellSettingsRow(
+                title: 'Terms of Service',
+                trailing: const ShellBadge(
+                  label: 'UNIMPLEMENTED',
+                  color: Color(0xFF9CA3AF),
+                ),
+                height: shell ? shellMetrics.aboutLinkRowHeight : 56,
+                horizontalPadding:
+                    shell ? shellMetrics.rowHorizontalPadding : 18,
+                titleFontSize: shell ? shellMetrics.rowTitleSize : 16,
+                valueFontSize: shell ? shellMetrics.rowValueSize : 16,
+                titleWeight: shell ? FontWeight.w400 : FontWeight.w500,
+                valueWeight: shell ? FontWeight.w400 : FontWeight.w500,
+                chevronSize: shell ? shellMetrics.chevronSize : 24,
+                valueChevronGap: shell ? 8 : 10,
+                titleColor: shell ? shellPrimaryTextColor : null,
+                chevronColor: shell ? shellChevronColor : null,
+                titleStyle: shellRowTitleStyle,
               ),
-              height: shell ? shellMetrics.aboutLinkRowHeight : 56,
-              horizontalPadding: shell ? shellMetrics.rowHorizontalPadding : 18,
-              titleFontSize: shell ? shellMetrics.rowTitleSize : 16,
-              valueFontSize: shell ? shellMetrics.rowValueSize : 16,
-              titleWeight: shell ? FontWeight.w400 : FontWeight.w500,
-              valueWeight: shell ? FontWeight.w400 : FontWeight.w500,
-              chevronSize: shell ? shellMetrics.chevronSize : 24,
-              valueChevronGap: shell ? 8 : 10,
-              titleColor: shell ? shellPrimaryTextColor : null,
-              chevronColor: shell ? shellChevronColor : null,
-              titleStyle: shellRowTitleStyle,
-            ),
             ShellSettingsRow(
               title: 'Privacy Policy',
-              trailing: const ShellBadge(
-                label: 'UNIMPLEMENTED',
-                color: Color(0xFF9CA3AF),
-              ),
+              onTap: () => _openExternalUrl(_privacyPolicyUri),
               height: shell ? shellMetrics.aboutLinkRowHeight : 56,
               horizontalPadding: shell ? shellMetrics.rowHorizontalPadding : 18,
               titleFontSize: shell ? shellMetrics.rowTitleSize : 16,

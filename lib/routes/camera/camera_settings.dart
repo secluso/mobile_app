@@ -1,5 +1,6 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -200,6 +201,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final personDetectionEnabled =
         selectedNotificationEvents.contains('All') ||
         selectedNotificationEvents.contains('Humans');
+    final showDevOnlyRows = kDebugMode;
 
     return SeclusoScaffold(
       body: ColoredBox(
@@ -268,16 +270,17 @@ class _SettingsPageState extends State<SettingsPage> {
                       valueStyle: rowValueStyle,
                       valueChevronGap: 0,
                     ),
-                  ShellSettingsRow(
-                    title: 'Location',
-                    trailing: const ShellBadge(
-                      label: 'UNIMPLEMENTED',
-                      color: Color(0xFF9CA3AF),
+                  if (showDevOnlyRows)
+                    ShellSettingsRow(
+                      title: 'Location',
+                      trailing: const ShellBadge(
+                        label: 'UNIMPLEMENTED',
+                        color: Color(0xFF9CA3AF),
+                      ),
+                      height: metrics.shortRowHeight + metrics.shortRowDelta,
+                      horizontalPadding: metrics.rowHorizontalPadding,
+                      titleStyle: rowTitleStyle,
                     ),
-                    height: metrics.shortRowHeight + metrics.shortRowDelta,
-                    horizontalPadding: metrics.rowHorizontalPadding,
-                    titleStyle: rowTitleStyle,
-                  ),
                 ],
               ),
               SizedBox(height: metrics.sectionGap),
@@ -359,66 +362,68 @@ class _SettingsPageState extends State<SettingsPage> {
                 ],
               ),
               SizedBox(height: metrics.sectionGap),
-              _buildGroup(
-                context,
-                metrics: metrics,
-                title: 'DETECTION',
-                titleStyle: sectionTitleStyle,
-                cardShadow: cardShadow,
-                rows: [
-                  ShellSettingsRow(
-                    title: 'Motion Sensitivity',
-                    trailing: const ShellBadge(
-                      label: 'UNIMPLEMENTED',
-                      color: Color(0xFF9CA3AF),
+              if (showDevOnlyRows) ...[
+                _buildGroup(
+                  context,
+                  metrics: metrics,
+                  title: 'DETECTION',
+                  titleStyle: sectionTitleStyle,
+                  cardShadow: cardShadow,
+                  rows: [
+                    ShellSettingsRow(
+                      title: 'Motion Sensitivity',
+                      trailing: const ShellBadge(
+                        label: 'UNIMPLEMENTED',
+                        color: Color(0xFF9CA3AF),
+                      ),
+                      height: metrics.shortRowHeight,
+                      horizontalPadding: metrics.rowHorizontalPadding,
+                      titleStyle: rowTitleStyle,
                     ),
-                    height: metrics.shortRowHeight,
-                    horizontalPadding: metrics.rowHorizontalPadding,
-                    titleStyle: rowTitleStyle,
-                  ),
-                  ShellSettingsRow(
-                    title: 'Detection Zones',
-                    trailing: const ShellBadge(
-                      label: 'UNIMPLEMENTED',
-                      color: Color(0xFF9CA3AF),
+                    ShellSettingsRow(
+                      title: 'Detection Zones',
+                      trailing: const ShellBadge(
+                        label: 'UNIMPLEMENTED',
+                        color: Color(0xFF9CA3AF),
+                      ),
+                      height: metrics.bottomRowHeight,
+                      horizontalPadding: metrics.rowHorizontalPadding,
+                      titleStyle: rowTitleStyle,
                     ),
-                    height: metrics.bottomRowHeight,
-                    horizontalPadding: metrics.rowHorizontalPadding,
-                    titleStyle: rowTitleStyle,
-                  ),
-                ],
-              ),
-              SizedBox(height: metrics.sectionGap),
-              _buildGroup(
-                context,
-                metrics: metrics,
-                title: 'RECORDING',
-                titleStyle: sectionTitleStyle,
-                cardShadow: cardShadow,
-                rows: [
-                  ShellSettingsRow(
-                    title: 'Clip Length',
-                    trailing: const ShellBadge(
-                      label: 'UNIMPLEMENTED',
-                      color: Color(0xFF9CA3AF),
+                  ],
+                ),
+                SizedBox(height: metrics.sectionGap),
+                _buildGroup(
+                  context,
+                  metrics: metrics,
+                  title: 'RECORDING',
+                  titleStyle: sectionTitleStyle,
+                  cardShadow: cardShadow,
+                  rows: [
+                    ShellSettingsRow(
+                      title: 'Clip Length',
+                      trailing: const ShellBadge(
+                        label: 'UNIMPLEMENTED',
+                        color: Color(0xFF9CA3AF),
+                      ),
+                      height: metrics.shortRowHeight,
+                      horizontalPadding: metrics.rowHorizontalPadding,
+                      titleStyle: rowTitleStyle,
                     ),
-                    height: metrics.shortRowHeight,
-                    horizontalPadding: metrics.rowHorizontalPadding,
-                    titleStyle: rowTitleStyle,
-                  ),
-                  ShellSettingsRow(
-                    title: 'Pre-roll',
-                    trailing: const ShellBadge(
-                      label: 'UNIMPLEMENTED',
-                      color: Color(0xFF9CA3AF),
+                    ShellSettingsRow(
+                      title: 'Pre-roll',
+                      trailing: const ShellBadge(
+                        label: 'UNIMPLEMENTED',
+                        color: Color(0xFF9CA3AF),
+                      ),
+                      height: metrics.toggleRowHeight + metrics.shortRowDelta,
+                      horizontalPadding: metrics.rowHorizontalPadding,
+                      titleStyle: rowTitleStyle,
                     ),
-                    height: metrics.toggleRowHeight + metrics.shortRowDelta,
-                    horizontalPadding: metrics.rowHorizontalPadding,
-                    titleStyle: rowTitleStyle,
-                  ),
-                ],
-              ),
-              SizedBox(height: metrics.sectionGap),
+                  ],
+                ),
+                SizedBox(height: metrics.sectionGap),
+              ],
               _buildGroup(
                 context,
                 metrics: metrics,
@@ -426,16 +431,17 @@ class _SettingsPageState extends State<SettingsPage> {
                 titleStyle: sectionTitleStyle,
                 cardShadow: cardShadow,
                 rows: [
-                  ShellSettingsRow(
-                    title: 'Restart Camera',
-                    trailing: const ShellBadge(
-                      label: 'UNIMPLEMENTED',
-                      color: Color(0xFF9CA3AF),
+                  if (showDevOnlyRows)
+                    ShellSettingsRow(
+                      title: 'Restart Camera',
+                      trailing: const ShellBadge(
+                        label: 'UNIMPLEMENTED',
+                        color: Color(0xFF9CA3AF),
+                      ),
+                      height: metrics.shortRowHeight,
+                      horizontalPadding: metrics.rowHorizontalPadding,
+                      titleStyle: rowTitleStyle,
                     ),
-                    height: metrics.shortRowHeight,
-                    horizontalPadding: metrics.rowHorizontalPadding,
-                    titleStyle: rowTitleStyle,
-                  ),
                   ShellSettingsRow(
                     title: 'Remove Camera',
                     onTap: _confirmRemoveCamera,
@@ -463,6 +469,9 @@ class _SettingsPageState extends State<SettingsPage> {
     required List<BoxShadow> cardShadow,
     required List<Widget> rows,
   }) {
+    if (rows.isEmpty) {
+      return const SizedBox.shrink();
+    }
     final dark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

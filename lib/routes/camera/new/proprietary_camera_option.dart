@@ -17,6 +17,7 @@ import 'package:secluso_flutter/keys.dart';
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'qr_scan.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -171,6 +172,14 @@ class _ProprietaryCameraConnectDialogState
       _isConnecting = true;
     });
     await WidgetsBinding.instance.endOfFrame;
+    if (!await _ensureWifiPairingPermissions()) {
+      if (!mounted) return;
+      setState(() {
+        _connectivityError = true;
+        _isConnecting = false;
+      });
+      return;
+    }
     try {
       final result = await ProprietaryCameraHotspot.connect();
       Log.d("First result from Wifi Connect Attempt: $result");
@@ -234,6 +243,39 @@ class _ProprietaryCameraConnectDialogState
         });
       }
     }
+  }
+
+  Future<bool> _ensureWifiPairingPermissions() async {
+    if (!Platform.isAndroid) {
+      return true;
+    }
+
+    final nearbyStatus = await Permission.nearbyWifiDevices.request();
+    if (nearbyStatus.isGranted) {
+      return true;
+    }
+
+    final locationStatus = await Permission.location.request();
+    if (locationStatus.isGranted) {
+      return true;
+    }
+
+    if (!mounted) {
+      return false;
+    }
+
+    final needsSettings =
+        nearbyStatus.isPermanentlyDenied || locationStatus.isPermanentlyDenied;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          needsSettings
+              ? 'Allow Nearby Wi-Fi Devices or Location in Settings to pair with the camera.'
+              : 'Allow Nearby Wi-Fi Devices or Location to pair with the camera.',
+        ),
+      ),
+    );
+    return false;
   }
 
   Future<void> _maybeDisconnect() async {

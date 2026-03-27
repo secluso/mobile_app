@@ -12,6 +12,7 @@ import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/app_coordination_state.dart';
+import 'package:secluso_flutter/utilities/review_environment.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import '../../objectbox.g.dart';
@@ -27,6 +28,17 @@ class CameraUiBridge {
   switchShellTabCallback;
 
   static Future<void> deleteCamera(String cameraName) async {
+    await ReviewEnvironment.instance.ensureLoaded();
+    if (ReviewEnvironment.instance.session?.cameraByName(cameraName) != null) {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.remove(
+        PrefKeys.cameraNotificationsEnabledPrefix + cameraName,
+      );
+      await prefs.remove(PrefKeys.cameraNotificationEventsPrefix + cameraName);
+      await ReviewEnvironment.instance.removeCameraByName(cameraName);
+      return;
+    }
+
     if (!AppStores.isInitialized) {
       await AppStores.init();
     }

@@ -11,6 +11,8 @@ class SeclusoPreviewAssets {
   static const String foyerEvent = 'assets/design/foyer_event.png';
   static const String deliveryNookEvent =
       'assets/design/delivery_nook_event.png';
+  static const String reviewFrontDoorClip =
+      'assets/design/review_front_door_preview.mp4';
   static const String homeOfficeFeed = 'assets/design/home_office_feed.png';
   static const String storageFeed = 'assets/design/storage_feed.png';
   static const String corridorFeed = 'assets/design/corridor_feed.png';
