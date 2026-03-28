@@ -514,10 +514,25 @@ class _ServerPageState extends State<ServerPage> {
     if (ReviewEnvironment.instance.isActive) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Review relay is up to date.'),
-        ),
+        const SnackBar(content: Text('Review relay is up to date.')),
       );
+      return;
+    }
+
+    if (_isPreviewMode) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Preview relay is up to date.')),
+      );
+      return;
+    }
+
+    if (!hasSynced ||
+        !await HttpClientService.instance.hasStoredServerCredentials()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Connect a relay first.')));
       return;
     }
 

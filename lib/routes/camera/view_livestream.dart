@@ -729,6 +729,13 @@ class _LivestreamPageState extends State<LivestreamPage>
     _lastLifecycleState = state;
   }
 
+  void _showUnimplementedLivestreamControl() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Unimplemented')));
+  }
+
   @override
   Widget build(BuildContext context) {
     final isLandscape =
@@ -901,6 +908,7 @@ class _LivestreamPageState extends State<LivestreamPage>
     bool loading = false,
   }) {
     final theme = Theme.of(context);
+    final showDevOnlyControls = kDebugMode;
     return LayoutBuilder(
       builder: (context, constraints) {
         final fullScreenHeight = MediaQuery.sizeOf(context).height;
@@ -1068,8 +1076,9 @@ class _LivestreamPageState extends State<LivestreamPage>
                       height: metrics.controlPanelHeight,
                       child: _LivestreamWorkingControlPanel(
                         metrics: metrics,
-                        onBackThirty: () {},
-                        onMute: () {},
+                        showDevOnlyControls: showDevOnlyControls,
+                        onBackThirty: _showUnimplementedLivestreamControl,
+                        onMute: _showUnimplementedLivestreamControl,
                         onStop: () {
                           if (_isPreviewMode) {
                             Navigator.of(context).maybePop();
@@ -1077,25 +1086,26 @@ class _LivestreamPageState extends State<LivestreamPage>
                             unawaited(_closeLivestream());
                           }
                         },
-                        onPhoto: () {},
+                        onPhoto: _showUnimplementedLivestreamControl,
                       ),
                     ),
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      top: metrics.micLabelTop,
-                      child: Text(
-                        'Microphone Muted',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.inter(
-                          textStyle: theme.textTheme.bodySmall,
-                          color: Colors.white.withValues(alpha: 0.4),
-                          fontSize: metrics.micLabelSize,
-                          fontWeight: FontWeight.w400,
-                          height: 13.5 / 9,
+                    if (showDevOnlyControls)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        top: metrics.micLabelTop,
+                        child: Text(
+                          'Microphone Muted',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                            textStyle: theme.textTheme.bodySmall,
+                            color: Colors.white.withValues(alpha: 0.4),
+                            fontSize: metrics.micLabelSize,
+                            fontWeight: FontWeight.w400,
+                            height: 13.5 / 9,
+                          ),
                         ),
                       ),
-                    ),
                     Positioned(
                       left: (metrics.canvasWidth - metrics.footerWidth) / 2,
                       top: metrics.footerTop,
@@ -1643,6 +1653,7 @@ class _LivestreamWorkingChip extends StatelessWidget {
 class _LivestreamWorkingControlPanel extends StatelessWidget {
   const _LivestreamWorkingControlPanel({
     required this.metrics,
+    required this.showDevOnlyControls,
     required this.onBackThirty,
     required this.onMute,
     required this.onStop,
@@ -1650,6 +1661,7 @@ class _LivestreamWorkingControlPanel extends StatelessWidget {
   });
 
   final _LivestreamWorkingMetrics metrics;
+  final bool showDevOnlyControls;
   final VoidCallback onBackThirty;
   final VoidCallback onMute;
   final VoidCallback onStop;
@@ -1669,60 +1681,62 @@ class _LivestreamWorkingControlPanel extends StatelessWidget {
           ),
           child: Stack(
             children: [
-              Positioned(
-                left: metrics.controlButton1Left,
-                top: metrics.controlButtonTop,
-                child: _LivestreamWorkingRoundButton(
-                  width: metrics.controlButtonWidth,
-                  height: metrics.controlButtonHeight,
-                  borderRadius: metrics.controlButtonHeight / 2,
-                  onTap: onBackThirty,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: metrics.controlReplayIconSize,
-                        height: metrics.controlReplayIconSize,
-                        child: CustomPaint(
-                          painter: _DesignLivestreamReplayPainter(
-                            Colors.white.withValues(alpha: 0.7),
+              if (showDevOnlyControls)
+                Positioned(
+                  left: metrics.controlButton1Left,
+                  top: metrics.controlButtonTop,
+                  child: _LivestreamWorkingRoundButton(
+                    width: metrics.controlButtonWidth,
+                    height: metrics.controlButtonHeight,
+                    borderRadius: metrics.controlButtonHeight / 2,
+                    onTap: onBackThirty,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: metrics.controlReplayIconSize,
+                          height: metrics.controlReplayIconSize,
+                          child: CustomPaint(
+                            painter: _DesignLivestreamReplayPainter(
+                              Colors.white.withValues(alpha: 0.7),
+                            ),
                           ),
                         ),
-                      ),
-                      SizedBox(height: 1.5 * metrics.scale),
-                      Text(
-                        '30',
-                        style: GoogleFonts.inter(
-                          textStyle: Theme.of(context).textTheme.labelSmall,
-                          color: Colors.white.withValues(alpha: 0.7),
-                          fontSize: metrics.controlLabelSize,
-                          fontWeight: FontWeight.w700,
-                          height: 10.5 / 7,
+                        SizedBox(height: 1.5 * metrics.scale),
+                        Text(
+                          '30',
+                          style: GoogleFonts.inter(
+                            textStyle: Theme.of(context).textTheme.labelSmall,
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: metrics.controlLabelSize,
+                            fontWeight: FontWeight.w700,
+                            height: 10.5 / 7,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              Positioned(
-                left: metrics.controlButton2Left,
-                top: metrics.controlButtonTop,
-                child: _LivestreamWorkingRoundButton(
-                  width: metrics.controlButtonWidth,
-                  height: metrics.controlButtonHeight,
-                  borderRadius: metrics.controlButtonHeight / 2,
-                  onTap: onMute,
-                  child: SizedBox(
-                    width: metrics.controlMuteIconSize,
-                    height: metrics.controlMuteIconSize,
-                    child: CustomPaint(
-                      painter: _DesignLivestreamMicOffPainter(
-                        Colors.white.withValues(alpha: 0.7),
+              if (showDevOnlyControls)
+                Positioned(
+                  left: metrics.controlButton2Left,
+                  top: metrics.controlButtonTop,
+                  child: _LivestreamWorkingRoundButton(
+                    width: metrics.controlButtonWidth,
+                    height: metrics.controlButtonHeight,
+                    borderRadius: metrics.controlButtonHeight / 2,
+                    onTap: onMute,
+                    child: SizedBox(
+                      width: metrics.controlMuteIconSize,
+                      height: metrics.controlMuteIconSize,
+                      child: CustomPaint(
+                        painter: _DesignLivestreamMicOffPainter(
+                          Colors.white.withValues(alpha: 0.7),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
               Positioned(
                 left: metrics.stopButtonLeft,
                 top: metrics.stopButtonTop,
@@ -1743,25 +1757,26 @@ class _LivestreamWorkingControlPanel extends StatelessWidget {
                   ),
                 ),
               ),
-              Positioned(
-                left: metrics.controlButton4Left,
-                top: metrics.controlButtonTop,
-                child: _LivestreamWorkingRoundButton(
-                  width: metrics.controlButtonWidth,
-                  height: metrics.controlButtonHeight,
-                  borderRadius: metrics.controlButtonHeight / 2,
-                  onTap: onPhoto,
-                  child: SizedBox(
-                    width: metrics.controlCameraIconSize,
-                    height: metrics.controlCameraIconSize,
-                    child: CustomPaint(
-                      painter: _DesignLivestreamCameraPainter(
-                        Colors.white.withValues(alpha: 0.7),
+              if (showDevOnlyControls)
+                Positioned(
+                  left: metrics.controlButton4Left,
+                  top: metrics.controlButtonTop,
+                  child: _LivestreamWorkingRoundButton(
+                    width: metrics.controlButtonWidth,
+                    height: metrics.controlButtonHeight,
+                    borderRadius: metrics.controlButtonHeight / 2,
+                    onTap: onPhoto,
+                    child: SizedBox(
+                      width: metrics.controlCameraIconSize,
+                      height: metrics.controlCameraIconSize,
+                      child: CustomPaint(
+                        painter: _DesignLivestreamCameraPainter(
+                          Colors.white.withValues(alpha: 0.7),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
             ],
           ),
         ),

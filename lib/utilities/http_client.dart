@@ -770,17 +770,37 @@ class HttpClientService {
     return dir;
   }
 
+  Future<bool> hasStoredServerCredentials() async {
+    final serverAddr = await _pref(PrefKeys.serverAddr);
+    final username = await _pref(PrefKeys.serverUsername);
+    final password = await _pref(PrefKeys.serverPassword);
+
+    return [
+      serverAddr?.trim(),
+      username?.trim(),
+      password?.trim(),
+    ].every((value) => value != null && value.isNotEmpty);
+  }
+
   Future<({String serverAddr, String username, String password})>
   _getValidatedCredentials() async {
     final serverAddr = await _pref(PrefKeys.serverAddr);
     final username = await _pref(PrefKeys.serverUsername);
     final password = await _pref(PrefKeys.serverPassword);
 
-    if ([serverAddr, username, password].contains(null)) {
-      throw Exception('Missing server credentials');
+    if ([
+      serverAddr?.trim(),
+      username?.trim(),
+      password?.trim(),
+    ].any((value) => value == null || value.isEmpty)) {
+      throw _SilentException('Missing server credentials');
     }
 
-    return (serverAddr: serverAddr!, username: username!, password: password!);
+    return (
+      serverAddr: serverAddr!.trim(),
+      username: username!.trim(),
+      password: password!.trim(),
+    );
   }
 
   // TODO: Should we put a lock around this? Is it possible for two bg tasks to run simultaneously?

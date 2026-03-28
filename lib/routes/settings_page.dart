@@ -22,6 +22,7 @@ import 'package:url_launcher/url_launcher.dart';
 enum SettingsPreviewScrollPosition { top, bottom, veryBottom }
 
 final Uri _privacyPolicyUri = Uri.parse('https://secluso.com/privacy-policy');
+final Uri _termsOfServiceUri = Uri.parse('https://secluso.com/terms');
 
 String _formatStorageDisplayBytes(int bytes) {
   if (bytes <= 0) return '0 B';
@@ -889,26 +890,21 @@ class _SettingsPageState extends State<SettingsPage> {
               titleStyle: shellRowTitleStyle,
               valueStyle: shellRowValueStyle,
             ),
-            if (showDevOnlyRows)
-              ShellSettingsRow(
-                title: 'Terms of Service',
-                trailing: const ShellBadge(
-                  label: 'UNIMPLEMENTED',
-                  color: Color(0xFF9CA3AF),
-                ),
-                height: shell ? shellMetrics.aboutLinkRowHeight : 56,
-                horizontalPadding:
-                    shell ? shellMetrics.rowHorizontalPadding : 18,
-                titleFontSize: shell ? shellMetrics.rowTitleSize : 16,
-                valueFontSize: shell ? shellMetrics.rowValueSize : 16,
-                titleWeight: shell ? FontWeight.w400 : FontWeight.w500,
-                valueWeight: shell ? FontWeight.w400 : FontWeight.w500,
-                chevronSize: shell ? shellMetrics.chevronSize : 24,
-                valueChevronGap: shell ? 8 : 10,
-                titleColor: shell ? shellPrimaryTextColor : null,
-                chevronColor: shell ? shellChevronColor : null,
-                titleStyle: shellRowTitleStyle,
-              ),
+            ShellSettingsRow(
+              title: 'Terms of Service',
+              onTap: () => _openExternalUrl(_termsOfServiceUri),
+              height: shell ? shellMetrics.aboutLinkRowHeight : 56,
+              horizontalPadding: shell ? shellMetrics.rowHorizontalPadding : 18,
+              titleFontSize: shell ? shellMetrics.rowTitleSize : 16,
+              valueFontSize: shell ? shellMetrics.rowValueSize : 16,
+              titleWeight: shell ? FontWeight.w400 : FontWeight.w500,
+              valueWeight: shell ? FontWeight.w400 : FontWeight.w500,
+              chevronSize: shell ? shellMetrics.chevronSize : 24,
+              valueChevronGap: shell ? 8 : 10,
+              titleColor: shell ? shellPrimaryTextColor : null,
+              chevronColor: shell ? shellChevronColor : null,
+              titleStyle: shellRowTitleStyle,
+            ),
             ShellSettingsRow(
               title: 'Privacy Policy',
               onTap: () => _openExternalUrl(_privacyPolicyUri),
