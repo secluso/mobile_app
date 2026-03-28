@@ -398,7 +398,7 @@ class _AppShellState extends State<AppShell> {
             openRelayScanOnLoad: widget.openRelayScanOnLoad,
             relayScanRequestId: _serverRelayScanRequestId,
           ),
-      _usesPreviewContent
+      widget.preview
           ? SettingsPage(
             key: ValueKey('shell-settings-$previewSignature'),
             showShellChrome: true,

@@ -500,14 +500,49 @@ class _ServerPageState extends State<ServerPage> {
   }
 
   Future<void> _openCameraDetails(String cameraName) async {
+    final reviewSession = ReviewEnvironment.instance.session;
+    final reviewCamera = reviewSession?.cameraByName(cameraName);
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => CameraViewPage(cameraName: cameraName)),
+      MaterialPageRoute(
+        builder:
+            (_) =>
+                reviewCamera != null
+                    ? _buildReviewCameraViewPage(reviewCamera)
+                    : CameraViewPage(cameraName: cameraName),
+      ),
     );
     if (_isPreviewMode) return;
     final cameraNames = await _fetchCameraNames();
     if (!mounted) return;
     setState(() => _cameraNames = cameraNames);
+  }
+
+  CameraViewPage _buildReviewCameraViewPage(ReviewCameraFixture camera) {
+    final previewVideos = <Video>[];
+    final previewDetectionsByVideo = <String, Set<String>>{};
+    final previewThumbAssetsByVideo = <String, String>{};
+    final previewVideoAssetsByVideo = <String, String>{};
+    final previewDurationByVideo = <String, Duration>{};
+
+    for (final clip in camera.clips) {
+      previewVideos.add(Video(camera.name, clip.videoFile, true, clip.motion));
+      previewDetectionsByVideo[clip.videoFile] = clip.detections;
+      previewThumbAssetsByVideo[clip.videoFile] = clip.previewAssetPath;
+      previewVideoAssetsByVideo[clip.videoFile] = clip.videoAssetPath;
+      previewDurationByVideo[clip.videoFile] = clip.duration;
+    }
+
+    return CameraViewPage(
+      cameraName: camera.name,
+      previewVideos: previewVideos,
+      previewDetectionsByVideo: previewDetectionsByVideo,
+      previewThumbAssetsByVideo: previewThumbAssetsByVideo,
+      previewVideoAssetsByVideo: previewVideoAssetsByVideo,
+      previewDurationByVideo: previewDurationByVideo,
+      previewHeroAssetPath: camera.livePreviewAssetPath,
+      previewHeroVideoAssetPath: camera.livePreviewVideoAssetPath,
+    );
   }
 
   Future<void> _checkForUpdates() async {
