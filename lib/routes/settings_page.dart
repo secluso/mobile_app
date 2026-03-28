@@ -308,12 +308,16 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final themeProvider = Provider.of<ThemeProvider>(context);
     final dark = theme.brightness == Brightness.dark;
     final shell = widget.showShellChrome;
     final shellMetrics = _ShellSettingsMetrics.forWidth(
       MediaQuery.sizeOf(context).width,
     );
-    final displayNightTheme = shell && _isPreviewMode ? dark : isNightTheme;
+    final displayNightTheme =
+        _isPreviewMode
+            ? (shell ? dark : isNightTheme)
+            : themeProvider.isDarkMode;
     final shellPrimaryTextColor = dark ? Colors.white : const Color(0xFF111827);
     final shellSecondaryTextColor =
         dark ? Colors.white.withValues(alpha: 0.4) : const Color(0xFF6B7280);
@@ -520,12 +524,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 onChanged: (value) {
                   setState(() => isNightTheme = value);
                   if (!_isPreviewMode) {
-                    Provider.of<ThemeProvider>(
-                      context,
-                      listen: false,
-                    ).setTheme(value);
+                    unawaited(themeProvider.setTheme(value));
                   }
-                  _saveSettings();
+                  unawaited(_saveSettings());
                 },
                 width: shell ? shellMetrics.toggleWidth : 50,
                 height: shell ? shellMetrics.toggleHeight : 30,
