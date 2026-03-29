@@ -52,7 +52,7 @@ dependencies:
     git: # necessary to use actual repo to have iOS fixes
       url: https://github.com/fluttercommunity/flutter_workmanager.git
       path: workmanager
-      ref: main
+      ref: 7f4f870d593f858b0f55bd344c9863a6099cb30f
   connectivity_plus: ^7.0.0
   wakelock_plus: ^1.4.0
   intl: 0.20.2

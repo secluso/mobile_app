@@ -1391,7 +1391,7 @@ packages:
     dependency: "direct main"
     description:
       path: workmanager
-      ref: main
+      ref: "7f4f870d593f858b0f55bd344c9863a6099cb30f"
       resolved-ref: "7f4f870d593f858b0f55bd344c9863a6099cb30f"
       url: "https://github.com/fluttercommunity/flutter_workmanager.git"
     source: git
