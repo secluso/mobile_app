@@ -5,10 +5,10 @@ import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_zxing/flutter_zxing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/notifications/firebase.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
@@ -1320,7 +1320,6 @@ class _RelayQrScanPage extends StatefulWidget {
 }
 
 class _RelayQrScanPageState extends State<_RelayQrScanPage> {
-  final MobileScannerController _cameraController = MobileScannerController();
   bool _handlingScan = false;
   String? _indicatorMessage;
   Timer? _indicatorTimer;
@@ -1328,70 +1327,67 @@ class _RelayQrScanPageState extends State<_RelayQrScanPage> {
   @override
   void dispose() {
     _indicatorTimer?.cancel();
-    _cameraController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleDetection(BarcodeCapture capture) async {
-    if (_handlingScan) return;
+  Future<void> _handleDetection(Code code) async {
+    if (_handlingScan || !code.isValid) return;
 
-    for (final barcode in capture.barcodes) {
-      var rawValue = barcode.rawValue?.trim();
-      if (rawValue == null || rawValue.isEmpty) {
-        continue;
-      }
-
-      dynamic decoded;
-      try {
-        decoded = jsonDecode(rawValue);
-      } catch (_) {
-        decoded = null;
-      }
-
-      UserCredentialsQrPayload? credentials;
-
-      if (decoded is Map) {
-        final reviewRelayPayload = ReviewRelayQrPayload.tryParseMap(decoded);
-        if (reviewRelayPayload != null) {
-          credentials = UserCredentialsQrPayload.review(
-            relayId: reviewRelayPayload.relayId,
-            relayLabel: reviewRelayPayload.relayLabel,
-            relayAddress: reviewRelayPayload.relayAddress,
-          );
-        }
-
-        final versionKey = decoded['v'];
-        final serverUsername = decoded['u'];
-        final serverPassword = decoded['p'];
-        final serverAddress = decoded['sa'];
-        if (credentials == null &&
-            versionKey is String &&
-            serverUsername is String &&
-            serverPassword is String &&
-            serverAddress is String &&
-            versionKey == Constants.userCredentialsQrCodeVersion) {
-          credentials = UserCredentialsQrPayload(
-            serverUsername: serverUsername,
-            serverPassword: serverPassword,
-            serverAddress: serverAddress,
-          );
-          try {} catch (_) {}
-        }
-      }
-
-      if (credentials == null) {
-        _showNonSeclusoQrIndicator(
-          'QR code detected, but it is not a Secluso user credentials QR code.',
-        );
-        continue;
-      }
-
-      _handlingScan = true;
-      await _cameraController.stop();
-      if (!mounted) return;
-      Navigator.of(context).pop(credentials);
+    final rawValue = code.text?.trim();
+    if (rawValue == null || rawValue.isEmpty) {
       return;
     }
+
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(rawValue);
+    } catch (_) {
+      decoded = null;
+    }
+
+    UserCredentialsQrPayload? credentials;
+
+    if (decoded is Map) {
+      final reviewRelayPayload = ReviewRelayQrPayload.tryParseMap(decoded);
+      if (reviewRelayPayload != null) {
+        credentials = UserCredentialsQrPayload.review(
+          relayId: reviewRelayPayload.relayId,
+          relayLabel: reviewRelayPayload.relayLabel,
+          relayAddress: reviewRelayPayload.relayAddress,
+        );
+      }
+
+      final versionKey = decoded['v'];
+      final serverUsername = decoded['u'];
+      final serverPassword = decoded['p'];
+      final serverAddress = decoded['sa'];
+      if (credentials == null &&
+          versionKey is String &&
+          serverUsername is String &&
+          serverPassword is String &&
+          serverAddress is String &&
+          versionKey == Constants.userCredentialsQrCodeVersion) {
+        credentials = UserCredentialsQrPayload(
+          serverUsername: serverUsername,
+          serverPassword: serverPassword,
+          serverAddress: serverAddress,
+        );
+        try {} catch (_) {}
+      }
+    }
+
+    if (credentials == null) {
+      _showNonSeclusoQrIndicator(
+        'QR code detected, but it is not a Secluso user credentials QR code.',
+      );
+      return;
+    }
+
+    setState(() {
+      _handlingScan = true;
+    });
+    if (!mounted) return;
+    Navigator.of(context).pop(credentials);
   }
 
   void _showNonSeclusoQrIndicator(String message) {
@@ -1417,10 +1413,20 @@ class _RelayQrScanPageState extends State<_RelayQrScanPage> {
       belowFrameText: "Point at your relay's QR\ncode",
       bottomMessage:
           'Relay credentials are stored only on this phone and used only to connect to your relay.',
-      background: MobileScanner(
-        controller: _cameraController,
-        onDetect: _handleDetection,
-      ),
+      background:
+          _handlingScan
+              ? const ColoredBox(color: Color(0xFF050505))
+              : ReaderWidget(
+                onScan: _handleDetection,
+                codeFormat: Format.qrCode,
+                cropPercent: 1.0,
+                tryHarder: true,
+                showFlashlight: false,
+                showToggleCamera: false,
+                showGallery: false,
+                showScannerOverlay: false,
+                loading: const ColoredBox(color: Color(0xFF050505)),
+              ),
       onBack: () => Navigator.of(context).maybePop(),
       indicatorMessage: _indicatorMessage,
     );

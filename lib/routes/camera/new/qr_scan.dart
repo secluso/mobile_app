@@ -2,8 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_zxing/flutter_zxing.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'dart:async';
 import 'package:secluso_flutter/routes/camera/new/ip_camera_option.dart';
@@ -346,7 +346,6 @@ class GenericCameraQrScanPage extends StatefulWidget {
 }
 
 class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage> {
-  final MobileScannerController _cameraController = MobileScannerController();
   bool _handlingScan = false;
   String? _indicatorMessage;
   Timer? _indicatorTimer;
@@ -354,90 +353,90 @@ class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage> {
   @override
   void dispose() {
     _indicatorTimer?.cancel();
-    _cameraController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleDetectedBarcode(BarcodeCapture capture) async {
-    if (_handlingScan) return;
-    for (final barcode in capture.barcodes) {
-      final text = barcode.rawValue?.trim();
-      if (text == null || text.isEmpty) {
-        continue;
-      }
-      final payload = _parseCameraQr(text);
-      if (payload == null) {
-        _showNonSeclusoQrIndicator(
-          'QR code detected, but it is not a Secluso camera QR code.',
-        );
-        continue;
-      }
+  Future<void> _handleDetectedBarcode(Code barcode) async {
+    if (_handlingScan || !barcode.isValid) return;
 
-      _handlingScan = true;
-      await _cameraController.stop();
-      if (!context.mounted) return;
-
-      Map<String, Object>? result;
-      switch (payload.kind) {
-        case GenericCameraQrKind.proprietary:
-          result =
-              await ProprietaryCameraConnectDialog.showProprietaryCameraSetupFlow(
-                context,
-                initialQrCode: payload.rawQrBytes!,
-                hotspotPassword: payload.hotspotPassword!,
-              );
-        case GenericCameraQrKind.ip:
-          result = await IpCameraDialog.showIpCameraPopup(
-            context,
-            initialCameraName: payload.initialCameraName,
-            initialCameraIp: payload.initialCameraIp,
-          );
-        case GenericCameraQrKind.review:
-          final reviewPayload = payload.reviewPayload;
-          if (reviewPayload == null) {
-            result = null;
-            break;
-          }
-          final session = ReviewEnvironment.instance.session;
-          final alreadyAdded =
-              session?.cameras.any(
-                (camera) =>
-                    camera.id == reviewPayload.cameraId ||
-                    camera.name == reviewPayload.cameraName,
-              ) ??
-              false;
-          if (!ReviewEnvironment.instance.isActive) {
-            _showNonSeclusoQrIndicator(
-              'Scan the App Review relay QR before scanning the review camera QR.',
-            );
-            break;
-          }
-          if (alreadyAdded) {
-            _showNonSeclusoQrIndicator(
-              'That App Review camera is already added.',
-            );
-            break;
-          }
-          await Navigator.of(context).push<void>(
-            MaterialPageRoute(
-              builder:
-                  (_) =>
-                      ReviewCameraPairingFlowPage(reviewPayload: reviewPayload),
-            ),
-          );
-      }
-
-      if (!mounted) return;
-
-      if (result != null) {
-        Navigator.of(context).pop(result);
-        return;
-      }
-
-      _handlingScan = false;
-      await _cameraController.start();
-      break;
+    final text = barcode.text?.trim();
+    if (text == null || text.isEmpty) {
+      return;
     }
+
+    final payload = _parseCameraQr(text);
+    if (payload == null) {
+      _showNonSeclusoQrIndicator(
+        'QR code detected, but it is not a Secluso camera QR code.',
+      );
+      return;
+    }
+
+    setState(() {
+      _handlingScan = true; // mark as handled
+    });
+    if (!context.mounted) return;
+
+    Map<String, Object>? result;
+    switch (payload.kind) {
+      case GenericCameraQrKind.proprietary:
+        result =
+            await ProprietaryCameraConnectDialog.showProprietaryCameraSetupFlow(
+              context,
+              initialQrCode: payload.rawQrBytes!,
+              hotspotPassword: payload.hotspotPassword!,
+            );
+      case GenericCameraQrKind.ip:
+        result = await IpCameraDialog.showIpCameraPopup(
+          context,
+          initialCameraName: payload.initialCameraName,
+          initialCameraIp: payload.initialCameraIp,
+        );
+      case GenericCameraQrKind.review:
+        final reviewPayload = payload.reviewPayload;
+        if (reviewPayload == null) {
+          result = null;
+          break;
+        }
+        final session = ReviewEnvironment.instance.session;
+        final alreadyAdded =
+            session?.cameras.any(
+              (camera) =>
+                  camera.id == reviewPayload.cameraId ||
+                  camera.name == reviewPayload.cameraName,
+            ) ??
+            false;
+        if (!ReviewEnvironment.instance.isActive) {
+          _showNonSeclusoQrIndicator(
+            'Scan the App Review relay QR before scanning the review camera QR.',
+          );
+          break;
+        }
+        if (alreadyAdded) {
+          _showNonSeclusoQrIndicator(
+            'That App Review camera is already added.',
+          );
+          break;
+        }
+        await Navigator.of(context).push<void>(
+          MaterialPageRoute(
+            builder:
+                (_) =>
+                    ReviewCameraPairingFlowPage(reviewPayload: reviewPayload),
+          ),
+        );
+    }
+
+    if (!mounted) return;
+
+    if (result != null) {
+      Navigator.of(context).pop(result);
+      return;
+    }
+
+    setState(() {
+      _handlingScan = false;
+    });
   }
 
   GenericCameraQrPayload? _parseCameraQr(String rawValue) {
@@ -509,10 +508,20 @@ class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage> {
       title: 'Scan Camera QR',
       bottomMessage:
           'Supported QR types are interpreted locally on this phone. Unsupported QR codes are ignored and never sent to any server.',
-      background: MobileScanner(
-        controller: _cameraController,
-        onDetect: _handleDetectedBarcode,
-      ),
+      background:
+          _handlingScan
+              ? const ColoredBox(color: Color(0xFF050505))
+              : ReaderWidget(
+                onScan: _handleDetectedBarcode,
+                codeFormat: Format.qrCode,
+                cropPercent: 1.0,
+                tryHarder: true,
+                showFlashlight: false,
+                showToggleCamera: false,
+                showGallery: false,
+                showScannerOverlay: false,
+                loading: const ColoredBox(color: Color(0xFF050505)),
+              ),
       onBack: () => Navigator.of(context).maybePop(),
       indicatorMessage: _indicatorMessage,
     );
@@ -757,7 +766,6 @@ class _QrScanPageFrameState extends State<_QrScanPageFrame>
 
 class _QrScanDialogState extends State<QrScanDialog> {
   bool _hasScannedCode = false; // ensure we only handle the first QR code
-  final MobileScannerController _cameraController = MobileScannerController();
 
   String? _errorMessage;
   Timer? _errorTimer;
@@ -765,7 +773,7 @@ class _QrScanDialogState extends State<QrScanDialog> {
 
   @override
   void dispose() {
-    _cameraController.dispose();
+    _errorTimer?.cancel();
     super.dispose();
   }
 
@@ -774,52 +782,46 @@ class _QrScanDialogState extends State<QrScanDialog> {
     Navigator.of(context).pop(null);
   }
 
-  void _onDetectBarcode(BarcodeCapture capture) async {
-    if (_hasScannedCode) return; // already handled
-    final barcodes = capture.barcodes;
+  void _onDetectBarcode(Code barcode) {
+    if (_hasScannedCode || !barcode.isValid) return; // already handled
 
-    for (final barcode in barcodes) {
-      final text = barcode.rawValue;
-      Log.d("Detected barcode with text: $text");
-      if (text != null && text.isNotEmpty) {
-        try {
-          jsonDecode(text);
-        } catch (e) {
-          _showInvalidQrCode("Invalid QR code shown");
-          continue;
-        }
-
-        final jsonData = jsonDecode(text);
-        if (jsonData is! Map ||
-            !jsonData.containsKey("v") ||
-            !jsonData.containsKey("cs")) {
-          _showInvalidQrCode("Invalid QR code shown");
-          continue;
-        }
-
-        final versionKey = jsonData["v"];
-        if (versionKey != Constants.cameraQrCodeVersion) {
-          _showInvalidQrCode("Unsupported QR code version: $versionKey");
-          continue;
-        }
-
-        // read base64 instead of bytes
-        final rawBytes = base64Decode(jsonData["cs"]);
-        if (rawBytes.length != Constants.numCameraSecretBytes) {
-          _showInvalidQrCode("Invalid QR code shown");
-          continue;
-        }
-
-        _hasScannedCode = true; // mark as handled
-        // Stop the camera
-        _cameraController.stop();
-
-        Navigator.of(context).pop(rawBytes);
-
-        // Once we return from that, break out completely
-        break;
-      }
+    final text = barcode.text;
+    Log.d("Detected barcode with text: $text");
+    if (text == null || text.isEmpty) {
+      return;
     }
+
+    dynamic jsonData;
+    try {
+      jsonData = jsonDecode(text);
+    } catch (_) {
+      _showInvalidQrCode("Invalid QR code shown");
+      return;
+    }
+
+    if (jsonData is! Map ||
+        !jsonData.containsKey("v") ||
+        !jsonData.containsKey("cs")) {
+      _showInvalidQrCode("Invalid QR code shown");
+      return;
+    }
+
+    final versionKey = jsonData["v"];
+    if (versionKey != Constants.cameraQrCodeVersion) {
+      _showInvalidQrCode("Unsupported QR code version: $versionKey");
+      return;
+    }
+
+    final rawBytes = base64Decode(jsonData["cs"]);
+    if (rawBytes.length != Constants.numCameraSecretBytes) {
+      _showInvalidQrCode("Invalid QR code shown");
+      return;
+    }
+
+    setState(() {
+      _hasScannedCode = true; // mark as handled
+    });
+    Navigator.of(context).pop(rawBytes);
   }
 
   void _showInvalidQrCode(String message) {
@@ -910,9 +912,18 @@ class _QrScanDialogState extends State<QrScanDialog> {
                                     widget.previewAssetPath!,
                                     fit: BoxFit.cover,
                                   )
-                                  : MobileScanner(
-                                    controller: _cameraController,
-                                    onDetect: _onDetectBarcode,
+                                  : ReaderWidget(
+                                    onScan: _onDetectBarcode,
+                                    codeFormat: Format.qrCode,
+                                    cropPercent: 1.0,
+                                    tryHarder: true,
+                                    showFlashlight: false,
+                                    showToggleCamera: false,
+                                    showGallery: false,
+                                    showScannerOverlay: false,
+                                    loading: const ColoredBox(
+                                      color: Color(0xFF050505),
+                                    ),
                                   ),
                         ),
                         Positioned.fill(

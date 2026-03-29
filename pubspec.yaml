@@ -41,7 +41,7 @@ dependencies:
     path: rust_builder
   flutter_rust_bridge: 2.11.1 # Needs to be consistent with FRB version
   shared_preferences: 2.5.3
-  mobile_scanner: ^7.2.0  # Locked to this version as future versions return invalid QR data
+  flutter_zxing: ^2.2.1
   provider: ^6.1.5+1
   confetti: 0.8.0
   logger: ^2.7.0
