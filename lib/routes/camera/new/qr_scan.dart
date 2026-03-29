@@ -288,6 +288,7 @@ class GenericCameraQrPayload {
     this.initialCameraName,
     this.initialCameraIp,
     this.reviewPayload,
+    this.hotspotPassword,
   });
 
   final GenericCameraQrKind kind;
@@ -295,11 +296,16 @@ class GenericCameraQrPayload {
   final String? initialCameraName;
   final String? initialCameraIp;
   final ReviewCameraQrPayload? reviewPayload;
+  final String? hotspotPassword;
 
-  factory GenericCameraQrPayload.proprietary(Uint8List rawQrBytes) {
+  factory GenericCameraQrPayload.proprietary(
+    Uint8List rawQrBytes,
+    String hotspotPassword,
+  ) {
     return GenericCameraQrPayload._(
       kind: GenericCameraQrKind.proprietary,
       rawQrBytes: rawQrBytes,
+      hotspotPassword: hotspotPassword,
     );
   }
 
@@ -377,7 +383,8 @@ class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage> {
           result =
               await ProprietaryCameraConnectDialog.showProprietaryCameraSetupFlow(
                 context,
-                initialQrCode: payload.rawQrBytes,
+                initialQrCode: payload.rawQrBytes!,
+                hotspotPassword: payload.hotspotPassword!,
               );
         case GenericCameraQrKind.ip:
           result = await IpCameraDialog.showIpCameraPopup(
@@ -453,9 +460,15 @@ class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage> {
           cameraSecret is String &&
           versionKey == Constants.cameraQrCodeVersion) {
         try {
-          final rawBytes = base64Decode(cameraSecret);
-          if (rawBytes.length == Constants.numCameraSecretBytes) {
-            return GenericCameraQrPayload.proprietary(rawBytes);
+          final hotspotPassword = decoded['wp'];
+          if (hotspotPassword is String && hotspotPassword.isNotEmpty) {
+            final rawBytes = base64Decode(cameraSecret);
+            if (rawBytes.length == Constants.numCameraSecretBytes) {
+              return GenericCameraQrPayload.proprietary(
+                rawBytes,
+                hotspotPassword,
+              );
+            }
           }
         } catch (_) {}
 

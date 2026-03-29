@@ -11,10 +11,9 @@ import 'package:secluso_flutter/utilities/rust_api.dart';
 class ProprietaryCameraHotspot {
   static const MethodChannel _wifiChannel = MethodChannel("secluso.com/wifi");
   static const String ssid = 'Secluso';
-  static const String password = '12345678';
   static const Duration _reconnectThrottle = Duration(seconds: 3);
 
-  static Future<String?> connect() {
+  static Future<String?> connect(String password) {
     return _wifiChannel.invokeMethod<String>('connectToWifi', <String, dynamic>{
       'ssid': ssid,
       'password': password,
@@ -56,6 +55,7 @@ class ProprietaryCameraHotspot {
     bool reconnectIfNeeded = false,
     int requiredStablePolls = 1,
     Duration settleDelay = const Duration(milliseconds: 250),
+    required String password,
   }) async {
     final deadline = DateTime.now().add(timeout);
     DateTime? lastReconnectAttempt;
@@ -92,7 +92,7 @@ class ProprietaryCameraHotspot {
                   _reconnectThrottle)) {
         lastReconnectAttempt = DateTime.now();
         try {
-          final reconnectResult = await connect();
+          final reconnectResult = await connect(password);
           Log.d(
             'Camera hotspot reconnect attempt '
             '(result=${reconnectResult ?? '<null>'}, '

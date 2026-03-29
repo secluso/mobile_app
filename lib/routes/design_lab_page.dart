@@ -440,7 +440,9 @@ Widget? designLabTargetPage(String target, {String themeName = 'dark'}) {
         ),
       );
     case 'dialog_secluso_connect':
-      return const ProprietaryCameraConnectDialog();
+      return const ProprietaryCameraConnectDialog(
+        hotspotPassword: 'password123',
+      );
     case 'dialog_secluso_setup':
       return const ProprietaryCameraInfoDialog(previewMode: true);
     case 'dialog_secluso_pairing':
@@ -449,6 +451,7 @@ Widget? designLabTargetPage(String target, {String themeName = 'dark'}) {
         wifiSsid: 'Home WiFi',
         wifiPassword: 'password123',
         previewMode: true,
+        hotspotPassword: "password123",
       );
     case 'dialog_secluso_pairing_failed':
       return const ProprietaryCameraWaitingDialog(
@@ -456,6 +459,7 @@ Widget? designLabTargetPage(String target, {String themeName = 'dark'}) {
         wifiSsid: 'Home WiFi',
         wifiPassword: 'password123',
         previewMode: true,
+        hotspotPassword: "password123",
         previewState: ProprietaryPairingPreviewState.failure,
       );
     case 'dialog_secluso_paired':

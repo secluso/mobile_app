@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'ip_camera_option.dart';
-import 'proprietary_camera_option.dart';
+import 'qr_scan.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/ui/secluso_luxury.dart';
 import 'package:secluso_flutter/ui/secluso_preview_assets.dart';
@@ -17,9 +17,7 @@ class ShowNewCameraOptions extends StatelessWidget {
   /// Navigates to the proprietary (QR) camera setup page.
   Future<void> _navigateToProprietaryCamera(BuildContext context) async {
     await WidgetsBinding.instance.endOfFrame;
-    await ProprietaryCameraConnectDialog.showProprietaryCameraSetupFlow(
-      context,
-    );
+    await GenericCameraQrScanPage.show(context);
   }
 
   /// Navigates to IP camera setup page
@@ -102,12 +100,12 @@ class _CameraOptionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
-    final surfaceColor = dark
-        ? const Color(0xFF0C0D10)
-        : Colors.white.withValues(alpha: 0.96);
-    final bodyColor = dark
-        ? Colors.white.withValues(alpha: 0.74)
-        : theme.colorScheme.onSurface.withValues(alpha: 0.66);
+    final surfaceColor =
+        dark ? const Color(0xFF0C0D10) : Colors.white.withValues(alpha: 0.96);
+    final bodyColor =
+        dark
+            ? Colors.white.withValues(alpha: 0.74)
+            : theme.colorScheme.onSurface.withValues(alpha: 0.66);
     final titleColor = dark ? Colors.white : theme.colorScheme.onSurface;
     final actionColor = dark ? Colors.white : theme.colorScheme.onSurface;
     if (!featured) {
@@ -115,9 +113,8 @@ class _CameraOptionCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: surfaceColor,
           borderRadius: BorderRadius.circular(30),
-          border: dark
-              ? null
-              : Border.all(color: theme.colorScheme.outlineVariant),
+          border:
+              dark ? null : Border.all(color: theme.colorScheme.outlineVariant),
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(30),
@@ -227,9 +224,8 @@ class _CameraOptionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: surfaceColor,
         borderRadius: BorderRadius.circular(32),
-        border: dark
-            ? null
-            : Border.all(color: theme.colorScheme.outlineVariant),
+        border:
+            dark ? null : Border.all(color: theme.colorScheme.outlineVariant),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(32),

@@ -39,6 +39,7 @@ class ProprietaryCameraWaitingDialog extends StatefulWidget {
   final String cameraName;
   final String wifiSsid;
   final String wifiPassword;
+  final String hotspotPassword;
   final Uint8List? qrCode;
   final bool previewMode;
   final ProprietaryPairingPreviewState previewState;
@@ -47,6 +48,7 @@ class ProprietaryCameraWaitingDialog extends StatefulWidget {
     required this.cameraName,
     required this.wifiSsid,
     required this.wifiPassword,
+    required this.hotspotPassword,
     this.qrCode,
     this.previewMode = false,
     this.previewState = ProprietaryPairingPreviewState.progress,
@@ -310,6 +312,7 @@ class _ProprietaryCameraWaitingDialogState
         cameraIp: Constants.proprietaryCameraIp,
         timeout: const Duration(seconds: 12),
         reconnectIfNeeded: Platform.isIOS,
+        password: widget.hotspotPassword,
       );
       if (!hotspotReady) {
         if (!mounted) return;

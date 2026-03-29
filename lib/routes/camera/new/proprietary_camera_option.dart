@@ -18,20 +18,23 @@ import 'package:secluso_flutter/keys.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'qr_scan.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
 
 /// Popup: User connects to camera's Wi-Fi hotspot.
 class ProprietaryCameraConnectDialog extends StatefulWidget {
-  const ProprietaryCameraConnectDialog({super.key});
+  const ProprietaryCameraConnectDialog({
+    super.key,
+    required this.hotspotPassword,
+  });
 
   static bool pairingCompleted = false;
   static bool pairingInProgress = false;
   static int _sessionCounter = 0;
   static int currentSessionId = 0;
   static int? boundSessionId;
+  final String hotspotPassword;
 
   @override
   State<ProprietaryCameraConnectDialog> createState() =>
@@ -43,7 +46,8 @@ class ProprietaryCameraConnectDialog extends StatefulWidget {
   /// Returns a map of final camera info if completed, or null if canceled.
   static Future<Map<String, Object>?> showProprietaryCameraSetupFlow(
     BuildContext context, {
-    Uint8List? initialQrCode,
+    required Uint8List initialQrCode,
+    required String hotspotPassword,
   }) async {
     pairingCompleted = false;
     pairingInProgress = true;
@@ -53,7 +57,10 @@ class ProprietaryCameraConnectDialog extends StatefulWidget {
     try {
       final connectResult = await _showSetupDialog<bool>(
         context: dialogContext,
-        builder: (ctx) => const ProprietaryCameraConnectDialog(),
+        builder:
+            (ctx) => ProprietaryCameraConnectDialog(
+              hotspotPassword: hotspotPassword,
+            ),
       );
 
       if (connectResult == null || connectResult == false) {
@@ -63,7 +70,10 @@ class ProprietaryCameraConnectDialog extends StatefulWidget {
       final infoResult = await _showSetupDialog<Map<String, Object>>(
         context: dialogContext,
         builder:
-            (ctx) => ProprietaryCameraInfoDialog(initialQrCode: initialQrCode),
+            (ctx) => ProprietaryCameraInfoDialog(
+              initialQrCode: initialQrCode,
+              hotspotPassword: hotspotPassword,
+            ),
       );
 
       ProprietaryCameraConnectDialog.pairingCompleted = true;
@@ -121,7 +131,7 @@ class _ProprietaryCameraConnectDialogState
     if (ProprietaryCameraConnectDialog.pairingInProgress) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _connectToCamera();
+        _connectToCamera(widget.hotspotPassword);
       });
     }
   }
@@ -138,6 +148,7 @@ class _ProprietaryCameraConnectDialogState
         cameraIp: Constants.proprietaryCameraIp,
         timeout: const Duration(seconds: 20),
         reconnectIfNeeded: Platform.isIOS,
+        password: widget.hotspotPassword,
       );
       if (!mounted) return false;
 
@@ -165,7 +176,7 @@ class _ProprietaryCameraConnectDialogState
     }
   }
 
-  Future<void> _connectToCamera() async {
+  Future<void> _connectToCamera(String wifiPassword) async {
     Log.d("Entered method");
     setState(() {
       _connectivityError = false;
@@ -181,7 +192,7 @@ class _ProprietaryCameraConnectDialogState
       return;
     }
     try {
-      final result = await ProprietaryCameraHotspot.connect();
+      final result = await ProprietaryCameraHotspot.connect(wifiPassword);
       Log.d("First result from Wifi Connect Attempt: $result");
 
       if (result == "connected" &&
@@ -328,7 +339,7 @@ class _ProprietaryCameraConnectDialogState
         connectivityError: _connectivityError,
         spinnerRotation: _spinnerController,
         onBack: _onCancel,
-        onRetry: _connectToCamera,
+        onRetry: () => _connectToCamera(widget.hotspotPassword),
       ),
     );
   }
@@ -1286,10 +1297,12 @@ class ProprietaryCameraInfoDialog extends StatefulWidget {
     super.key,
     this.previewMode = false,
     this.initialQrCode,
+    this.hotspotPassword,
   });
 
   final bool previewMode;
   final Uint8List? initialQrCode;
+  final String? hotspotPassword;
 
   @override
   State<ProprietaryCameraInfoDialog> createState() =>
@@ -1306,6 +1319,7 @@ class _ProprietaryCameraInfoDialogState
   final _wifiPasswordFocusNode = FocusNode();
 
   Uint8List? _qrCode;
+  String? _hotspotPassword;
   bool _showWifiPassword = false;
 
   @override
@@ -1313,6 +1327,7 @@ class _ProprietaryCameraInfoDialogState
     super.initState();
     ProprietaryCameraConnectDialog.pairingCompleted = false;
     _qrCode = widget.initialQrCode;
+    _hotspotPassword = widget.hotspotPassword;
     _cameraNameFocusNode.addListener(_handleFocusChange);
     _wifiSsidFocusNode.addListener(_handleFocusChange);
     _wifiPasswordFocusNode.addListener(_handleFocusChange);
@@ -1437,15 +1452,14 @@ class _ProprietaryCameraInfoDialogState
     final wifiSsid = _wifiSsidController.text.trim();
     final wifiPassword = _wifiPasswordController.text;
 
-    if (_qrCode == null) {
-      final result = await QrScanDialog.showQrScanDialog(context);
-      if (!mounted) {
-        return;
-      }
-      if (result == null) {
-        return;
-      }
-      _qrCode = result;
+    if (_qrCode == null || _hotspotPassword == null) {
+      FocusManager.instance.primaryFocus?.unfocus();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Scan the camera QR code before continuing.'),
+        ),
+      );
+      return;
     }
 
     if (!mounted) {
@@ -1460,6 +1474,7 @@ class _ProprietaryCameraInfoDialogState
               cameraName: cameraName,
               wifiSsid: wifiSsid,
               wifiPassword: wifiPassword,
+              hotspotPassword: _hotspotPassword!,
               qrCode: _qrCode!,
             ),
       ),
