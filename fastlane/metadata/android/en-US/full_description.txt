@@ -1,0 +1,31 @@
+Secluso is a private home security camera system for Raspberry Pi and Secluso
+hardware. Watch live video, get alerts, and view recordings from your phone
+without giving a cloud provider access to your footage.
+
+You can start today with your own Raspberry Pi and off-the-shelf parts.
+
+Secluso is built around end-to-end encryption. The camera encrypts video before
+it leaves your network, and the relay only transports encrypted data. You can
+self-host the open-source relay on your own VPS, or use hosted relay
+infrastructure without giving the relay access to your footage.
+
+Secluso Deploy gives you a guided setup path for preparing your Raspberry Pi,
+pairing it with the app, and setting up secure remote access.
+
+Secluso also includes on-device AI for alerts such as motion, person, pet, and
+vehicle detection.
+
+What you get:
+
+- end-to-end encrypted live view, alerts, and recordings
+- on-device AI with motion, person, pet, and vehicle alerts
+- support for DIY Raspberry Pi cameras
+- self-hosted or hosted relay options without giving the relay access to your
+  footage
+- open-source software you can inspect and self-host
+- reproducible releases you can verify
+- guided image building, QR-based pairing, and relay provisioning for easier
+  setup
+
+The F-Droid Android build is a better fit for de-Googled devices and avoids
+Firebase and Google Play Services for notifications.

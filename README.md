@@ -128,7 +128,7 @@ The app supports a special Android build mode for F-Droid that forces UnifiedPus
 Build it with:
 
 ```bash
-flutter build apk --dart-define=SECLUSO_FDROID_BUILD=true
+tool/fdroid/build_fdroid_apk.sh
 ```
 
 What this does:
@@ -153,6 +153,11 @@ SECLUSO_FDROID_BUILD=1 ./android/gradlew -p android app:dependencies --configura
 ```
 
 On the F-Droid build, the runtime classpath should include `project :unifiedpush_android` and should not include `firebase_core`, `firebase_messaging`, or `com.google.firebase:*`.
+
+Submission prep files for Fdroid are available here:
+
+- fastlane/metadata/android/en-US/
+- fdroid/com.secluso.mobile.yml
 
 ---
 

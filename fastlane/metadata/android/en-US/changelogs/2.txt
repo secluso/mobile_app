@@ -1,0 +1,6 @@
+Initial F-Droid-ready Android submission build.
+
+- Uses the dedicated F-Droid Android build path
+- Removes Firebase/FCM from the Android dependency graph
+- Uses UnifiedPush for Android notifications
+- Bundles app fonts locally instead of fetching them at runtime

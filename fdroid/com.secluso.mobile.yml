@@ -1,0 +1,71 @@
+# Draft metadata file for proposing Secluso to F-Droid's fdroiddata repo.
+# Review the commit, screenshots, and description before opening the MR.
+# `$$flutter$$` below is an fdroiddata placeholder, not a local shell path.
+
+Categories:
+  - Security
+  - Internet
+License: GPL-3.0-or-later
+AuthorName: Secluso
+AuthorWebSite: https://secluso.com
+WebSite: https://secluso.com
+SourceCode: https://github.com/secluso/mobile_app
+IssueTracker: https://github.com/secluso/mobile_app/issues
+Changelog: https://github.com/secluso/mobile_app/releases
+Summary: Private home security for Raspberry Pi and Secluso hardware
+Description: |
+    Secluso is a private home security camera system for Raspberry Pi and
+    Secluso hardware. Watch live video, get alerts, and view recordings from
+    your phone without giving a cloud provider access to your footage.
+
+    You can start today with your own Raspberry Pi and off-the-shelf parts.
+
+    The system is built around end-to-end encryption. The camera encrypts video
+    before it leaves your network, and the relay only transports encrypted
+    data. You can self-host the open-source relay on your own VPS, or use
+    hosted relay infrastructure without giving the relay access to your
+    footage.
+
+    Secluso Deploy gives you a guided setup path for preparing your Raspberry
+    Pi, pairing it with the app, and setting up secure remote access.
+
+    Secluso also includes on-device AI for alerts such as motion, person, pet,
+    and vehicle detection.
+
+    Features include:
+
+    * end-to-end encrypted live view, alerts, and recordings
+    * on-device AI with motion, person, pet, and vehicle alerts
+    * support for DIY Raspberry Pi cameras
+    * self-hosted or hosted relay options without giving the relay access to
+      your footage
+    * open-source software you can inspect and self-host
+    * reproducible releases you can verify
+    * guided image building, QR-based pairing, and relay provisioning for
+      easier setup
+
+    The F-Droid Android build is a better fit for de-Googled devices and
+    avoids Firebase and Google Play Services for notifications.
+CurrentVersion: 0.1.0
+CurrentVersionCode: 2
+MaintainerNotes: |
+    The F-Droid build is manual rather than a normal Gradle flavor. Use the
+    build recipe below, which enables the special F-Droid path and keeps the
+    Android release build unsigned for F-Droid signing.
+
+    The app can be pointed at a self-hosted relay from inside the UI, so it is
+    not tied to one fixed hosted service.
+
+RepoType: git
+Repo: https://github.com/secluso/mobile_app.git
+
+Builds:
+  - versionName: 0.1.0
+    versionCode: 2
+    commit: 980749727107ad517b9f3aa23f381d8e57b60be3
+    srclibs:
+      - flutter@3.32.2
+    build:
+      - export PUB_CACHE="$PWD/.pub-cache"
+      - ./tool/fdroid/build_fdroid_apk.sh "$$flutter$$/bin/flutter"
+    output: build/app/outputs/flutter-apk/app-release.apk

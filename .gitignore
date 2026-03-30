@@ -79,6 +79,8 @@ tool/*
 !tool/design_targets_android.txt
 !tool/repro/
 !tool/repro/**
+!tool/fdroid/
+!tool/fdroid/**
 !tool/app_review/
 !tool/app_review/**
 tool/repro/__pycache__/
