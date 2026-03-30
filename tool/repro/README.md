@@ -19,6 +19,14 @@ That builds the unsigned Android release APK in Docker and puts it here:
 build/reproducible/app-release-unsigned.apk
 ```
 
+If you want the special F-Droid Android variant instead, use the env var..
+
+```bash
+SECLUSO_FDROID_BUILD=1 tool/repro/build_with_docker.sh
+```
+
+That flag is passed through to the Docker container and translated into the matching Flutter dart define. So the reproducible build uses the UnifiedPush-only F-Droid Android path instead of the normal Firebase-backed Android path in this case!
+
 For normal repeated local use, the Docker wrappers now try to stay fast:
 
 - they reuse a cached repro image when the Dockerfile has not changed
@@ -44,6 +52,12 @@ That builds the unsigned Android App Bundle in Docker and puts it here:
 build/reproducible/app-release-unsigned.aab
 ```
 
+The same F-Droid switch works for the App Bundle path:
+
+```bash
+SECLUSO_FDROID_BUILD=1 tool/repro/build_aab_with_docker.sh
+```
+
 If you want to check whether the build is actually reproducible, run:
 
 ```bash
@@ -66,6 +80,13 @@ If you want the slower clean-room version that strips those warmed caches too, s
 
 ```bash
 SECLUSO_REPRO_CHECK_STRICT=1
+```
+
+You can combine that with the F-Droid variant too:
+
+```bash
+SECLUSO_FDROID_BUILD=1 tool/repro/check_reproducibility.sh
+SECLUSO_FDROID_BUILD=1 tool/repro/check_aab_reproducibility.sh
 ```
 
 If you want to compare against a Secluso APK installed on a phone, the flow is also pretty simple. First rebuild the unsigned APK:

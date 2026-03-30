@@ -43,6 +43,7 @@ export RUSTUP_HOME="${RUSTUP_HOME:-/opt/rustup}"
 export CARGOKIT_RUST_TOOLCHAIN="${CARGOKIT_RUST_TOOLCHAIN:-1.90.0}"
 export SECLUSO_FLUTTER_VERBOSE="${SECLUSO_FLUTTER_VERBOSE:-0}"
 export SECLUSO_ANDROID_TARGET_PLATFORM="${SECLUSO_ANDROID_TARGET_PLATFORM:-android-arm64}"
+export SECLUSO_FDROID_BUILD="${SECLUSO_FDROID_BUILD:-0}"
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$SECLUSO_REPRO_MAX_WORKERS}"
 export CARGO_INCREMENTAL=0
 export SECLUSO_REPRO_CLEAN="${SECLUSO_REPRO_CLEAN:-0}"
@@ -112,10 +113,22 @@ flutter pub get --enforce-lockfile
 
 export SECLUSO_ALLOW_UNSIGNED_RELEASE=1
 log_step "Building Android release APK"
+flutter_build_args=(
+  flutter
+  build
+  apk
+  --release
+  --no-pub
+  --target-platform="$SECLUSO_ANDROID_TARGET_PLATFORM"
+)
+if [[ "$SECLUSO_FDROID_BUILD" == "1" ]]; then
+  flutter_build_args+=(--dart-define=SECLUSO_FDROID_BUILD=true)
+fi
 if [[ "$SECLUSO_FLUTTER_VERBOSE" == "1" ]]; then
-  run_flutter_build flutter build apk --release --no-pub --target-platform="$SECLUSO_ANDROID_TARGET_PLATFORM" -v
+  flutter_build_args+=(-v)
+  run_flutter_build "${flutter_build_args[@]}"
 else
-  run_flutter_build flutter build apk --release --no-pub --target-platform="$SECLUSO_ANDROID_TARGET_PLATFORM"
+  run_flutter_build "${flutter_build_args[@]}"
 fi
 
 OUTPUT_DIR="$REPO_ROOT/build/reproducible"

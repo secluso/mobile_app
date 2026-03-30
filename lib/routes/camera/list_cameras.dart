@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:collection/collection.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:secluso_flutter/notifications/android_push_transport.dart';
 import 'package:path/path.dart' as p;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:path_provider/path_provider.dart';
@@ -829,7 +830,10 @@ class CamerasPageState extends State<CamerasPage>
 
             //TODO: This might be necessary to work on iOS. Not 100% sure.
             if (Platform.isAndroid) {
-              if (!FirebaseInit.isInitialized) {
+              final androidPushPlatform = await AndroidPushTransport.load();
+              if (AndroidPushTransport.isUnifiedValue(androidPushPlatform)) {
+                await PushNotificationService.instance.init();
+              } else if (!FirebaseInit.isInitialized) {
                 Log.d(
                   "Skipping FCM permission request; Firebase not initialized",
                 );

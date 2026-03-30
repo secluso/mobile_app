@@ -61,6 +61,7 @@ fi
 docker run --rm \
   --platform "$DOCKER_PLATFORM" \
   -e SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-1704067200}" \
+  -e SECLUSO_FDROID_BUILD="${SECLUSO_FDROID_BUILD:-0}" \
   -v "$REPO_ROOT":/workspace \
   "${DOCKER_CACHE_VOLUMES[@]}" \
   "$IMAGE_TAG" \

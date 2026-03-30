@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/notifications/android_push_transport.dart';
 import 'package:secluso_flutter/notifications/epoch.dart';
 import 'package:secluso_flutter/notifications/ios_notification_relay.dart';
 import 'package:secluso_flutter/notifications/notifications.dart';
@@ -275,7 +276,19 @@ class HttpClientService {
       );
     }
 
-    return NotificationTarget(platform: 'android');
+    final androidPushPlatform = AndroidPushTransport.fromPrefs(prefs);
+    if (AndroidPushTransport.isUnifiedValue(androidPushPlatform)) {
+      return NotificationTarget(
+        platform: AndroidPushTransport.unified,
+        unifiedpushEndpointUrl: prefs.getString(
+          PrefKeys.unifiedPushEndpointUrl,
+        ),
+        unifiedpushPubKey: prefs.getString(PrefKeys.unifiedPushPubKey),
+        unifiedpushAuth: prefs.getString(PrefKeys.unifiedPushAuth),
+      );
+    }
+
+    return NotificationTarget(platform: AndroidPushTransport.fcm);
   }
 
   Future<void> uploadSettings(

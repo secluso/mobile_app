@@ -18,9 +18,26 @@ import 'package:secluso_flutter/database/app_stores.dart';
 
 final FlutterLocalNotificationsPlugin _notifs =
     FlutterLocalNotificationsPlugin();
+bool _notificationsInitialized = false;
+Future<void>? _notificationsInitFuture;
 
 // Initialization method
 Future<void> initLocalNotifications() async {
+  if (_notificationsInitialized) {
+    return;
+  }
+  if (_notificationsInitFuture != null) {
+    return _notificationsInitFuture!;
+  }
+  _notificationsInitFuture = _doInitLocalNotifications();
+  try {
+    await _notificationsInitFuture!;
+  } finally {
+    _notificationsInitFuture = null;
+  }
+}
+
+Future<void> _doInitLocalNotifications() async {
   Log.d("Init local notifications called");
   // basic engine bootstrap (no permissions yet)
   const initSettings = InitializationSettings(
@@ -35,68 +52,66 @@ Future<void> initLocalNotifications() async {
     settings: initSettings,
     // optional deep-link handler
     onDidReceiveNotificationResponse: (resp) async {
-      if (resp.payload != null) {
-        Log.d("On video tap");
-        Map<String, dynamic> callInfo = jsonDecode(resp.payload!);
+      final callInfo = _parseNotificationPayload(resp.payload);
+      if (callInfo == null) {
+        return;
+      }
 
-        if (callInfo.containsKey("cameraName") &&
-            callInfo.containsKey("timestamp")) {
-          String cameraName = callInfo["cameraName"].toString();
-          String timestamp = callInfo["timestamp"].toString();
+      if (callInfo.containsKey("cameraName") &&
+          callInfo.containsKey("timestamp")) {
+        String cameraName = callInfo["cameraName"].toString();
+        String timestamp = callInfo["timestamp"].toString();
 
-          final box = AppStores.instance.videoStore.box<Video>();
-          final videoQuery =
-              box
-                  .query(
-                    Video_.camera
-                        .equals(cameraName)
-                        .and(Video_.video.contains(timestamp)),
-                  )
-                  .build();
-          final foundVideo = videoQuery.findFirst();
-          videoQuery.close();
+        final box = AppStores.instance.videoStore.box<Video>();
+        final videoQuery =
+            box
+                .query(
+                  Video_.camera
+                      .equals(cameraName)
+                      .and(Video_.video.contains(timestamp)),
+                )
+                .build();
+        final foundVideo = videoQuery.findFirst();
+        videoQuery.close();
 
-          final navCtx = navigatorKey.currentContext;
+        final navCtx = navigatorKey.currentContext;
 
-          if (foundVideo == null) {
-            Log.i("Not in database yet. Send to $cameraName");
+        if (foundVideo == null) {
+          Log.i("Not in database yet. Send to $cameraName");
 
-            if (navCtx != null) {
-              ScaffoldMessenger.of(navCtx).showSnackBar(
-                const SnackBar(
-                  backgroundColor: Colors.red,
-                  content: Text(
-                    "Video from notification is being downloaded",
-                    style: TextStyle(color: Colors.white),
-                  ),
+          if (navCtx != null) {
+            ScaffoldMessenger.of(navCtx).showSnackBar(
+              const SnackBar(
+                backgroundColor: Colors.red,
+                content: Text(
+                  "Video from notification is being downloaded",
+                  style: TextStyle(color: Colors.white),
                 ),
-              );
+              ),
+            );
 
-              navigatorKey.currentState?.push(
-                MaterialPageRoute(
-                  builder: (_) => CameraViewPage(cameraName: cameraName),
-                ),
-              );
-            }
-          } else {
-            Log.i("Found video. ${foundVideo.video}");
+            navigatorKey.currentState?.push(
+              MaterialPageRoute(
+                builder: (_) => CameraViewPage(cameraName: cameraName),
+              ),
+            );
+          }
+        } else {
+          Log.i("Found video. ${foundVideo.video}");
 
-            if (navCtx != null) {
-              navigatorKey.currentState?.push(
-                MaterialPageRoute(
-                  builder:
-                      (_) => VideoViewPage(
-                        cameraName: foundVideo.camera,
-                        videoTitle: foundVideo.video,
-                        visibleVideoTitle: repackageVideoTitle(
-                          foundVideo.video,
-                        ),
-                        isLivestream: !foundVideo.motion,
-                        canDownload: foundVideo.received,
-                      ),
-                ),
-              );
-            }
+          if (navCtx != null) {
+            navigatorKey.currentState?.push(
+              MaterialPageRoute(
+                builder:
+                    (_) => VideoViewPage(
+                      cameraName: foundVideo.camera,
+                      videoTitle: foundVideo.video,
+                      visibleVideoTitle: repackageVideoTitle(foundVideo.video),
+                      isLivestream: !foundVideo.motion,
+                      canDownload: foundVideo.received,
+                    ),
+              ),
+            );
           }
         }
       }
@@ -111,6 +126,31 @@ Future<void> initLocalNotifications() async {
     await _ensureMotionChannelAndroid();
     await _ensureSupportChannelAndroid();
   }
+  _notificationsInitialized = true;
+}
+
+Map<String, dynamic>? _parseNotificationPayload(String? payload) {
+  final raw = payload?.trim();
+  if (raw == null || raw.isEmpty) {
+    Log.w('Notification tap missing payload');
+    return null;
+  }
+
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is Map<String, dynamic>) {
+      Log.d("On video tap");
+      return decoded;
+    }
+    if (decoded is Map) {
+      Log.d("On video tap");
+      return decoded.map((key, value) => MapEntry(key.toString(), value));
+    }
+    Log.w('Notification tap payload was not a JSON object');
+  } catch (e, st) {
+    Log.w('Invalid notification tap payload: $e\n$st');
+  }
+  return null;
 }
 
 int _motionNotifId(String cameraName, String timestamp) {

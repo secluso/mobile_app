@@ -1,6 +1,7 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +12,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/notifications/android_push_transport.dart';
+import 'package:secluso_flutter/notifications/unified_push_service.dart';
 import 'package:secluso_flutter/routes/camera/camera_ui_bridge.dart';
 import 'package:secluso_flutter/routes/theme_provider.dart';
 import 'package:secluso_flutter/ui/secluso_surfaces.dart';
@@ -82,6 +85,8 @@ class _SettingsPageState extends State<SettingsPage> {
   StorageSummary? storageSummary;
   bool _showRecentErrorHint = false;
   String _appVersionDisplay = 'Loading...';
+  bool _hasRelayConnection = false;
+  String _androidPushPlatform = AndroidPushTransport.defaultValue;
   late final VoidCallback _logErrorListener;
 
   bool get _isPreviewMode => widget.previewNightTheme != null;
@@ -103,6 +108,8 @@ class _SettingsPageState extends State<SettingsPage> {
       storageRetentionDays = StorageManager.defaultRetentionDays;
       storageSummary = _previewStorageSummary;
       _showRecentErrorHint = false;
+      _hasRelayConnection = false;
+      _androidPushPlatform = AndroidPushTransport.defaultValue;
       unawaited(_loadAppVersionDisplay());
       return;
     }
@@ -136,6 +143,7 @@ class _SettingsPageState extends State<SettingsPage> {
         prefs.getBool(PrefKeys.notificationsEnabled) ??
         prefs.getBool('notifications') ??
         true;
+    final savedServerAddr = prefs.getString(PrefKeys.serverAddr);
     StorageSummary loadedStorageSummary;
     try {
       loadedStorageSummary = await StorageManager.calculateSummary();
@@ -168,6 +176,8 @@ class _SettingsPageState extends State<SettingsPage> {
       storageRetentionDays = loadedRetentionDays;
       storageSummary = loadedStorageSummary;
       _showRecentErrorHint = errorNotificationsEnabled && hasRecentError;
+      _hasRelayConnection = (savedServerAddr ?? '').trim().isNotEmpty;
+      _androidPushPlatform = AndroidPushTransport.fromPrefs(prefs);
     });
   }
 
@@ -232,6 +242,48 @@ class _SettingsPageState extends State<SettingsPage> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('Could not open $uri')));
+  }
+
+  String get _androidPushPlatformLabel =>
+      AndroidPushTransport.isUnifiedValue(_androidPushPlatform)
+          ? 'UnifiedPush'
+          : 'Firebase';
+
+  Future<void> _changeAndroidPushPlatform() async {
+    if (_isPreviewMode || !Platform.isAndroid) return;
+    if (!AndroidPushTransport.allowsChoice) return;
+    if (_hasRelayConnection) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Remove the relay before changing Android push delivery.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final selected = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder:
+            (_) =>
+                AndroidPushDeliveryPage(currentPlatform: _androidPushPlatform),
+      ),
+    );
+    if (selected == null || selected == _androidPushPlatform) {
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(PrefKeys.androidPushPlatform, selected);
+    if (!AndroidPushTransport.isUnifiedValue(selected)) {
+      await UnifiedPushService.instance.deactivate();
+    }
+    if (!mounted) return;
+    setState(() {
+      _androidPushPlatform = selected;
+    });
   }
 
   Future<void> _triggerDebugSampleError() async {
@@ -605,6 +657,32 @@ class _SettingsPageState extends State<SettingsPage> {
               titleColor: shell ? shellPrimaryTextColor : null,
               titleStyle: shellRowTitleStyle,
             ),
+            if (Platform.isAndroid)
+              ShellSettingsRow(
+                title: 'Push Delivery',
+                value:
+                    AndroidPushTransport.allowsChoice
+                        ? _androidPushPlatformLabel
+                        : 'UnifiedPush only',
+                onTap:
+                    AndroidPushTransport.allowsChoice
+                        ? _changeAndroidPushPlatform
+                        : null,
+                height: shell ? shellMetrics.rowHeight : 56,
+                horizontalPadding:
+                    shell ? shellMetrics.rowHorizontalPadding : 18,
+                titleFontSize: shell ? shellMetrics.rowTitleSize : 16,
+                valueFontSize: shell ? shellMetrics.rowValueSize : 16,
+                titleWeight: shell ? FontWeight.w400 : FontWeight.w500,
+                valueWeight: shell ? FontWeight.w400 : FontWeight.w500,
+                chevronSize: shell ? shellMetrics.chevronSize : 24,
+                valueChevronGap: shell ? 8 : 10,
+                titleColor: shell ? shellPrimaryTextColor : null,
+                valueColor: shell ? shellSecondaryTextColor : null,
+                chevronColor: shell ? shellChevronColor : null,
+                titleStyle: shellRowTitleStyle,
+                valueStyle: shellRowValueStyle,
+              ),
             ShellSettingsRow(
               title: 'Person Alerts',
               trailing: ShellToggle(
@@ -1437,6 +1515,82 @@ class _StorageSettingsPageState extends State<StorageSettingsPage> {
   }
 }
 
+class AndroidPushDeliveryPage extends StatelessWidget {
+  const AndroidPushDeliveryPage({super.key, required this.currentPlatform});
+
+  final String currentPlatform;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    return Scaffold(
+      backgroundColor:
+          dark ? theme.scaffoldBackgroundColor : const Color(0xFFF6F7FB),
+      appBar: AppBar(
+        title: const Text('Push Delivery'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+          children: [
+            Text(
+              'ANDROID',
+              style: theme.textTheme.labelSmall?.copyWith(
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w700,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Choose how this Android phone should receive relay notifications before you connect a relay.',
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 18),
+            _AndroidPushChoiceCard(
+              title: 'Firebase Cloud Messaging',
+              subtitle:
+                  'Recommended. Works on most Android phones with no extra setup.',
+              tradeoff: 'Depends on Google Play Services.',
+              icon: Icons.notifications_active_rounded,
+              highlighted:
+                  !AndroidPushTransport.isUnifiedValue(currentPlatform),
+              onTap: () => Navigator.of(context).pop(AndroidPushTransport.fcm),
+            ),
+            const SizedBox(height: 12),
+            _AndroidPushChoiceCard(
+              title: 'UnifiedPush',
+              subtitle:
+                  'More private and works on de-Googled phones with a distributor app.',
+              tradeoff:
+                  'Requires a UnifiedPush distributor app to be installed.',
+              icon: Icons.hub_outlined,
+              highlighted: AndroidPushTransport.isUnifiedValue(currentPlatform),
+              onTap:
+                  () => Navigator.of(context).pop(AndroidPushTransport.unified),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'You can only change this before a relay is connected.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.58),
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SettingsFooterLockIcon extends StatelessWidget {
   const _SettingsFooterLockIcon({required this.size, required this.color});
 
@@ -1949,6 +2103,134 @@ class _ShellSettingsMetrics {
       infoIconSize: s(14),
       infoGap: s(12),
       infoTextSize: s(10),
+    );
+  }
+}
+
+class _AndroidPushChoiceCard extends StatelessWidget {
+  const _AndroidPushChoiceCard({
+    required this.title,
+    required this.subtitle,
+    required this.tradeoff,
+    required this.icon,
+    required this.highlighted,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final String tradeoff;
+  final IconData icon;
+  final bool highlighted;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final cardColor =
+        highlighted
+            ? (dark ? const Color(0xFF12201A) : const Color(0xFFF3FBF7))
+            : (dark ? Colors.white.withValues(alpha: 0.03) : Colors.white);
+    final borderColor =
+        highlighted
+            ? const Color(0xFF1ECF89)
+            : (dark
+                ? Colors.white.withValues(alpha: 0.08)
+                : const Color(0xFFE2E8F0));
+    final iconBackgroundColor =
+        highlighted
+            ? (dark ? const Color(0xFF163324) : const Color(0xFFE7F8F0))
+            : (dark
+                ? Colors.white.withValues(alpha: 0.08)
+                : const Color(0xFFF3F4F6));
+    final iconColor =
+        highlighted ? const Color(0xFF1ECF89) : const Color(0xFF64748B);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: borderColor),
+            boxShadow:
+                dark
+                    ? null
+                    : [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: iconBackgroundColor,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: iconColor),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.72,
+                        ),
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      tradeoff,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.56,
+                        ),
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Icon(
+                highlighted
+                    ? Icons.check_circle_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                color:
+                    highlighted
+                        ? const Color(0xFF1ECF89)
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.28),
+                size: 22,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

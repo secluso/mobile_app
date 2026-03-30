@@ -11,6 +11,7 @@ import 'package:secluso_flutter/utilities/firebase_init.dart';
 import 'package:flutter/services.dart';
 import 'package:secluso_flutter/notifications/heartbeat_task.dart';
 import 'package:secluso_flutter/notifications/scheduler.dart';
+import 'package:secluso_flutter/notifications/android_push_transport.dart';
 import 'package:secluso_flutter/src/rust/guard.dart';
 import 'package:secluso_flutter/src/rust/api/logger.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
@@ -23,6 +24,7 @@ import "routes/theme_provider.dart";
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/notifications/firebase.dart';
+import 'package:secluso_flutter/notifications/unified_push_service.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
 import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/notifications/pending_processor.dart';
@@ -70,7 +72,7 @@ const bool _designPreviewBoot =
     kDebugMode &&
     (_launchDesignLab || _launchDesignTarget != '' || _launchDesignController);
 
-void main() {
+void main([List<String> args = const []]) {
   // Wrap main() with a zone so if something throws during init, we still attempt to close the DB.
   runZonedGuarded(
     () async {
@@ -81,6 +83,22 @@ void main() {
         Log.i('UI context started (id=$traceId)');
         Log.i('main() started');
         final binding = WidgetsFlutterBinding.ensureInitialized();
+        final isUnifiedPushBackground = args.contains('--unifiedpush-bg');
+        if (Platform.isAndroid) {
+          await UnifiedPushService.instance.init(
+            background: isUnifiedPushBackground,
+          );
+          if (!isUnifiedPushBackground &&
+              !AndroidPushTransport.fdroidUnifiedOnly) {
+            FirebaseMessaging.onBackgroundMessage(
+              firebaseMessagingBackgroundHandler,
+            );
+          }
+        }
+        if (isUnifiedPushBackground) {
+          Log.i('UnifiedPush background isolate started');
+          return;
+        }
         await SystemChrome.setPreferredOrientations([
           DeviceOrientation.portraitUp,
         ]);
@@ -133,11 +151,6 @@ void main() {
           return true;
         };
         unawaited(Log.ensureStorageReady());
-        if (Platform.isAndroid) {
-          FirebaseMessaging.onBackgroundMessage(
-            firebaseMessagingBackgroundHandler,
-          );
-        }
         runApp(
           AppBootstrap(
             initialDarkMode: initialDarkMode,
@@ -319,9 +332,15 @@ Future<void> _initializeApp(ThemeProvider themeProvider) async {
 
   // We wait to initialize Firebase and the download scheduler until our cameras have been initialized
   var prefs = await SharedPreferences.getInstance();
+  final androidPushPlatform =
+      Platform.isAndroid ? AndroidPushTransport.fromPrefs(prefs) : null;
+  final useUnifiedPush =
+      Platform.isAndroid &&
+      androidPushPlatform != null &&
+      AndroidPushTransport.isUnifiedValue(androidPushPlatform);
 
   if (prefs.containsKey(PrefKeys.serverAddr)) {
-    if (Platform.isAndroid) {
+    if (Platform.isAndroid && !useUnifiedPush) {
       final fcmConfig = FcmConfig.fromPrefs(prefs);
       if (fcmConfig == null) {
         Log.e("Missing cached FCM config; clearing server credentials");
@@ -354,7 +373,17 @@ Future<void> _initializeApp(ThemeProvider themeProvider) async {
     queueProcessorPortName,
   );
 
-  if (Platform.isIOS || FirebaseInit.isInitialized) {
+  if (useUnifiedPush) {
+    final hasDistributor =
+        await UnifiedPushService.instance.tryUseCurrentOrDefaultDistributor();
+    if (hasDistributor) {
+      await UnifiedPushService.instance.register();
+    } else {
+      Log.d('Skipping UnifiedPush register; no distributor selected');
+    }
+  }
+
+  if (Platform.isIOS || FirebaseInit.isInitialized || useUnifiedPush) {
     await PushNotificationService.instance.init();
   } else {
     Log.d("Skipping PushNotificationService.init; Firebase not initialized");

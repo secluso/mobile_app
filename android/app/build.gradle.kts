@@ -6,9 +6,12 @@ plugins {
 }
 
 import groovy.json.JsonSlurper
-import java.util.Properties
 import java.io.FileInputStream
+import org.gradle.api.Project
+import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.jvm.tasks.Jar
+import java.util.Base64
+import java.util.Properties
 
 fun androidDevDependencyPluginNames(flutterProjectDir: File): Set<String> {
     val pluginsFile = flutterProjectDir.resolve(".flutter-plugins-dependencies")
@@ -27,42 +30,79 @@ fun androidDevDependencyPluginNames(flutterProjectDir: File): Set<String> {
     }.toSet()
 }
 
-fun stripReleaseOnlyDevPluginsFromRegistrant(
-    projectLogger: org.gradle.api.logging.Logger,
-    appProjectDir: File,
-    flutterProjectDir: File,
-) {
-    val devPluginNames = androidDevDependencyPluginNames(flutterProjectDir)
-    if (devPluginNames.isEmpty()) {
-        return
-    }
-
-    val registrantFile = appProjectDir.resolve("src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java")
-    if (!registrantFile.exists()) {
-        return
-    }
-
-    var content = registrantFile.readText()
-    var changed = false
-    for (pluginName in devPluginNames) {
+fun stripPluginRegistrations(content: String, pluginNames: Set<String>): String {
+    var updatedContent = content
+    for (pluginName in pluginNames) {
         val pattern = Regex(
-            """(?ms)^\s*try \{\R\s*flutterEngine\.getPlugins\(\)\.add\(new .*?\);\R\s*\} catch \(Exception e\) \{\R\s*Log\.e\(TAG, "Error registering plugin ${Regex.escape(pluginName)}, .*?\);\R\s*\}\R?"""
+            """(?m)^\s*try \{\R\s*flutterEngine\.getPlugins\(\)\.add\(new [^\r\n]+\);\R\s*\} catch \(Exception e\) \{\R\s*Log\.e\(TAG, "Error registering plugin ${Regex.escape(pluginName)}, [^"]+", e\);\R\s*\}\R?"""
         )
-        val updated = content.replace(pattern, "")
-        if (updated != content) {
-            changed = true
-            content = updated
+        updatedContent = updatedContent.replace(pattern, "")
+    }
+    return updatedContent
+}
+
+fun decodeDartDefines(rawValue: String?): Map<String, String> {
+    if (rawValue.isNullOrBlank()) {
+        return emptyMap()
+    }
+    return rawValue
+        .split(',')
+        .mapNotNull { encoded ->
+            if (encoded.isBlank()) {
+                return@mapNotNull null
+            }
+            val normalized = encoded.padEnd((encoded.length + 3) / 4 * 4, '=')
+            val decoded = String(Base64.getUrlDecoder().decode(normalized))
+            val separator = decoded.indexOf('=')
+            if (separator <= 0) {
+                return@mapNotNull null
+            }
+            decoded.substring(0, separator) to decoded.substring(separator + 1)
+        }
+        .toMap()
+}
+
+fun Project.addCameraAndroidCameraxWorkaround() {
+    rootProject.subprojects
+        .firstOrNull { it.name == "camera_android_camerax" }
+        ?.dependencies
+        ?.add("implementation", "androidx.concurrent:concurrent-futures:1.1.0")
+}
+
+val fdroidBuildEnabled =
+    providers.environmentVariable("SECLUSO_FDROID_BUILD").orNull == "1" ||
+        decodeDartDefines(
+            providers.gradleProperty("dart-defines").orNull ?: System.getProperty("dart-defines")
+        )["SECLUSO_FDROID_BUILD"] == "true"
+val fdroidExcludedPluginNames = setOf("firebase_core", "firebase_messaging")
+val fdroidGeneratedRegistrantDir =
+    layout.buildDirectory.dir("generated/source/secluso/fdroid")
+val generateFdroidGeneratedPluginRegistrant =
+    tasks.register("generateFdroidGeneratedPluginRegistrant") {
+        val sourceFile =
+            projectDir.resolve("src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java")
+        val outputDir = fdroidGeneratedRegistrantDir.get().asFile
+        val outputFile = outputDir.resolve("io/flutter/plugins/GeneratedPluginRegistrant.java")
+        inputs.file(sourceFile)
+        outputs.file(outputFile)
+        doLast {
+            if (!sourceFile.exists()) {
+                throw org.gradle.api.GradleException(
+                    "GeneratedPluginRegistrant source missing: ${sourceFile.absolutePath}"
+                )
+            }
+            val strippedPluginNames =
+                androidDevDependencyPluginNames(rootProject.projectDir.parentFile) +
+                    if (fdroidBuildEnabled) fdroidExcludedPluginNames else emptySet()
+            val strippedContent =
+                stripPluginRegistrations(sourceFile.readText(), strippedPluginNames)
+            outputFile.parentFile.mkdirs()
+            outputFile.writeText(strippedContent)
+            logger.lifecycle(
+                "Generated F-Droid GeneratedPluginRegistrant without: ${strippedPluginNames.joinToString(", ")}"
+            )
         }
     }
-
-    if (changed) {
-        registrantFile.writeText(content)
-        projectLogger.lifecycle(
-            "Stripped release-only dev dependency plugins from GeneratedPluginRegistrant: " +
-                devPluginNames.joinToString(", ")
-        )
-    }
-}
 
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
@@ -136,8 +176,21 @@ android {
     }
 
     sourceSets {
+        getByName("main") {
+            java.srcDir(fdroidGeneratedRegistrantDir)
+        }
         getByName("androidTest") {
             assets.srcDir(project.file("../../tool"))
+        }
+    }
+
+    packaging {
+        jniLibs {
+            // Direct APK installs from Flutter/ADB are not emitted with 16 KB page
+            // alignment today, so keep native libraries compressed to avoid the
+            // device-side compatibility warning while retaining 16 KB-compatible
+            // ELF alignment inside the libraries themselves.
+            useLegacyPackaging = true
         }
     }
 
@@ -165,14 +218,23 @@ flutter {
     source = "../.."
 }
 
-tasks.matching { it.name == "compileReleaseJavaWithJavac" }.configureEach {
-    doFirst {
-        stripReleaseOnlyDevPluginsFromRegistrant(
-            projectLogger = logger,
-            appProjectDir = projectDir,
-            flutterProjectDir = rootProject.projectDir.parentFile,
-        )
+gradle.projectsEvaluated {
+    addCameraAndroidCameraxWorkaround()
+}
+
+val mainRegistrantFile =
+    projectDir.resolve("src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java").absoluteFile
+tasks.matching { it.name.startsWith("compile") && it.name.endsWith("JavaWithJavac") }.configureEach {
+    dependsOn(generateFdroidGeneratedPluginRegistrant)
+    if (this is JavaCompile) {
+        exclude { fileTreeElement ->
+            fileTreeElement.file.absoluteFile == mainRegistrantFile
+        }
     }
+}
+
+tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }.configureEach {
+    dependsOn(generateFdroidGeneratedPluginRegistrant)
 }
 
 tasks.withType<Jar>().configureEach {
@@ -184,7 +246,9 @@ tasks.withType<Jar>().configureEach {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
-    implementation("com.google.firebase:firebase-messaging:24.1.1")
+    if (!fdroidBuildEnabled) {
+        implementation("com.google.firebase:firebase-messaging:24.1.1")
+    }
     implementation("androidx.media3:media3-exoplayer:1.7.1")
     implementation("androidx.media3:media3-ui:1.7.1")
     // Keep these AndroidX test libs on versions that work nicely with the rest

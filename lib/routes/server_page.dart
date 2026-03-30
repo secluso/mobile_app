@@ -11,7 +11,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/notifications/android_push_transport.dart';
 import 'package:secluso_flutter/notifications/firebase.dart';
+import 'package:secluso_flutter/notifications/unified_push_service.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
 import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
@@ -312,6 +314,10 @@ class _ServerPageState extends State<ServerPage> {
       //TODO: check to make sure serverIp is a valid IP address.
 
       final prefs = await SharedPreferences.getInstance();
+      final androidPushPlatform =
+          Platform.isAndroid
+              ? AndroidPushTransport.fromPrefs(prefs)
+              : AndroidPushTransport.fcm;
       final prevServerAddr = prefs.getString(PrefKeys.serverAddr);
       final prevHasSynced = prevServerAddr != null && prevServerAddr.isNotEmpty;
       final currentCameraNames =
@@ -325,7 +331,8 @@ class _ServerPageState extends State<ServerPage> {
       }
 
       FcmConfig? fetchedFcmConfig;
-      if (Platform.isAndroid) {
+      if (Platform.isAndroid &&
+          !AndroidPushTransport.isUnifiedValue(androidPushPlatform)) {
         final fetched = await HttpClientService.instance
             .fetchFcmConfigWithCredentials(
               serverAddr: normalizedServerAddr,
@@ -361,11 +368,30 @@ class _ServerPageState extends State<ServerPage> {
 
         fetchedFcmConfig = fetched.value;
       }
+      if (Platform.isAndroid &&
+          AndroidPushTransport.isUnifiedValue(androidPushPlatform)) {
+        final distributorReady = await _ensureUnifiedPushDistributorReady();
+        if (!distributorReady) {
+          return;
+        }
+      }
       await prefs.setString(PrefKeys.serverAddr, normalizedServerAddr);
       await prefs.setString(PrefKeys.serverUsername, serverUsername);
       await prefs.setString(PrefKeys.serverPassword, serverPassword);
       await prefs.setString(PrefKeys.relayConnectionKind, relayConnectionKind);
-      await prefs.setBool(PrefKeys.needUpdateFcmToken, true);
+      if (Platform.isAndroid) {
+        await prefs.setString(
+          PrefKeys.androidPushPlatform,
+          androidPushPlatform,
+        );
+      } else {
+        await prefs.remove(PrefKeys.androidPushPlatform);
+      }
+      await prefs.setBool(
+        PrefKeys.needUpdateFcmToken,
+        !Platform.isAndroid ||
+            !AndroidPushTransport.isUnifiedValue(androidPushPlatform),
+      );
       await prefs.setBool(PrefKeys.needUpdateIosRelayBinding, true);
       await prefs.remove(PrefKeys.needUploadIosNotificationTarget);
       await prefs.remove(PrefKeys.iosRelayHubToken);
@@ -373,7 +399,8 @@ class _ServerPageState extends State<ServerPage> {
       await prefs.remove(PrefKeys.iosRelayBindingJson);
       HttpClientService.instance.resetVersionGateState();
 
-      if (Platform.isAndroid) {
+      if (Platform.isAndroid &&
+          !AndroidPushTransport.isUnifiedValue(androidPushPlatform)) {
         await prefs.setString(
           PrefKeys.fcmConfigJson,
           jsonEncode(fetchedFcmConfig!.toJson()),
@@ -399,21 +426,31 @@ class _ServerPageState extends State<ServerPage> {
       }
 
       if (Platform.isAndroid) {
-        bool firebaseReady = false;
-        try {
-          await FirebaseInit.ensure(fetchedFcmConfig!);
-          firebaseReady = true;
-        } catch (e, st) {
-          Log.e("Firebase init failed: $e\n$st");
-        }
-
-        if (firebaseReady) {
+        if (AndroidPushTransport.isUnifiedValue(androidPushPlatform)) {
+          await UnifiedPushService.instance.init();
+          if (!await UnifiedPushService.instance.hasStoredEndpoint()) {
+            await UnifiedPushService.instance.register();
+          }
           await PushNotificationService.instance.init();
-          Log.d("Before try upload");
           await PushNotificationService.tryUploadIfNeeded(true);
-          Log.d("After try upload");
         } else {
-          Log.d("Skipping push setup; Firebase not initialized");
+          await UnifiedPushService.instance.deactivate();
+          bool firebaseReady = false;
+          try {
+            await FirebaseInit.ensure(fetchedFcmConfig!);
+            firebaseReady = true;
+          } catch (e, st) {
+            Log.e("Firebase init failed: $e\n$st");
+          }
+
+          if (firebaseReady) {
+            await PushNotificationService.instance.init();
+            Log.d("Before try upload");
+            await PushNotificationService.tryUploadIfNeeded(true);
+            Log.d("After try upload");
+          } else {
+            Log.d("Skipping push setup; Firebase not initialized");
+          }
         }
       } else {
         await PushNotificationService.instance.init();
@@ -441,6 +478,46 @@ class _ServerPageState extends State<ServerPage> {
     }
   }
 
+  Future<bool> _ensureUnifiedPushDistributorReady() async {
+    await UnifiedPushService.instance.init();
+    final hasDistributor =
+        await UnifiedPushService.instance.tryUseCurrentOrDefaultDistributor();
+    if (hasDistributor) {
+      return true;
+    }
+
+    final distributors = await UnifiedPushService.instance.getDistributors();
+    if (distributors.isNotEmpty && mounted) {
+      final distributor = await _chooseUnifiedPushDistributor(distributors);
+      if (distributor != null) {
+        await UnifiedPushService.instance.saveDistributor(distributor);
+        return true;
+      }
+      if (!mounted) {
+        return false;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Choose a UnifiedPush distributor before connecting a relay.',
+          ),
+        ),
+      );
+      return false;
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Install a UnifiedPush distributor before connecting a relay.',
+          ),
+        ),
+      );
+    }
+    return false;
+  }
+
   Future<void> _removeServerConnection() async {
     if (_isPreviewMode && ReviewEnvironment.instance.isActive) {
       await _resetReviewEnvironment();
@@ -464,6 +541,7 @@ class _ServerPageState extends State<ServerPage> {
     }
 
     final prefs = await SharedPreferences.getInstance();
+    final androidPushPlatform = AndroidPushTransport.fromPrefs(prefs);
     await prefs.remove(PrefKeys.serverAddr);
     await prefs.remove(PrefKeys.serverUsername);
     await prefs.remove(PrefKeys.serverPassword);
@@ -476,7 +554,14 @@ class _ServerPageState extends State<ServerPage> {
     await prefs.remove(PrefKeys.iosRelayHubToken);
     await prefs.remove(PrefKeys.iosRelayHubTokenExpiryMs);
     await prefs.remove(PrefKeys.iosRelayBindingJson);
+    await prefs.remove(PrefKeys.unifiedPushEndpointUrl);
+    await prefs.remove(PrefKeys.unifiedPushPubKey);
+    await prefs.remove(PrefKeys.unifiedPushAuth);
     HttpClientService.instance.resetVersionGateState();
+    if (Platform.isAndroid &&
+        AndroidPushTransport.isUnifiedValue(androidPushPlatform)) {
+      await UnifiedPushService.instance.deactivate();
+    }
     _isDialogOpen.value = false;
     setState(() {
       serverAddr = null;
@@ -620,6 +705,77 @@ class _ServerPageState extends State<ServerPage> {
 
   String _resolvedRelayConnectionKind() =>
       _pendingRelayConnectionKind ?? _officialRelayConnectionKind;
+
+  Future<String?> _chooseUnifiedPushDistributor(
+    List<String> distributors,
+  ) async {
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final maxHeight = MediaQuery.sizeOf(sheetContext).height * 0.72;
+        return SafeArea(
+          top: false,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxHeight),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Choose a UnifiedPush distributor',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'This app is installed on your phone and delivers UnifiedPush notifications.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.66,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        ...distributors.map(
+                          (distributor) => ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(distributor),
+                            trailing: const Icon(Icons.chevron_right_rounded),
+                            onTap:
+                                () =>
+                                    Navigator.of(sheetContext).pop(distributor),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(sheetContext).pop(),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   Future<void> _resetReviewEnvironment() async {
     await ReviewEnvironment.instance.clear();
@@ -1494,18 +1650,25 @@ class _RelayQrScanPageState extends State<_RelayQrScanPage>
       background:
           !hasCameraPermission
               ? const ColoredBox(color: Color(0xFF050505))
-              : _handlingScan
-              ? const ColoredBox(color: Color(0xFF050505))
-              : ReaderWidget(
-                onScan: _handleDetection,
-                codeFormat: Format.qrCode,
-                cropPercent: 1.0,
-                tryHarder: true,
-                showFlashlight: false,
-                showToggleCamera: false,
-                showGallery: false,
-                showScannerOverlay: false,
-                loading: const ColoredBox(color: Color(0xFF050505)),
+              : Stack(
+                fit: StackFit.expand,
+                children: [
+                  ReaderWidget(
+                    onScan: _handleDetection,
+                    codeFormat: Format.qrCode,
+                    cropPercent: 1.0,
+                    tryHarder: true,
+                    showFlashlight: false,
+                    showToggleCamera: false,
+                    showGallery: false,
+                    showScannerOverlay: false,
+                    loading: const ColoredBox(color: Color(0xFF050505)),
+                  ),
+                  if (_handlingScan)
+                    const IgnorePointer(
+                      child: ColoredBox(color: Color(0xFF050505)),
+                    ),
+                ],
               ),
       onBack: () => Navigator.of(context).maybePop(),
       indicatorMessage:

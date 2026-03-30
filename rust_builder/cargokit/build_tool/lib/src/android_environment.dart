@@ -129,7 +129,9 @@ class AndroidEnvironment {
 
     final ndkVersionParsed = Version.parse(ndkVersion);
     final rustFlagsKey = 'CARGO_ENCODED_RUSTFLAGS';
-    final rustFlagsValue = _libGccWorkaround(targetTempDir, ndkVersionParsed);
+    final rustFlagsValue = _androidPageSizeRustFlags(
+      _libGccWorkaround(targetTempDir, ndkVersionParsed),
+    );
 
     final runRustTool =
         Platform.isWindows ? 'run_build_tool.cmd' : 'run_build_tool.sh';
@@ -191,5 +193,18 @@ class AndroidEnvironment {
     }
     rustFlags = '$rustFlags-L\x1f$workaroundDir';
     return rustFlags;
+  }
+
+  String _androidPageSizeRustFlags(String rustFlags) {
+    final flags = <String>[
+      '-C',
+      'link-arg=-Wl,-z,max-page-size=16384',
+      '-C',
+      'link-arg=-Wl,-z,common-page-size=16384',
+    ];
+    if (rustFlags.isNotEmpty) {
+      rustFlags = '$rustFlags\x1f';
+    }
+    return '$rustFlags${flags.join('\x1f')}';
   }
 }

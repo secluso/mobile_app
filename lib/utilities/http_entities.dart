@@ -83,12 +83,25 @@ class IosRelayBindingPayload {
 class NotificationTarget {
   final String platform;
   final IosRelayBindingPayload? iosRelayBinding;
+  final String? unifiedpushEndpointUrl;
+  final String? unifiedpushPubKey;
+  final String? unifiedpushAuth;
 
-  NotificationTarget({required this.platform, this.iosRelayBinding});
+  NotificationTarget({
+    required this.platform,
+    this.iosRelayBinding,
+    this.unifiedpushEndpointUrl,
+    this.unifiedpushPubKey,
+    this.unifiedpushAuth,
+  });
 
   Map<String, dynamic> toJson() => {
     'platform': platform,
     if (iosRelayBinding != null) 'ios_relay_binding': iosRelayBinding,
+    if (unifiedpushEndpointUrl != null)
+      'unifiedpush_endpoint_url': unifiedpushEndpointUrl,
+    if (unifiedpushPubKey != null) 'unifiedpush_pub_key': unifiedpushPubKey,
+    if (unifiedpushAuth != null) 'unifiedpush_auth': unifiedpushAuth,
   };
 }
 

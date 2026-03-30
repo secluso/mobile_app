@@ -1,6 +1,7 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
 class PrefKeys {
+  static const androidPushPlatform = 'android_push_platform';
   static const needUpdateFcmToken = 'need_update_fcm_token';
   static const needUpdateIosRelayBinding = 'need_update_ios_relay_binding';
   static const needUploadIosNotificationTarget =
@@ -43,4 +44,8 @@ class PrefKeys {
       "camera_notifications_enabled_";
   static const cameraNotificationEventsPrefix = "camera_notification_events_";
   static const reviewEnvironmentJson = "review_environment_json";
+  static const unifiedPushDistributor = 'unified_push_distributor';
+  static const unifiedPushEndpointUrl = 'unified_push_endpoint_url';
+  static const unifiedPushPubKey = 'unified_push_pub_key';
+  static const unifiedPushAuth = 'unified_push_auth';
 }

@@ -595,18 +595,25 @@ class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage>
       background:
           !hasCameraPermission
               ? const ColoredBox(color: Color(0xFF050505))
-              : _handlingScan
-              ? const ColoredBox(color: Color(0xFF050505))
-              : ReaderWidget(
-                onScan: _handleDetectedBarcode,
-                codeFormat: Format.qrCode,
-                cropPercent: 1.0,
-                tryHarder: true,
-                showFlashlight: false,
-                showToggleCamera: false,
-                showGallery: false,
-                showScannerOverlay: false,
-                loading: const ColoredBox(color: Color(0xFF050505)),
+              : Stack(
+                fit: StackFit.expand,
+                children: [
+                  ReaderWidget(
+                    onScan: _handleDetectedBarcode,
+                    codeFormat: Format.qrCode,
+                    cropPercent: 1.0,
+                    tryHarder: true,
+                    showFlashlight: false,
+                    showToggleCamera: false,
+                    showGallery: false,
+                    showScannerOverlay: false,
+                    loading: const ColoredBox(color: Color(0xFF050505)),
+                  ),
+                  if (_handlingScan)
+                    const IgnorePointer(
+                      child: ColoredBox(color: Color(0xFF050505)),
+                    ),
+                ],
               ),
       onBack: () => Navigator.of(context).maybePop(),
       indicatorMessage:

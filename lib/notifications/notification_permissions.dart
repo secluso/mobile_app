@@ -6,6 +6,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/notifications/android_push_transport.dart';
 import 'package:secluso_flutter/notifications/firebase.dart';
 import 'package:secluso_flutter/utilities/firebase_init.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
@@ -27,7 +28,10 @@ Future<void> requestNotificationsAfterFirstCameraAdd() async {
     final result = await Permission.notification.request();
     if (result.isGranted) {
       if (Platform.isAndroid) {
-        if (!FirebaseInit.isInitialized) {
+        final androidPushPlatform = await AndroidPushTransport.load();
+        if (AndroidPushTransport.isUnifiedValue(androidPushPlatform)) {
+          await PushNotificationService.instance.init();
+        } else if (!FirebaseInit.isInitialized) {
           Log.d("Skipping FCM permission request; Firebase not initialized");
         } else {
           await FirebaseMessaging.instance.requestPermission(

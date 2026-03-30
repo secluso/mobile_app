@@ -88,6 +88,17 @@ class CargoKitPlugin implements Plugin<Project> {
 
     static String file;
 
+    private static List<String> flutterTargetPlatforms(String buildType) {
+        def platforms = ["android-arm", "android-arm64"]
+        if (buildType == "debug") {
+            platforms.add("android-x86")
+            platforms.add("android-x64")
+        } else {
+            platforms.add("android-x64")
+        }
+        return platforms
+    }
+
     private Plugin findFlutterPlugin(Project rootProject) {
         _findFlutterPlugin(rootProject.childProjects)
     }
@@ -140,13 +151,7 @@ class CargoKitPlugin implements Plugin<Project> {
             def jniLibs = project.android.sourceSets.maybeCreate(buildType).jniLibs;
             jniLibs.srcDir(new File(cargoOutputDir))
 
-            def platforms = com.flutter.gradle.FlutterPluginUtils.getTargetPlatforms(plugin.project).collect()
-
-            // Same thing addFlutterDependencies does in flutter.gradle
-            if (buildType == "debug") {
-                platforms.add("android-x86")
-                platforms.add("android-x64")
-            }
+            def platforms = flutterTargetPlatforms(buildType)
 
             // The task name depends on plugin properties, which are not available
             // at this point

@@ -121,4 +121,39 @@ For the full reproducible-build workflow, signed-release path, and internal repr
 
 ---
 
+## 8. Special F-Droid Android Build
+
+The app supports a special Android build mode for F-Droid that forces UnifiedPush and excludes Firebase from the Android dependency graph.
+
+Build it with:
+
+```bash
+flutter build apk --dart-define=SECLUSO_FDROID_BUILD=true
+```
+
+What this does:
+
+- Forces Android push transport to UnifiedPush
+- Excludes the Android `firebase_core` and `firebase_messaging` plugin projects
+- Excludes the direct native `com.google.firebase:firebase-messaging` dependency
+- Generates an F-Droid-specific `GeneratedPluginRegistrant` without Firebase or `integration_test`
+
+Important note:
+
+- The Dart packages `firebase_core` and `firebase_messaging` still remain in `pubspec.yaml` for normal App Store / Play builds.
+- That does not break the F-Droid build by itself. Flutter/Dart imports are resolved at the Dart package level, while Android plugin registration is a separate native step.
+- In the F-Droid build, the Firebase Android plugins are not registered, and the Android push flow is routed through UnifiedPush instead of FCM.
+- Because the F-Droid runtime avoids the FCM code paths, the remaining Dart imports do not trigger Firebase runtime errors on Android.
+
+Verification commands:
+
+```bash
+SECLUSO_FDROID_BUILD=1 ./android/gradlew -p android app:properties --console=plain
+SECLUSO_FDROID_BUILD=1 ./android/gradlew -p android app:dependencies --configuration debugRuntimeClasspath --console=plain
+```
+
+On the F-Droid build, the runtime classpath should include `project :unifiedpush_android` and should not include `firebase_core`, `firebase_messaging`, or `com.google.firebase:*`.
+
+---
+
 > Need help or want to contribute? Visit the [Secluso GitHub Repository](https://github.com/secluso/secluso).

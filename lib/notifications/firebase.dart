@@ -9,6 +9,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:secluso_flutter/notifications/ios_notification_relay.dart';
 import 'package:secluso_flutter/notifications/alert_preferences.dart';
+import 'package:secluso_flutter/notifications/android_push_transport.dart';
 import 'package:secluso_flutter/utilities/firebase_init.dart';
 import 'package:secluso_flutter/notifications/heartbeat_task.dart';
 import 'package:secluso_flutter/notifications/notifications.dart';
@@ -29,28 +30,13 @@ import 'package:secluso_flutter/database/app_stores.dart';
 import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/utilities/version_gate.dart';
-import 'package:secluso_flutter/src/rust/frb_generated.dart';
+import 'package:secluso_flutter/src/rust/guard.dart';
 import 'dart:io' show File, Platform;
 
 class RustBridgeHelper {
-  static bool _initialized = false;
-
-  static Future<void>? _initFuture;
-
-  /// Call this to avoid double-initialize in Android in the entry-point
   static Future<void> ensureInitialized() {
-    if (_initialized) {
-      return Future.value();
-    }
-
-    _initFuture ??= _doInit();
-    return _initFuture!;
-  }
-
-  static Future<void> _doInit() async {
     Log.init();
-    await RustLib.init();
-    _initialized = true;
+    return RustLibGuard.initOnce();
   }
 }
 
@@ -102,6 +88,24 @@ Future<void> _invalidateServerCredentials(SharedPreferences prefs) async {
   await prefs.remove(PrefKeys.fcmConfigJson);
 }
 
+Future<void> handleEncryptedAndroidPushBytes(
+  Uint8List bytes, {
+  required String source,
+}) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  Log.init();
+  DartPluginRegistrant.ensureInitialized();
+  unawaited(Log.ensureStorageReady());
+  await initLocalNotifications();
+  if (Platform.isAndroid) {
+    await RustBridgeHelper.ensureInitialized();
+  }
+
+  await PushNotificationService.instance.processMessageData({
+    'body': base64Encode(bytes),
+  }, source: source);
+}
+
 class PushNotificationService {
   PushNotificationService._();
   static final instance = PushNotificationService._();
@@ -149,6 +153,14 @@ class PushNotificationService {
           onPayload: (data, source) => processMessageData(data, source: source),
         );
         await IosNotificationRelay.instance.tryAuthorizeIfNeeded(false);
+        _initialized = true;
+        return;
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      final androidTransport = AndroidPushTransport.fromPrefs(prefs);
+      if (AndroidPushTransport.isUnifiedValue(androidTransport)) {
+        await initLocalNotifications();
         _initialized = true;
         return;
       }
@@ -285,6 +297,29 @@ class PushNotificationService {
 
       final prefs = await SharedPreferences.getInstance();
       final hasServerCredentials = _hasServerCredentials(prefs);
+      final androidTransport = AndroidPushTransport.fromPrefs(prefs);
+      final useUnifiedPush =
+          Platform.isAndroid &&
+          AndroidPushTransport.isUnifiedValue(androidTransport);
+
+      if (useUnifiedPush) {
+        if (!hasServerCredentials) {
+          Log.d(
+            "Skipping Android UnifiedPush upload; server credentials unavailable",
+          );
+          return;
+        }
+
+        final targetResult =
+            await HttpClientService.instance.uploadNotificationTarget();
+        if (targetResult.isSuccess) {
+          Log.d('[UP] Android notification target uploaded');
+        } else {
+          Log.d('[UP] Android notification target upload failed');
+        }
+        return;
+      }
+
       final firebaseReady = FirebaseInit.isInitialized;
       FirebaseMessaging? messaging;
       if (!firebaseReady) {
