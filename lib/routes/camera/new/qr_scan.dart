@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_zxing/flutter_zxing.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'dart:async';
 import 'package:secluso_flutter/routes/camera/new/ip_camera_option.dart';
@@ -65,6 +66,7 @@ class SeclusoQrScanScreen extends StatelessWidget {
     this.belowFrameText,
     this.errorMessage,
     this.indicatorMessage,
+    this.actionArea,
   });
 
   final String title;
@@ -74,6 +76,7 @@ class SeclusoQrScanScreen extends StatelessWidget {
   final String? belowFrameText;
   final String? errorMessage;
   final String? indicatorMessage;
+  final Widget? actionArea;
 
   @override
   Widget build(BuildContext context) {
@@ -266,6 +269,10 @@ class SeclusoQrScanScreen extends StatelessWidget {
                             ),
                           ),
                         ],
+                        if (actionArea != null) ...[
+                          SizedBox(height: 12 * metrics.scale),
+                          actionArea!,
+                        ],
                       ],
                     ),
                   ),
@@ -345,15 +352,89 @@ class GenericCameraQrScanPage extends StatefulWidget {
       _GenericCameraQrScanPageState();
 }
 
-class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage> {
+class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage>
+    with WidgetsBindingObserver {
+  PermissionStatus? _cameraPermissionStatus;
   bool _handlingScan = false;
   String? _indicatorMessage;
   Timer? _indicatorTimer;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refreshCameraPermission(requestIfNeeded: true);
+  }
+
+  @override
   void dispose() {
     _indicatorTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshCameraPermission();
+    }
+  }
+
+  Future<void> _refreshCameraPermission({bool requestIfNeeded = false}) async {
+    PermissionStatus status = await Permission.camera.status;
+    if (requestIfNeeded &&
+        !status.isGranted &&
+        !status.isPermanentlyDenied &&
+        !status.isRestricted) {
+      status = await Permission.camera.request();
+    }
+    if (!mounted) return;
+    setState(() {
+      _cameraPermissionStatus = status;
+    });
+  }
+
+  String? _cameraPermissionMessage() {
+    final status = _cameraPermissionStatus;
+    if (status == null || status.isGranted) {
+      return null;
+    }
+    if (status.isPermanentlyDenied) {
+      return 'Camera access is required to scan QR codes. Enable it in Settings.';
+    }
+    if (status.isRestricted) {
+      return 'Camera access is restricted on this device.';
+    }
+    return 'Camera access is required to scan QR codes.';
+  }
+
+  Widget? _cameraPermissionActions(BuildContext context) {
+    final status = _cameraPermissionStatus;
+    if (status == null || status.isGranted) {
+      return null;
+    }
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            child: const Text('Back'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: FilledButton(
+            onPressed:
+                status.isPermanentlyDenied
+                    ? openAppSettings
+                    : () => _refreshCameraPermission(requestIfNeeded: true),
+            child: Text(
+              status.isPermanentlyDenied ? 'Open Settings' : 'Try Again',
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _handleDetectedBarcode(Code barcode) async {
@@ -504,12 +585,17 @@ class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage> {
 
   @override
   Widget build(BuildContext context) {
+    final hasCameraPermission = _cameraPermissionStatus?.isGranted ?? false;
     return SeclusoQrScanScreen(
       title: 'Scan Camera QR',
       bottomMessage:
-          'Supported QR types are interpreted locally on this phone. Unsupported QR codes are ignored and never sent to any server.',
+          hasCameraPermission
+              ? 'Supported QR types are interpreted locally on this phone. Unsupported QR codes are ignored and never sent to any server.'
+              : 'Camera access is used only to scan QR codes on this phone.',
       background:
-          _handlingScan
+          !hasCameraPermission
+              ? const ColoredBox(color: Color(0xFF050505))
+              : _handlingScan
               ? const ColoredBox(color: Color(0xFF050505))
               : ReaderWidget(
                 onScan: _handleDetectedBarcode,
@@ -523,7 +609,12 @@ class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage> {
                 loading: const ColoredBox(color: Color(0xFF050505)),
               ),
       onBack: () => Navigator.of(context).maybePop(),
-      indicatorMessage: _indicatorMessage,
+      indicatorMessage:
+          _cameraPermissionStatus == null
+              ? 'Checking camera access…'
+              : _indicatorMessage,
+      errorMessage: _cameraPermissionMessage(),
+      actionArea: _cameraPermissionActions(context),
     );
   }
 }
@@ -764,17 +855,111 @@ class _QrScanPageFrameState extends State<_QrScanPageFrame>
   }
 }
 
-class _QrScanDialogState extends State<QrScanDialog> {
+class _QrScanDialogState extends State<QrScanDialog>
+    with WidgetsBindingObserver {
   bool _hasScannedCode = false; // ensure we only handle the first QR code
+  PermissionStatus? _cameraPermissionStatus;
 
   String? _errorMessage;
   Timer? _errorTimer;
   bool get _isPreviewMode => widget.previewAssetPath != null;
 
   @override
+  void initState() {
+    super.initState();
+    if (!_isPreviewMode) {
+      WidgetsBinding.instance.addObserver(this);
+      _refreshCameraPermission(requestIfNeeded: true);
+    }
+  }
+
+  @override
   void dispose() {
     _errorTimer?.cancel();
+    if (!_isPreviewMode) {
+      WidgetsBinding.instance.removeObserver(this);
+    }
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!_isPreviewMode && state == AppLifecycleState.resumed) {
+      _refreshCameraPermission();
+    }
+  }
+
+  Future<void> _refreshCameraPermission({bool requestIfNeeded = false}) async {
+    PermissionStatus status = await Permission.camera.status;
+    if (requestIfNeeded &&
+        !status.isGranted &&
+        !status.isPermanentlyDenied &&
+        !status.isRestricted) {
+      status = await Permission.camera.request();
+    }
+    if (!mounted) return;
+    setState(() {
+      _cameraPermissionStatus = status;
+    });
+  }
+
+  String? _cameraPermissionMessage() {
+    final status = _cameraPermissionStatus;
+    if (_isPreviewMode || status == null || status.isGranted) {
+      return null;
+    }
+    if (status.isPermanentlyDenied) {
+      return 'Camera access is required to scan QR codes. Enable it in Settings.';
+    }
+    if (status.isRestricted) {
+      return 'Camera access is restricted on this device.';
+    }
+    return 'Camera access is required to scan QR codes.';
+  }
+
+  Widget _cameraPermissionPlaceholder(ThemeData theme) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Text(
+          _cameraPermissionMessage() ?? 'Checking camera access…',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: Colors.white.withValues(alpha: 0.78),
+            height: 1.45,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _cameraPermissionActions() {
+    final status = _cameraPermissionStatus;
+    if (_isPreviewMode || status == null || status.isGranted) {
+      return const SizedBox.shrink();
+    }
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: _onCloseDialog,
+            child: const Text('Back'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: FilledButton(
+            onPressed:
+                status.isPermanentlyDenied
+                    ? openAppSettings
+                    : () => _refreshCameraPermission(requestIfNeeded: true),
+            child: Text(
+              status.isPermanentlyDenied ? 'Open Settings' : 'Try Again',
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   void _onCloseDialog() {
@@ -844,6 +1029,8 @@ class _QrScanDialogState extends State<QrScanDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final hasCameraPermission =
+        _isPreviewMode || (_cameraPermissionStatus?.isGranted ?? false);
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -912,6 +1099,8 @@ class _QrScanDialogState extends State<QrScanDialog> {
                                     widget.previewAssetPath!,
                                     fit: BoxFit.cover,
                                   )
+                                  : !hasCameraPermission
+                                  ? _cameraPermissionPlaceholder(theme)
                                   : ReaderWidget(
                                     onScan: _onDetectBarcode,
                                     codeFormat: Format.qrCode,
@@ -953,6 +1142,10 @@ class _QrScanDialogState extends State<QrScanDialog> {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  if (!_isPreviewMode && !hasCameraPermission) ...[
+                    _cameraPermissionActions(),
+                    const SizedBox(height: 12),
+                  ],
                   if (_errorMessage != null)
                     Text(
                       _errorMessage!,
@@ -963,7 +1156,9 @@ class _QrScanDialogState extends State<QrScanDialog> {
                     )
                   else
                     Text(
-                      'Only Secluso camera QR codes are accepted here.',
+                      !hasCameraPermission
+                          ? 'Camera access is used only to scan Secluso QR codes on this phone.'
+                          : 'Only Secluso camera QR codes are accepted here.',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: Colors.white.withValues(alpha: 0.58),
                       ),

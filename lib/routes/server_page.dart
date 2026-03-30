@@ -6,6 +6,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_zxing/flutter_zxing.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1319,15 +1320,89 @@ class _RelayQrScanPage extends StatefulWidget {
   State<_RelayQrScanPage> createState() => _RelayQrScanPageState();
 }
 
-class _RelayQrScanPageState extends State<_RelayQrScanPage> {
+class _RelayQrScanPageState extends State<_RelayQrScanPage>
+    with WidgetsBindingObserver {
+  PermissionStatus? _cameraPermissionStatus;
   bool _handlingScan = false;
   String? _indicatorMessage;
   Timer? _indicatorTimer;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refreshCameraPermission(requestIfNeeded: true);
+  }
+
+  @override
   void dispose() {
     _indicatorTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshCameraPermission();
+    }
+  }
+
+  Future<void> _refreshCameraPermission({bool requestIfNeeded = false}) async {
+    PermissionStatus status = await Permission.camera.status;
+    if (requestIfNeeded &&
+        !status.isGranted &&
+        !status.isPermanentlyDenied &&
+        !status.isRestricted) {
+      status = await Permission.camera.request();
+    }
+    if (!mounted) return;
+    setState(() {
+      _cameraPermissionStatus = status;
+    });
+  }
+
+  String? _cameraPermissionMessage() {
+    final status = _cameraPermissionStatus;
+    if (status == null || status.isGranted) {
+      return null;
+    }
+    if (status.isPermanentlyDenied) {
+      return 'Camera access is required to scan QR codes. Enable it in Settings.';
+    }
+    if (status.isRestricted) {
+      return 'Camera access is restricted on this device.';
+    }
+    return 'Camera access is required to scan QR codes.';
+  }
+
+  Widget? _cameraPermissionActions(BuildContext context) {
+    final status = _cameraPermissionStatus;
+    if (status == null || status.isGranted) {
+      return null;
+    }
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            child: const Text('Back'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: FilledButton(
+            onPressed:
+                status.isPermanentlyDenied
+                    ? openAppSettings
+                    : () => _refreshCameraPermission(requestIfNeeded: true),
+            child: Text(
+              status.isPermanentlyDenied ? 'Open Settings' : 'Try Again',
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _handleDetection(Code code) async {
@@ -1408,13 +1483,18 @@ class _RelayQrScanPageState extends State<_RelayQrScanPage> {
 
   @override
   Widget build(BuildContext context) {
+    final hasCameraPermission = _cameraPermissionStatus?.isGranted ?? false;
     return SeclusoQrScanScreen(
       title: 'Scan Relay QR',
       belowFrameText: "Point at your relay's QR\ncode",
       bottomMessage:
-          'Relay credentials are stored only on this phone and used only to connect to your relay.',
+          hasCameraPermission
+              ? 'Relay credentials are stored only on this phone and used only to connect to your relay.'
+              : 'Camera access is used only to scan relay QR codes on this phone.',
       background:
-          _handlingScan
+          !hasCameraPermission
+              ? const ColoredBox(color: Color(0xFF050505))
+              : _handlingScan
               ? const ColoredBox(color: Color(0xFF050505))
               : ReaderWidget(
                 onScan: _handleDetection,
@@ -1428,7 +1508,12 @@ class _RelayQrScanPageState extends State<_RelayQrScanPage> {
                 loading: const ColoredBox(color: Color(0xFF050505)),
               ),
       onBack: () => Navigator.of(context).maybePop(),
-      indicatorMessage: _indicatorMessage,
+      indicatorMessage:
+          _cameraPermissionStatus == null
+              ? 'Checking camera access…'
+              : _indicatorMessage,
+      errorMessage: _cameraPermissionMessage(),
+      actionArea: _cameraPermissionActions(context),
     );
   }
 }
