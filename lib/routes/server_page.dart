@@ -615,7 +615,10 @@ class _ServerPageState extends State<ServerPage> {
       previewVideos.add(Video(camera.name, clip.videoFile, true, clip.motion));
       previewDetectionsByVideo[clip.videoFile] = clip.detections;
       previewThumbAssetsByVideo[clip.videoFile] = clip.previewAssetPath;
-      previewVideoAssetsByVideo[clip.videoFile] = clip.videoAssetPath;
+      final videoAssetPath = clip.videoAssetPath;
+      if (videoAssetPath != null) {
+        previewVideoAssetsByVideo[clip.videoFile] = videoAssetPath;
+      }
       previewDurationByVideo[clip.videoFile] = clip.duration;
     }
 

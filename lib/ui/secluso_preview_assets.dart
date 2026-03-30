@@ -3,6 +3,8 @@
 class SeclusoPreviewAssets {
   const SeclusoPreviewAssets._();
 
+  static const bool _fdroidBuild = bool.fromEnvironment('SECLUSO_FDROID_BUILD');
+
   static const String designFrontDoor = 'assets/design/design_front_door.png';
   static const String designLivingRoom = 'assets/design/design_living_room.png';
   static const String designBackyard = 'assets/design/design_backyard.png';
@@ -11,8 +13,8 @@ class SeclusoPreviewAssets {
   static const String foyerEvent = 'assets/design/foyer_event.png';
   static const String deliveryNookEvent =
       'assets/design/delivery_nook_event.png';
-  static const String reviewFrontDoorClip =
-      'assets/design/review_front_door_preview.mp4';
+  static const String? reviewFrontDoorClip =
+      _fdroidBuild ? null : 'assets/design/review_front_door_preview.mp4';
   static const String homeOfficeFeed = 'assets/design/home_office_feed.png';
   static const String storageFeed = 'assets/design/storage_feed.png';
   static const String corridorFeed = 'assets/design/corridor_feed.png';

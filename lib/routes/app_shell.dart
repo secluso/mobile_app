@@ -237,7 +237,10 @@ class _AppShellState extends State<AppShell> {
             );
             previewDetectionsByVideo[clip.videoFile] = clip.detections;
             previewThumbAssetsByVideo[clip.videoFile] = clip.previewAssetPath;
-            previewVideoAssetsByVideo[clip.videoFile] = clip.videoAssetPath;
+            final videoAssetPath = clip.videoAssetPath;
+            if (videoAssetPath != null) {
+              previewVideoAssetsByVideo[clip.videoFile] = videoAssetPath;
+            }
             previewDurationByVideo[clip.videoFile] = clip.duration;
           }
           return CameraPreviewData(

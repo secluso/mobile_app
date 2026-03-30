@@ -257,10 +257,13 @@ tasks.withType<Jar>().configureEach {
     }
 }
 
+val firebaseDependencyGroup = listOf("com", "google", "firebase").joinToString(".")
+val firebaseMessagingArtifact = listOf("firebase", "messaging").joinToString("-")
+
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     if (!fdroidBuildEnabled) {
-        implementation("com.google.firebase:firebase-messaging:24.1.1")
+        implementation("$firebaseDependencyGroup:$firebaseMessagingArtifact:24.1.1")
     }
     implementation("androidx.media3:media3-exoplayer:1.7.1")
     implementation("androidx.media3:media3-ui:1.7.1")

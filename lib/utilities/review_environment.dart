@@ -94,7 +94,7 @@ class ReviewClipFixture {
 
   final String videoFile;
   final String previewAssetPath;
-  final String videoAssetPath;
+  final String? videoAssetPath;
   final Set<String> detections;
   final bool motion;
   final Duration duration;
@@ -116,7 +116,7 @@ class ReviewClipFixture {
     return ReviewClipFixture(
       videoFile: (json['videoFile'] as String?) ?? '',
       previewAssetPath: (json['previewAssetPath'] as String?) ?? '',
-      videoAssetPath: (json['videoAssetPath'] as String?) ?? '',
+      videoAssetPath: json['videoAssetPath'] as String?,
       detections:
           ((json['detections'] as List?) ?? const [])
               .whereType<String>()
@@ -148,7 +148,7 @@ class ReviewCameraFixture {
   final String name;
   final String profileId;
   final String livePreviewAssetPath;
-  final String livePreviewVideoAssetPath;
+  final String? livePreviewVideoAssetPath;
   final String statusLabel;
   final String recentActivityTitle;
   final String recentActivityTimeLabel;
@@ -175,7 +175,7 @@ class ReviewCameraFixture {
       profileId: (json['profileId'] as String?) ?? 'front-door',
       livePreviewAssetPath: (json['livePreviewAssetPath'] as String?) ?? '',
       livePreviewVideoAssetPath:
-          (json['livePreviewVideoAssetPath'] as String?) ?? '',
+          json['livePreviewVideoAssetPath'] as String?,
       statusLabel: (json['statusLabel'] as String?) ?? 'Quiet',
       recentActivityTitle:
           (json['recentActivityTitle'] as String?) ?? 'Person detected',

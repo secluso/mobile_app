@@ -65,6 +65,8 @@ Builds:
     commit: 980749727107ad517b9f3aa23f381d8e57b60be3
     srclibs:
       - flutter@3.32.2
+    scandelete:
+      - assets/design/review_front_door_preview.mp4
     build:
       - export PUB_CACHE="$PWD/.pub-cache"
       - ./tool/fdroid/build_fdroid_apk.sh "$$flutter$$/bin/flutter"
