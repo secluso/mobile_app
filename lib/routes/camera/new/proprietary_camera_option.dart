@@ -3,7 +3,6 @@
 import 'dart:math' as math;
 import 'dart:io' show Platform, Directory;
 
-import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
 import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
@@ -14,6 +13,7 @@ import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/proprietary_camera_hotspot.dart';
 import 'proprietary_camera_waiting.dart';
 import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/ui/google_fonts.dart';
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';

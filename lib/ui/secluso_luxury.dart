@@ -1,7 +1,7 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:secluso_flutter/ui/google_fonts.dart';
 import 'package:secluso_flutter/ui/secluso_surfaces.dart';
 import 'package:secluso_flutter/ui/secluso_theme.dart';
 
@@ -107,10 +107,7 @@ class SeclusoPageHeader extends StatelessWidget {
             ],
           ),
         ),
-        if (trailing != null) ...[
-          const SizedBox(width: 12),
-          trailing!,
-        ],
+        if (trailing != null) ...[const SizedBox(width: 12), trailing!],
       ],
     );
   }
@@ -170,9 +167,7 @@ class SeclusoSystemStrip extends StatelessWidget {
       child: Row(
         children: [
           for (var i = 0; i < items.length; i++) ...[
-            Expanded(
-              child: _StripCell(item: items[i], theme: theme),
-            ),
+            Expanded(child: _StripCell(item: items[i], theme: theme)),
             if (i != items.length - 1)
               Container(
                 width: 1,

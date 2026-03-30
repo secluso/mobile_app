@@ -1,7 +1,7 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:secluso_flutter/ui/google_fonts.dart';
 
 class SeclusoColors {
   static const Color ink = Color(0xFF0A0A0A);

@@ -5,11 +5,11 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/routes/camera/new/qr_scan.dart';
 import 'package:secluso_flutter/routes/camera/view_camera.dart';
 import 'package:secluso_flutter/routes/camera/view_video.dart';
+import 'package:secluso_flutter/ui/google_fonts.dart';
 import 'package:secluso_flutter/ui/secluso_shell_ui.dart';
 
 part 'shell_home_empty_state.dart';

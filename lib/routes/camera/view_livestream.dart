@@ -6,7 +6,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
 
 import 'package:flutter/services.dart';
@@ -22,6 +21,7 @@ import 'package:secluso_flutter/utilities/result.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:secluso_flutter/database/entities.dart';
+import 'package:secluso_flutter/ui/google_fonts.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
 import 'package:secluso_flutter/routes/app_drawer.dart';
 import 'package:secluso_flutter/routes/camera/view_camera.dart';

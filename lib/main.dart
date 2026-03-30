@@ -41,6 +41,7 @@ import 'package:secluso_flutter/utilities/review_environment.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/ui/secluso_surfaces.dart';
+import 'package:secluso_flutter/ui/font_licenses.dart';
 import 'package:secluso_flutter/ui/secluso_theme.dart';
 import 'dart:isolate';
 
@@ -83,6 +84,7 @@ void main([List<String> args = const []]) {
         Log.i('UI context started (id=$traceId)');
         Log.i('main() started');
         final binding = WidgetsFlutterBinding.ensureInitialized();
+        registerBundledFontLicenses();
         final isUnifiedPushBackground = args.contains('--unifiedpush-bg');
         if (Platform.isAndroid) {
           await UnifiedPushService.instance.init(

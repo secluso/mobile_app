@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_zxing/flutter_zxing.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'dart:async';
@@ -13,6 +12,7 @@ import 'package:secluso_flutter/routes/camera/new/proprietary_camera_waiting.dar
 import 'package:secluso_flutter/utilities/review_environment.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'dart:convert';
+import 'package:secluso_flutter/ui/google_fonts.dart';
 import 'package:secluso_flutter/ui/secluso_surfaces.dart';
 import 'package:secluso_flutter/ui/secluso_theme.dart';
 

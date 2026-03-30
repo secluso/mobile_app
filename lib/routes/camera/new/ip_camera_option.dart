@@ -1,7 +1,6 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,6 +10,7 @@ import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/routes/camera/new/ip_camera_waiting.dart';
 import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/ui/google_fonts.dart';
 import 'package:flutter/services.dart';
 import 'dart:io' show Directory;
 import 'package:path/path.dart' as p;
