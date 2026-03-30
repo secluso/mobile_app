@@ -115,26 +115,39 @@ if (keystorePropertiesFile.exists()) {
 val missingKeystoreKeys = requiredKeystoreKeys.filter { key ->
     keystoreProperties.getProperty(key).isNullOrBlank()
 }
-val hasValidKeystore = keystorePropertiesFile.exists() && missingKeystoreKeys.isEmpty()
-if (!hasValidKeystore) {
+val configuredStoreFile =
+    keystoreProperties.getProperty("storeFile")?.trim()?.takeIf { it.isNotEmpty() }?.let { path ->
+        val candidate = File(path)
+        if (candidate.isAbsolute) candidate else keystorePropertiesFile.parentFile.resolve(path)
+    }
+val hasConfiguredKeystore = keystorePropertiesFile.exists() && missingKeystoreKeys.isEmpty()
+val hasValidKeystore = hasConfiguredKeystore && configuredStoreFile?.isFile == true
+if (!allowUnsignedRelease && !hasValidKeystore) {
     val missingParts = if (keystorePropertiesFile.exists()) {
-        "missing keys: ${missingKeystoreKeys.joinToString(", ")}"
+        if (missingKeystoreKeys.isNotEmpty()) {
+            "missing keys: ${missingKeystoreKeys.joinToString(", ")}"
+        } else {
+            "keystore file not found: ${configuredStoreFile?.absolutePath ?: "<unresolved>"}"
+        }
     } else {
         "missing key.properties"
     }
-    val releaseBehavior = if (allowUnsignedRelease) {
-        "Unsigned release builds are enabled for verification."
-    } else {
-        "Debug builds will still work."
-    }
-    logger.warn("Android release signing disabled ($missingParts). $releaseBehavior")
+    logger.warn("Android release signing disabled ($missingParts). Debug builds will still work.")
+} else if (allowUnsignedRelease && keystorePropertiesFile.exists()) {
+    logger.lifecycle(
+        "SECLUSO_ALLOW_UNSIGNED_RELEASE=1; ignoring android/key.properties during unsigned release build."
+    )
 }
 
 gradle.taskGraph.whenReady {
     val wantsRelease = allTasks.any { it.name.contains("Release", ignoreCase = true) }
     if (wantsRelease && !hasValidKeystore && !allowUnsignedRelease) {
         val missingParts = if (keystorePropertiesFile.exists()) {
-            "missing keys: ${missingKeystoreKeys.joinToString(", ")}"
+            if (missingKeystoreKeys.isNotEmpty()) {
+                "missing keys: ${missingKeystoreKeys.joinToString(", ")}"
+            } else {
+                "keystore file not found: ${configuredStoreFile?.absolutePath ?: "<unresolved>"}"
+            }
         } else {
             "missing key.properties"
         }
@@ -195,9 +208,9 @@ android {
     }
 
     signingConfigs {
-        if (hasValidKeystore) {
+        if (!allowUnsignedRelease && hasValidKeystore) {
             create("release") {
-                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storeFile = configuredStoreFile
                 storePassword = keystoreProperties.getProperty("storePassword")
                 keyAlias = keystoreProperties.getProperty("keyAlias")
                 keyPassword = keystoreProperties.getProperty("keyPassword")
@@ -207,7 +220,7 @@ android {
 
     buildTypes {
         getByName("release") {
-            if (hasValidKeystore) {
+            if (!allowUnsignedRelease && hasValidKeystore) {
                 signingConfig = signingConfigs.getByName("release")
             }
         } 
