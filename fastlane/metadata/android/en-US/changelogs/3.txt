@@ -1,0 +1,6 @@
+Storage backend refactor for F-Droid builds.
+
+- Uses sqflite instead of ObjectBox in the F-Droid Android variant
+- Keeps Firebase/FCM out of the Android dependency graph
+- Uses UnifiedPush for Android notifications
+- Avoids false UI error banners when livestream chunk polling hits a normal 404 pause condition

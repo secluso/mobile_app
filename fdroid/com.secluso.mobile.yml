@@ -52,8 +52,8 @@ Repo: https://github.com/secluso/mobile_app.git
 
 Builds:
   - versionName: 0.1.0
-    versionCode: 2
-    commit: e2eee57769a7b53872c068278690ee3a0b596728
+    versionCode: 3
+    commit: 524dbaae2deff0ce6baf098de8bf1af04950c1d8
     sudo:
       - apt-get update || apt-get update
       - apt-get install -y build-essential clang cmake pkg-config
@@ -82,4 +82,4 @@ MaintainerNotes: |
 AutoUpdateMode: None
 UpdateCheckMode: None
 CurrentVersion: 0.1.0
-CurrentVersionCode: 2
+CurrentVersionCode: 3
