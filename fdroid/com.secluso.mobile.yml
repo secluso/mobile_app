@@ -62,10 +62,10 @@ Repo: https://github.com/secluso/mobile_app.git
 Builds:
   - versionName: 0.1.0
     versionCode: 2
-    commit: 980749727107ad517b9f3aa23f381d8e57b60be3
+    commit: 1c038f129adeb424d8d383be5378ee4f512d804e
     srclibs:
       - flutter@3.32.2
-    scandelete:
+    scanignore:
       - assets/design/review_front_door_preview.mp4
     build:
       - export PUB_CACHE="$PWD/.pub-cache"

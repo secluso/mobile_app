@@ -122,6 +122,7 @@ run_build() {
   docker run --rm \
     --platform "$DOCKER_PLATFORM" \
     -e SOURCE_DATE_EPOCH="$SOURCE_DATE_EPOCH_VALUE" \
+    -e SECLUSO_FDROID_BUILD="${SECLUSO_FDROID_BUILD:-0}" \
     -e SECLUSO_REPRO_CLEAN="$REPRO_CHECK_STRICT" \
     -e SECLUSO_REPRO_MAX_WORKERS="$REPRO_CHECK_MAX_WORKERS" \
     -v "$workspace":/workspace \
@@ -141,7 +142,7 @@ warm_source_workspace() {
     return
   fi
   echo "==> Warming source workspace caches"
-  "$SCRIPT_DIR/build_aab_with_docker.sh"
+  SECLUSO_FDROID_BUILD="${SECLUSO_FDROID_BUILD:-0}" "$SCRIPT_DIR/build_aab_with_docker.sh"
 }
 
 BUILD_ONE="$WORK_ROOT/build-one"
