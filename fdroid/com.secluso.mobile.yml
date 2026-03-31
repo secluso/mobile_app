@@ -13,42 +13,9 @@ SourceCode: https://github.com/secluso/mobile_app
 IssueTracker: https://github.com/secluso/mobile_app/issues
 Changelog: https://github.com/secluso/mobile_app/releases
 
-Description: |
-  Secluso is a private home security camera system for Raspberry Pi and
-  Secluso hardware. Watch live video, get alerts, and view recordings from
-  your phone without giving a cloud provider access to your footage.
-
-  You can start today with your own Raspberry Pi and off-the-shelf parts.
-
-  The system is built around end-to-end encryption. The camera encrypts video
-  before it leaves your network, and the relay only transports encrypted
-  data. You can self-host the open-source relay on your own VPS, or use
-  hosted relay infrastructure without giving the relay access to your
-  footage.
-
-  Secluso Deploy gives you a guided setup path for preparing your Raspberry
-  Pi, pairing it with the app, and setting up secure remote access.
-
-  Secluso also includes on-device AI for alerts such as motion, person, pet,
-  and vehicle detection.
-
-  Features include:
-
-  * end-to-end encrypted live view, alerts, and recordings
-  * on-device AI with motion, person, pet, and vehicle alerts
-  * support for DIY Raspberry Pi cameras
-  * self-hosted or hosted relay options without giving the relay access to
-    your footage
-  * open-source software you can inspect and self-host
-  * reproducible releases you can verify
-  * guided image building, QR-based pairing, and relay provisioning for
-    easier setup
-
-  The F-Droid Android build is a better fit for de-Googled devices and
-  avoids Firebase and Google Play Services for notifications.
-
 RepoType: git
 Repo: https://github.com/secluso/mobile_app.git
+Binaries: https://github.com/secluso/mobile_app/releases/download/v%v-%c/app-release-signed.apk
 
 Builds:
   - versionName: 0.1.0
@@ -56,20 +23,26 @@ Builds:
     commit: 524dbaae2deff0ce6baf098de8bf1af04950c1d8
     sudo:
       - apt-get update || apt-get update
-      - apt-get install -y build-essential clang cmake pkg-config
+      - apt-get install -y build-essential clang cmake pkg-config rustup
     output: build/app/outputs/flutter-apk/app-release.apk
     srclibs:
-      - flutter@3.32.2
-      - rustup@1.27.1
+      - flutter@stable
+    prebuild:
+      - flutterRevision=$(sed -n -E "s/^ARG FLUTTER_REVISION=(.*)$/\\1/p" tool/repro/Dockerfile)
+      - '[[ $flutterRevision ]]'
+      - git -C $$flutter$$ checkout -f "$flutterRevision"
+      - export CARGO_HOME="$HOME/.cargo"
+      - export RUSTUP_HOME="$HOME/.rustup"
+      - export PATH="$HOME/.cargo/bin:$PATH"
+      - rustup default 1.90.0
+      - rustup target add armv7-linux-androideabi aarch64-linux-android x86_64-linux-android
     build:
-      - $$rustup$$/rustup-init.sh -y --default-toolchain 1.90.0 --target armv7-linux-androideabi
-        aarch64-linux-android x86_64-linux-android
-      - source $HOME/.cargo/env
       - export CARGO_HOME="$HOME/.cargo"
       - export RUSTUP_HOME="$HOME/.rustup"
       - export PATH="$HOME/.cargo/bin:$PATH"
       - export PUB_CACHE="$PWD/.pub-cache"
       - ./tool/fdroid/build_fdroid_apk.sh "$$flutter$$/bin/flutter"
+AllowedAPKSigningKeys: f75eb11b6f59392bd7323748573d71e578541d5bc0fb66f90d41bde89b556f1b
 
 MaintainerNotes: |
   The F-Droid build is manual rather than a normal Gradle flavor. Use the
@@ -79,7 +52,7 @@ MaintainerNotes: |
   The app can be pointed at a self-hosted relay from inside the UI, so it is
   not tied to one fixed hosted service.
 
-AutoUpdateMode: None
-UpdateCheckMode: None
+AutoUpdateMode: Version
+UpdateCheckMode: Tags ^v[\d.]+-\d+$
 CurrentVersion: 0.1.0
 CurrentVersionCode: 3
