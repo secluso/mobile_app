@@ -171,7 +171,9 @@ class ThumbnailManager {
   ) async {
     if (VersionGate.isBlocked) {
       await HttpClientService.instance.potentiallySendBackgroundNotification();
-      Log.d("$camera: Skipping thumbnail check because version gate is active.");
+      Log.d(
+        "$camera: Skipping thumbnail check because version gate is active.",
+      );
       return false;
     }
     // Check if the file already exists in the thumbnails folder
@@ -242,8 +244,11 @@ class ThumbnailManager {
     return Log.runWithDerivedContext('thumb', () async {
       Log.d("Entered thumbnail session");
       if (VersionGate.isBlocked) {
-        await HttpClientService.instance.potentiallySendBackgroundNotification();
-        Log.d("$camera: Skipping thumbnail session because version gate is active.");
+        await HttpClientService.instance
+            .potentiallySendBackgroundNotification();
+        Log.d(
+          "$camera: Skipping thumbnail session because version gate is active.",
+        );
         return;
       }
       if (!await _cameraStillExists(camera)) {
@@ -552,7 +557,8 @@ class ThumbnailManager {
     return Log.runWithDerivedContext('thumb', () async {
       Log.d("Entered retrieveThumbnails");
       if (VersionGate.isBlocked) {
-        await HttpClientService.instance.potentiallySendBackgroundNotification();
+        await HttpClientService.instance
+            .potentiallySendBackgroundNotification();
         Log.d(
           "$camera: Skipping thumbnail retrieval because version gate is active.",
         );

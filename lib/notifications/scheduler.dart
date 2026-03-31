@@ -159,7 +159,8 @@ class DownloadScheduler {
     return Log.runWithContext(traceId, () async {
       Log.d("Scheduler context started (camera=$camera, id=$traceId)");
       if (VersionGate.isBlocked) {
-        await HttpClientService.instance.potentiallySendBackgroundNotification();
+        await HttpClientService.instance
+            .potentiallySendBackgroundNotification();
         Log.d("Skipping download scheduling because version gate is active");
         return;
       }

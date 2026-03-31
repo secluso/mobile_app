@@ -1,7 +1,6 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
 import 'dart:async';
-import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
@@ -166,7 +165,7 @@ Future<bool> _doInitialize(
   try {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final bool firstTimeConnectionDone =
-        prefs.getBool("first_time_" + cameraName) ?? false;
+        prefs.getBool("first_time_$cameraName") ?? false;
 
     Log.d("First time connection done: $firstTimeConnectionDone");
     Log.d(
@@ -227,7 +226,7 @@ Future<bool> initializeCore(String cameraName, bool firstTime) async {
   var encryptedDir = "$filesDir/encrypted";
 
   // Create directory if it doesn't exist
-  var videoDirHandle = await Directory(videosDir);
+  var videoDirHandle = Directory(videosDir);
   if (!(await videoDirHandle.exists())) {
     try {
       await videoDirHandle.create(recursive: true);
@@ -236,7 +235,7 @@ Future<bool> initializeCore(String cameraName, bool firstTime) async {
     }
   }
 
-  var encDirHandle = await Directory(encryptedDir);
+  var encDirHandle = Directory(encryptedDir);
   if (!(await encDirHandle.exists())) {
     try {
       await encDirHandle.create(recursive: true);

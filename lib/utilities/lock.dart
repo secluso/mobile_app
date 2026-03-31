@@ -32,10 +32,7 @@ Future<bool> lock(
       final ownerId = Log.currentContextId();
       final ownerLabel = ownerId.isNotEmpty ? ownerId : "unknown";
       try {
-        await File(ownerPath).writeAsString(
-          ownerLabel,
-          flush: true,
-        );
+        await File(ownerPath).writeAsString(ownerLabel, flush: true);
       } catch (_) {}
       if (sw.elapsedMilliseconds > 200) {
         Log.d("Lock $name acquired after ${sw.elapsedMilliseconds}ms");
@@ -58,9 +55,7 @@ Future<bool> lock(
     }
   } catch (_) {}
 
-  Log.w(
-    "Lock $name timeout after ${timeout.inSeconds}s (owner=$ownerLabel)",
-  );
+  Log.w("Lock $name timeout after ${timeout.inSeconds}s (owner=$ownerLabel)");
   return false;
 }
 

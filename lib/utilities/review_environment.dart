@@ -174,8 +174,7 @@ class ReviewCameraFixture {
       name: (json['name'] as String?) ?? '',
       profileId: (json['profileId'] as String?) ?? 'front-door',
       livePreviewAssetPath: (json['livePreviewAssetPath'] as String?) ?? '',
-      livePreviewVideoAssetPath:
-          json['livePreviewVideoAssetPath'] as String?,
+      livePreviewVideoAssetPath: json['livePreviewVideoAssetPath'] as String?,
       statusLabel: (json['statusLabel'] as String?) ?? 'Quiet',
       recentActivityTitle:
           (json['recentActivityTitle'] as String?) ?? 'Person detected',

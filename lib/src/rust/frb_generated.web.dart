@@ -9,6 +9,7 @@
 import 'api.dart';
 import 'api/lock_manager.dart';
 import 'api/logger.dart';
+import 'api/simple.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';

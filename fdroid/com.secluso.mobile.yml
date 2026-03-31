@@ -40,6 +40,7 @@ Builds:
       - export CARGO_HOME="$HOME/.cargo"
       - export RUSTUP_HOME="$HOME/.rustup"
       - export PATH="$HOME/.cargo/bin:$PATH"
+      - export GRADLE_USER_HOME="$PWD/.gradle-home"
       - export PUB_CACHE="$PWD/.pub-cache"
       - ./tool/fdroid/build_fdroid_apk.sh "$$flutter$$/bin/flutter"
 AllowedAPKSigningKeys: f75eb11b6f59392bd7323748573d71e578541d5bc0fb66f90d41bde89b556f1b

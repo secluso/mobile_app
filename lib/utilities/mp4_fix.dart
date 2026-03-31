@@ -296,7 +296,7 @@ class Mp4DurationFixer {
     if (mvhd == null || tkhd == null || mdhd == null) {
       throw StateError("mvhd/tkhd/mdhd not found inside moov");
     }
-    return (mvhd!, tkhd!, mdhd!);
+    return (mvhd, tkhd, mdhd);
   }
 
   /// Reads movie timescale from mvhd.
@@ -528,7 +528,7 @@ class Mp4DurationFixer {
       frames: scan.frames,
       fps: fps,
       duration: dur,
-      note: "patched durations (mvhd/tkhd/mdhd); track_ID=${tkIdAfter}",
+      note: "patched durations (mvhd/tkhd/mdhd); track_ID=$tkIdAfter",
     );
   }
 }

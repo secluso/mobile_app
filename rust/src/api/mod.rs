@@ -2,6 +2,7 @@
 
 pub mod lock_manager;
 pub mod logger;
+pub mod simple;
 
 use secluso_app_native::{self, Clients};
 

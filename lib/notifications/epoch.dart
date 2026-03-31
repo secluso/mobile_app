@@ -6,7 +6,11 @@ import 'package:path_provider/path_provider.dart';
 
 /// Reads the stored epoch for cameraName. Returns default value of 2 if missing
 /// or unreadable. Type is either "video" or "thumbnail".
-Future<int> readEpoch(String cameraName, String type, {int defaultValue = 2}) async {
+Future<int> readEpoch(
+  String cameraName,
+  String type, {
+  int defaultValue = 2,
+}) async {
   final dir = await getApplicationDocumentsDirectory();
   final path = p.join(dir.path, 'camera_dir_$cameraName', 'epoch_$type');
   final f = File(path);
@@ -36,7 +40,7 @@ Future<void> writeEpoch(String cameraName, String type, int value) async {
   }
 
   final finalPath = p.join(cameraDir.path, 'epoch_$type');
-  final tmpPath   = '$finalPath.tmp';
+  final tmpPath = '$finalPath.tmp';
 
   final tmpFile = File(tmpPath);
   final raf = await tmpFile.open(mode: FileMode.write);

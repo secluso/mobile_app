@@ -19,7 +19,11 @@ Future<bool> hasEpochMarker(String cameraName, String kind, int epoch) async {
   return file.exists();
 }
 
-Future<String?> readEpochMarker(String cameraName, String kind, int epoch) async {
+Future<String?> readEpochMarker(
+  String cameraName,
+  String kind,
+  int epoch,
+) async {
   final file = await _markerFile(cameraName, kind, epoch);
   if (!await file.exists()) {
     return null;

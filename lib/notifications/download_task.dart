@@ -379,7 +379,9 @@ Future<bool> retrieveVideos(String cameraName) async {
   Log.d("Entered for $cameraName");
   if (VersionGate.isBlocked) {
     await HttpClientService.instance.potentiallySendBackgroundNotification();
-    Log.d("$cameraName: Skipping video retrieval because version gate is active.");
+    Log.d(
+      "$cameraName: Skipping video retrieval because version gate is active.",
+    );
     return true;
   }
   if (!await _cameraStillExists(cameraName)) {

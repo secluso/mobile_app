@@ -240,7 +240,9 @@ class _LightScanningState extends StatelessWidget {
                     Positioned.fill(
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(metrics.scaled(16)),
+                          borderRadius: BorderRadius.circular(
+                            metrics.scaled(16),
+                          ),
                           gradient: RadialGradient(
                             center: const Alignment(0, -0.18),
                             radius: 0.58,
@@ -265,7 +267,9 @@ class _LightScanningState extends StatelessWidget {
                       child: Text(
                         'Scanning for cameras...',
                         textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        style: Theme.of(
+                          context,
+                        ).textTheme.titleMedium?.copyWith(
                           color: const Color(0xFF374151),
                           fontSize: metrics.scaled(11),
                           fontWeight: FontWeight.w500,
@@ -294,7 +298,9 @@ class _LightScanningState extends StatelessWidget {
                       child: Center(
                         child: Material(
                           color: const Color(0xFF8BB3EE),
-                          borderRadius: BorderRadius.circular(metrics.scaled(12)),
+                          borderRadius: BorderRadius.circular(
+                            metrics.scaled(12),
+                          ),
                           elevation: 0,
                           shadowColor: const Color(0x4DB45309),
                           child: InkWell(
@@ -462,9 +468,8 @@ class _RadarPulseRing extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(
-          color:
-              (dark ? const Color(0xFFB45309) : const Color(0xFF8BB3EE))
-                  .withValues(alpha: opacity),
+          color: (dark ? const Color(0xFFB45309) : const Color(0xFF8BB3EE))
+              .withValues(alpha: opacity),
           width: metrics.scaled(2),
         ),
       ),
