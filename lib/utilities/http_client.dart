@@ -530,9 +530,13 @@ class HttpClientService {
     final response = await http.get(url, headers: headers);
     await _handleServerVersionHeader(response);
     if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to fetch data: ${response.statusCode} ${response.reasonPhrase}',
-      );
+      final message =
+          'Failed to fetch data: ${response.statusCode} ${response.reasonPhrase}';
+      if (response.statusCode == 404) {
+        // A missing next chunk is a normal livestream pause/end condition.
+        throw _SilentException(message);
+      }
+      throw Exception(message);
     }
 
     // Delete action

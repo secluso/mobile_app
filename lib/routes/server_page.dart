@@ -187,8 +187,7 @@ class _ServerPageState extends State<ServerPage> {
       if (!AppStores.isInitialized) {
         await AppStores.init();
       }
-      final box = AppStores.instance.cameraStore.box<Camera>();
-      final cameras = await box.getAllAsync();
+      final cameras = await AppStores.instance.cameraStore.getAllAsync();
       return cameras.map((camera) => camera.name).toList(growable: false);
     } catch (_) {
       return const [];
@@ -417,9 +416,7 @@ class _ServerPageState extends State<ServerPage> {
       CameraUiBridge.refreshCameraListCallback?.call();
 
       //initialize all cameras again
-      final box = AppStores.instance.cameraStore.box<Camera>();
-
-      final allCameras = await box.getAllAsync();
+      final allCameras = await AppStores.instance.cameraStore.getAllAsync();
       for (var camera in allCameras) {
         // TODO: Check if false, perhaps there's some weird error we might need to look into...
         await initialize(camera.name);

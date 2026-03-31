@@ -29,7 +29,6 @@ import 'package:secluso_flutter/ui/secluso_surfaces.dart';
 import 'package:secluso_flutter/ui/secluso_theme.dart';
 import 'package:secluso_flutter/utilities/video_thumbnail_store.dart';
 import 'dart:io';
-import '../../objectbox.g.dart';
 
 const _livestreamStaleChunkThreshold = Duration(seconds: 4);
 
@@ -391,14 +390,13 @@ class _LivestreamPageState extends State<LivestreamPage>
         await AppStores.init();
       }
 
-      final box = AppStores.instance.videoStore.box<Video>();
-      box.put(Video(widget.cameraName, videoName, true, false));
+      await AppStores.instance.videoStore.put(
+        Video(widget.cameraName, videoName, true, false),
+      );
 
-      final cameraBox = AppStores.instance.cameraStore.box<Camera>();
-      final cameraQuery =
-          cameraBox.query(Camera_.name.equals(widget.cameraName)).build();
-      final foundCamera = cameraQuery.findFirst();
-      cameraQuery.close();
+      final foundCamera = await AppStores.instance.cameraStore.findFirstByName(
+        widget.cameraName,
+      );
 
       if (foundCamera == null) {
         Log.e(

@@ -74,7 +74,8 @@ val fdroidBuildEnabled =
         decodeDartDefines(
             providers.gradleProperty("dart-defines").orNull ?: System.getProperty("dart-defines")
         )["SECLUSO_FDROID_BUILD"] == "true"
-val fdroidExcludedPluginNames = setOf("firebase_core", "firebase_messaging")
+val fdroidExcludedPluginNames =
+    setOf("firebase_core", "firebase_messaging", "objectbox_flutter_libs")
 val fdroidGeneratedRegistrantDir =
     layout.buildDirectory.dir("generated/source/secluso/fdroid")
 val generateFdroidGeneratedPluginRegistrant =

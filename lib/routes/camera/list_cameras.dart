@@ -30,7 +30,6 @@ import 'package:secluso_flutter/routes/camera/shell_home_page.dart';
 import 'view_camera.dart';
 import 'camera_ui_bridge.dart';
 import 'new/show_new_camera_options.dart';
-import '../../objectbox.g.dart';
 import '../server_page.dart';
 import '../home_page.dart';
 
@@ -916,14 +915,10 @@ class CamerasPageState extends State<CamerasPage>
     return compact == 'Now' ? 'Just now' : '$compact ago';
   }
 
-  Future<Set<String>> _detectionTypesForVideo(
-    Box<Detection> detectionBox,
-    String videoName,
-  ) async {
-    final query =
-        detectionBox.query(Detection_.videoFile.equals(videoName)).build();
-    final rows = query.find();
-    query.close();
+  Future<Set<String>> _detectionTypesForVideo(String videoName) async {
+    final rows = await AppStores.instance.detectionStore.findByVideoFile(
+      videoName,
+    );
     return rows.map((row) => row.type.toLowerCase()).toSet();
   }
 
@@ -995,16 +990,10 @@ class CamerasPageState extends State<CamerasPage>
     final prefs = await SharedPreferences.getInstance();
     await prefs.reload();
 
-    final cameraBox = AppStores.instance.cameraStore.box<Camera>();
-    final videoBox = AppStores.instance.videoStore.box<Video>();
-    final detectionBox = AppStores.instance.detectionStore.box<Detection>();
-
-    final storedCameras = await cameraBox.getAllAsync();
-    final videoQuery =
-        videoBox.query().order(Video_.id, flags: Order.descending).build()
-          ..limit = 80;
-    final videos = videoQuery.find();
-    videoQuery.close();
+    final cameraStore = AppStores.instance.cameraStore;
+    final videoStore = AppStores.instance.videoStore;
+    final storedCameras = await cameraStore.getAllAsync();
+    final videos = await videoStore.listRecent(limit: 80);
 
     final latestVideoByCamera = <String, Video>{};
     for (final video in videos) {
@@ -1039,7 +1028,7 @@ class CamerasPageState extends State<CamerasPage>
       if (cached != null) {
         return cached;
       }
-      final detections = await _detectionTypesForVideo(detectionBox, videoName);
+      final detections = await _detectionTypesForVideo(videoName);
       detectionCache[videoName] = detections;
       return detections;
     }
@@ -1224,16 +1213,10 @@ class CamerasPageState extends State<CamerasPage>
       }
     }
 
-    final videoBox = AppStores.instance.videoStore.box<Video>();
-    final detectionBox = AppStores.instance.detectionStore.box<Detection>();
-    final query =
-        videoBox
-            .query(Video_.camera.equals(cameraName))
-            .order(Video_.id, flags: Order.descending)
-            .build()
-          ..limit = 40;
-    final videos = query.find();
-    query.close();
+    final videos = await AppStores.instance.videoStore.listByCamera(
+      cameraName,
+      limit: 40,
+    );
 
     for (final video in videos) {
       final hasVideoFile = await _videoFileExists(video.camera, video.video);
@@ -1241,10 +1224,7 @@ class CamerasPageState extends State<CamerasPage>
           await _eventThumbnailBytes(video.camera, video.video) == null) {
         continue;
       }
-      final detections = await _detectionTypesForVideo(
-        detectionBox,
-        video.video,
-      );
+      final detections = await _detectionTypesForVideo(video.video);
       if (!video.motion && detections.isEmpty) {
         continue;
       }

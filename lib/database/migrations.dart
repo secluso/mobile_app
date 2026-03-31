@@ -9,8 +9,8 @@ typedef Migration = Future<void> Function();
 final List<Migration> migrations = [
   // Migration 1: Test migration to ensure system works properly in the event we need this.
   () async {
-    final cameraBox = AppStores.instance.cameraStore.box<Camera>();
-    final cameras = await cameraBox.getAllAsync();
+    final cameraStore = AppStores.instance.cameraStore;
+    final cameras = await cameraStore.getAllAsync();
     final List<Camera> patched = [];
 
     for (var cam in cameras) {
@@ -23,7 +23,7 @@ final List<Migration> migrations = [
     }
 
     if (patched.isNotEmpty) {
-      await cameraBox.putManyAsync(patched);
+      await cameraStore.putManyAsync(patched);
       Log.d("Fixed ${patched.length} null unreadMessages values.");
     } else {
       Log.d("No null unreadMessages values found.");

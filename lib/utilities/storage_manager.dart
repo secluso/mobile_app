@@ -282,9 +282,9 @@ class StorageManager {
       await AppStores.init();
     }
 
-    final videoBox = AppStores.instance.videoStore.box<Video>();
-    final detectionBox = AppStores.instance.detectionStore.box<Detection>();
-    final videos = videoBox.getAll();
+    final videoStore = AppStores.instance.videoStore;
+    final detectionStore = AppStores.instance.detectionStore;
+    final videos = await videoStore.getAllAsync();
     final docsDir = await getApplicationDocumentsDirectory();
 
     final videoIdsToRemove = <int>[];
@@ -306,12 +306,12 @@ class StorageManager {
     }
 
     if (videoIdsToRemove.isNotEmpty) {
-      videoBox.removeMany(videoIdsToRemove);
+      await videoStore.removeMany(videoIdsToRemove);
     }
 
     var removedDetectionRows = 0;
     if (removedVideoNames.isNotEmpty) {
-      final detections = detectionBox.getAll();
+      final detections = await detectionStore.getAllAsync();
       final detectionIdsToRemove =
           detections
               .where((d) => removedVideoNames.contains(d.videoFile))
@@ -319,7 +319,7 @@ class StorageManager {
               .toList();
       if (detectionIdsToRemove.isNotEmpty) {
         removedDetectionRows = detectionIdsToRemove.length;
-        detectionBox.removeMany(detectionIdsToRemove);
+        await detectionStore.removeMany(detectionIdsToRemove);
       }
     }
 
@@ -358,9 +358,9 @@ class StorageManager {
     }
 
     final docsDir = await getApplicationDocumentsDirectory();
-    final videoBox = AppStores.instance.videoStore.box<Video>();
-    final detectionBox = AppStores.instance.detectionStore.box<Detection>();
-    final videos = videoBox.getAll();
+    final videoStore = AppStores.instance.videoStore;
+    final detectionStore = AppStores.instance.detectionStore;
+    final videos = await videoStore.getAllAsync();
 
     var bytesFreed = 0;
     var deletedVideos = 0;
@@ -406,12 +406,12 @@ class StorageManager {
     }
 
     if (removedVideoIds.isNotEmpty) {
-      videoBox.removeMany(removedVideoIds);
+      await videoStore.removeMany(removedVideoIds);
     }
 
     var removedDetectionRows = 0;
     if (removedVideoNames.isNotEmpty) {
-      final detections = detectionBox.getAll();
+      final detections = await detectionStore.getAllAsync();
       final detectionIdsToRemove =
           detections
               .where((d) => removedVideoNames.contains(d.videoFile))
@@ -419,7 +419,7 @@ class StorageManager {
               .toList();
       if (detectionIdsToRemove.isNotEmpty) {
         removedDetectionRows = detectionIdsToRemove.length;
-        detectionBox.removeMany(detectionIdsToRemove);
+        await detectionStore.removeMany(detectionIdsToRemove);
       }
     }
 

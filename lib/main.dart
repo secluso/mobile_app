@@ -26,7 +26,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/notifications/firebase.dart';
 import 'package:secluso_flutter/notifications/unified_push_service.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
-import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/notifications/pending_processor.dart';
 import 'package:secluso_flutter/database/migration_runner.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
@@ -662,8 +661,7 @@ class _VersionRow extends StatelessWidget {
 }
 
 Future<List<String>> _cameraNamesFromStore() async {
-  final box = AppStores.instance.cameraStore.box<Camera>();
-  final cameras = await box.getAllAsync();
+  final cameras = await AppStores.instance.cameraStore.getAllAsync();
   return cameras.map((camera) => camera.name).toList();
 }
 

@@ -203,14 +203,12 @@ class QueueProcessor {
       return;
     }
 
-    final cameraBox = stores.cameraStore.box<Camera>();
-    final videoBox = stores.videoStore.box<Video>();
-    final detectionBox = stores.detectionStore.box<Detection>();
-    final cameras = await cameraBox.getAllAsync();
+    final cameraStore = stores.cameraStore;
+    final videoStore = stores.videoStore;
+    final detectionStore = stores.detectionStore;
+    final cameras = await cameraStore.getAllAsync();
     final cameraByName = {for (final cam in cameras) cam.name: cam};
-    final existingVideosQuery = videoBox.query().build();
-    final existingVideos = existingVideosQuery.find();
-    existingVideosQuery.close();
+    final existingVideos = await videoStore.getAllAsync();
     final videoByCameraAndFile = {
       for (final video in existingVideos)
         '${video.camera}\n${video.video}': video,
@@ -315,13 +313,13 @@ class QueueProcessor {
     }
 
     if (videosToPut.isNotEmpty) {
-      await videoBox.putManyAsync(videosToPut);
+      await videoStore.putManyAsync(videosToPut);
     }
     if (detectionsToPut.isNotEmpty) {
-      await detectionBox.putManyAsync(detectionsToPut);
+      await detectionStore.putManyAsync(detectionsToPut);
     }
     if (camerasToUpdate.isNotEmpty) {
-      await cameraBox.putManyAsync(camerasToUpdate);
+      await cameraStore.putManyAsync(camerasToUpdate);
     }
 
     if (notificationsToRefresh.isNotEmpty) {

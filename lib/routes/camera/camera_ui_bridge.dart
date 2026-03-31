@@ -7,7 +7,6 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
-import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
@@ -15,7 +14,6 @@ import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'package:secluso_flutter/utilities/review_environment.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
-import '../../objectbox.g.dart';
 
 class CameraUiBridge {
   CameraUiBridge._();
@@ -55,25 +53,21 @@ class CameraUiBridge {
     invalidateCameraInit(cameraName);
     HttpClientService.instance.clearGroupNameCache(cameraName);
 
-    final cameraBox = AppStores.instance.cameraStore.box<Camera>();
-    final videoBox = AppStores.instance.videoStore.box<Video>();
+    final cameraStore = AppStores.instance.cameraStore;
+    final videoStore = AppStores.instance.videoStore;
 
     await prefs.remove('first_time_$cameraName');
 
     await AppCoordinationState.removeCamera(cameraName);
     await AppCoordinationState.removeCameraFromDownloadQueues(cameraName);
 
-    final query = cameraBox.query(Camera_.name.equals(cameraName)).build();
-    final cams = query.find();
-    query.close();
+    final cams = await cameraStore.findByName(cameraName);
     for (final cam in cams) {
-      cameraBox.remove(cam.id);
+      await cameraStore.remove(cam.id);
     }
 
-    final videoQuery = videoBox.query(Video_.camera.equals(cameraName)).build();
-    final videos = videoQuery.find();
-    videoQuery.close();
-    videoBox.removeMany(videos.map((v) => v.id).toList());
+    final videos = await videoStore.listByCamera(cameraName);
+    await videoStore.removeMany(videos.map((video) => video.id).toList());
 
     final docsDir = await getApplicationDocumentsDirectory();
     final camDir = Directory(p.join(docsDir.path, 'camera_dir_$cameraName'));

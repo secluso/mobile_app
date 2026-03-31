@@ -14,9 +14,7 @@ import 'package:secluso_flutter/ui/secluso_surfaces.dart';
 import 'package:secluso_flutter/ui/secluso_theme.dart';
 
 import 'package:secluso_flutter/database/app_stores.dart';
-import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/utilities/mp4_fix.dart';
-import '../../objectbox.g.dart';
 
 class VideoViewPage extends StatefulWidget {
   final String videoTitle;
@@ -53,7 +51,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
   bool _initialized = false;
   String? _loadError;
   String? _videoPath;
-  late Box<Detection> _detBox;
+  late AppDetectionStore _detectionStore;
   Set<String> _dets = {};
   bool _shareInProgress = false;
   double _playbackSpeed = 1.0;
@@ -89,21 +87,15 @@ class _VideoViewPageState extends State<VideoViewPage> {
         return;
       }
     }
-    _detBox = AppStores.instance.detectionStore.box<Detection>();
+    _detectionStore = AppStores.instance.detectionStore;
     await _loadDetections();
   }
 
   Future<void> _loadDetections() async {
-    // Query by camera + video file
-    final q =
-        _detBox
-            .query(
-              Detection_.camera.equals(widget.cameraName) &
-                  Detection_.videoFile.equals(widget.videoTitle),
-            )
-            .build();
-    final rows = q.find();
-    q.close();
+    final rows = await _detectionStore.findByCameraAndVideoFile(
+      widget.cameraName,
+      widget.videoTitle,
+    );
 
     final types = <String>{};
     for (final d in rows) {

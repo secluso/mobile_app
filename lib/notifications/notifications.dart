@@ -7,12 +7,10 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
-import 'package:secluso_flutter/objectbox.g.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 
 import 'package:secluso_flutter/routes/camera/view_video.dart';
 import 'package:secluso_flutter/routes/camera/view_camera.dart';
-import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/main.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
 
@@ -62,17 +60,8 @@ Future<void> _doInitLocalNotifications() async {
         String cameraName = callInfo["cameraName"].toString();
         String timestamp = callInfo["timestamp"].toString();
 
-        final box = AppStores.instance.videoStore.box<Video>();
-        final videoQuery =
-            box
-                .query(
-                  Video_.camera
-                      .equals(cameraName)
-                      .and(Video_.video.contains(timestamp)),
-                )
-                .build();
-        final foundVideo = videoQuery.findFirst();
-        videoQuery.close();
+        final foundVideo = await AppStores.instance.videoStore
+            .findFirstForNotification(cameraName, timestamp);
 
         final navCtx = navigatorKey.currentContext;
 

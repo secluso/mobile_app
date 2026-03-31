@@ -41,6 +41,7 @@ dependencies:
     path: rust_builder
   flutter_rust_bridge: 2.11.1 # Needs to be consistent with FRB version
   shared_preferences: 2.5.3
+  sqflite: ^2.4.2
   flutter_zxing: ^2.2.1
   unifiedpush: ^6.2.0
   provider: ^6.1.5+1

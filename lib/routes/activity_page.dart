@@ -6,7 +6,6 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
-import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/routes/camera/view_camera.dart';
 import 'package:secluso_flutter/routes/camera/view_video.dart';
 import 'package:secluso_flutter/ui/secluso_preview_assets.dart';
@@ -16,7 +15,6 @@ import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/video_thumbnail_store.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import '../objectbox.g.dart';
 
 class ActivityPreviewItem {
   const ActivityPreviewItem({
@@ -315,13 +313,9 @@ class _ActivityPageState extends State<ActivityPage>
       if (!AppStores.isInitialized) {
         await AppStores.init();
       }
-      final videoBox = AppStores.instance.videoStore.box<Video>();
-      final detectionBox = AppStores.instance.detectionStore.box<Detection>();
-      final query =
-          videoBox.query().order(Video_.id, flags: Order.descending).build()
-            ..limit = 40;
-      final videos = query.find();
-      query.close();
+      final videoStore = AppStores.instance.videoStore;
+      final detectionStore = AppStores.instance.detectionStore;
+      final videos = await videoStore.listRecent(limit: 40);
 
       final loaded = <_ActivityEntry>[];
       final loadedKeys = <String>{};
@@ -331,13 +325,10 @@ class _ActivityPageState extends State<ActivityPage>
         if (!seenKeys.add(videoKey)) {
           continue;
         }
-        final detQuery =
-            detectionBox
-                .query(Detection_.videoFile.equals(video.video))
-                .build();
         final detections =
-            detQuery.find().map((row) => row.type.toLowerCase()).toSet();
-        detQuery.close();
+            (await detectionStore.findByVideoFile(
+              video.video,
+            )).map((row) => row.type.toLowerCase()).toSet();
 
         if (!video.motion && detections.isEmpty) {
           continue;

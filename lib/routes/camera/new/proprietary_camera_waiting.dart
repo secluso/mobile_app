@@ -430,9 +430,8 @@ class _ProprietaryCameraWaitingDialogState
       );
     }
 
-    final box = AppStores.instance.cameraStore.box<Camera>();
     final camera = Camera(widget.cameraName);
-    box.put(camera);
+    await AppStores.instance.cameraStore.put(camera);
 
     CameraListNotifier.instance.refreshCallback?.call();
 

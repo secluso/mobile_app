@@ -16,7 +16,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'view_video.dart';
 import 'view_livestream.dart';
 import 'camera_settings.dart';
-import '../../objectbox.g.dart';
 import 'package:secluso_flutter/database/entities.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
@@ -80,12 +79,12 @@ String repackageVideoTitle(String videoFileName) {
 }
 
 class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
-  late Box<Video> _videoBox;
+  late AppVideoStore _videoStore;
   final List<Video> _videos = [];
   final Map<String, Uint8List?> _videoThumbCache = {};
   final Map<String, Future<Uint8List?>> _videoThumbFutures = {};
 
-  late Box<Detection> _detectionBox;
+  late AppDetectionStore _detectionStore;
   final Map<int, Set<String>> _detCache = {};
 
   static const int _pageSize = 20;
@@ -126,17 +125,13 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
         return;
       }
     }
-    final cameraBox = AppStores.instance.cameraStore.box<Camera>();
-    final cameraQuery =
-        cameraBox.query(Camera_.name.equals(widget.cameraName)).build();
-
-    final foundCamera = cameraQuery.findFirst();
-    cameraQuery.close();
+    final foundCamera = await AppStores.instance.cameraStore.findFirstByName(
+      widget.cameraName,
+    );
 
     if (foundCamera != null && foundCamera.unreadMessages) {
       foundCamera.unreadMessages = false;
-      // Save the updated row; wrap in a transaction for safety.
-      cameraBox.put(foundCamera);
+      await AppStores.instance.cameraStore.put(foundCamera);
     }
   }
 
@@ -203,15 +198,8 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
   Future<void> _prefetchDetectionsFor(List<Video> vids) async {
     for (final v in vids) {
       final vidPath = v.video;
-
-      // Build the cache (types that actually match this video's file path)
+      final detsForVid = await _detectionStore.findByVideoFile(vidPath);
       final matchingTypes = <String>{};
-
-      final q =
-          _detectionBox.query(Detection_.videoFile.equals(vidPath)).build();
-
-      final detsForVid = q.find();
-      q.close();
 
       for (final d in detsForVid) {
         if (d.type.isNotEmpty) matchingTypes.add(d.type.toLowerCase());
@@ -229,8 +217,8 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
         return;
       }
     }
-    _videoBox = AppStores.instance.videoStore.box<Video>();
-    _detectionBox = AppStores.instance.detectionStore.box<Detection>();
+    _videoStore = AppStores.instance.videoStore;
+    _detectionStore = AppStores.instance.detectionStore;
     await _loadNextPage(); // first 20
 
     final prefs = await SharedPreferences.getInstance();
@@ -284,15 +272,10 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     final int generation = _dataGeneration;
     _videoThumbCache.clear();
     _videoThumbFutures.clear();
-    final query =
-        _videoBox
-            .query(Video_.camera.equals(widget.cameraName))
-            .order(Video_.id, flags: Order.descending)
-            .build()
-          ..limit = _pageSize;
-
-    final newVideos = query.find();
-    query.close();
+    final newVideos = await _videoStore.listByCamera(
+      widget.cameraName,
+      limit: _pageSize,
+    );
 
     await _prefetchDetectionsFor(newVideos);
 
@@ -308,17 +291,11 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     if (!_hasMore || _isLoading) return;
     setState(() => _isLoading = true);
     final int generation = _dataGeneration;
-
-    final query =
-        _videoBox
-            .query(Video_.camera.equals(widget.cameraName))
-            .order(Video_.id, flags: Order.descending)
-            .build()
-          ..limit = _pageSize
-          ..offset = _offset;
-
-    final List<Video> batch = query.find();
-    query.close();
+    final batch = await _videoStore.listByCamera(
+      widget.cameraName,
+      limit: _pageSize,
+      offset: _offset,
+    );
 
     await _prefetchDetectionsFor(batch);
 
@@ -443,10 +420,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
       Log.e("Error: Failed to create directory for videos");
     }
 
-    final query =
-        _videoBox.query(Video_.camera.equals(widget.cameraName)).build();
-    final videosToDelete = query.find();
-    query.close();
+    final videosToDelete = await _videoStore.listByCamera(widget.cameraName);
 
     final ids =
         videosToDelete
@@ -455,13 +429,13 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
             .toList();
     try {
       if (ids.isNotEmpty) {
-        _videoBox.removeMany(ids);
+        await _videoStore.removeMany(ids);
       }
     } catch (e) {
       Log.e("Error deleting videos from DB; retrying once: $e");
       try {
         if (ids.isNotEmpty) {
-          _videoBox.removeMany(ids);
+          await _videoStore.removeMany(ids);
         }
       } catch (e2) {
         Log.e("DB delete retry failed: $e2");
@@ -469,10 +443,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     }
 
     try {
-      final countQuery =
-          _videoBox.query(Video_.camera.equals(widget.cameraName)).build();
-      final dbCount = countQuery.count();
-      countQuery.close();
+      final dbCount = await _videoStore.countForCamera(widget.cameraName);
 
       final remainingDeletedPaths = <String>[];
       for (final path in deletedPaths) {
@@ -514,11 +485,8 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
 
   Future<void> _logDeleteAllState(Directory videoDir) async {
     try {
-      final countQuery =
-          _videoBox.query(Video_.camera.equals(widget.cameraName)).build();
-      final dbCount = countQuery.count();
-      final remainingVideos = countQuery.find();
-      countQuery.close();
+      final dbCount = await _videoStore.countForCamera(widget.cameraName);
+      final remainingVideos = await _videoStore.listByCamera(widget.cameraName);
 
       final files = <String>[];
       final retainedThumbs = <String>[];
@@ -595,7 +563,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     }
 
     _invalidateVideoThumb(v.camera, v.video);
-    _videoBox.remove(v.id);
+    await _videoStore.removeMany([v.id]);
     setState(() => _videos.removeAt(index));
 
     ScaffoldMessenger.of(context).showSnackBar(

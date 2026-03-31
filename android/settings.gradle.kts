@@ -165,7 +165,11 @@ val flutterSdkPath = run {
 }
 val fdroidBuild = isFdroidBuild()
 val excludedAndroidPlugins =
-    if (fdroidBuild) setOf("firebase_core", "firebase_messaging") else emptySet()
+    if (fdroidBuild) {
+        setOf("firebase_core", "firebase_messaging", "objectbox_flutter_libs")
+    } else {
+        emptySet()
+    }
 val nativePluginLoader = SeclusoNativePluginLoader(excludedAndroidPlugins)
 val flutterProjectDefaults = SeclusoFlutterProjectDefaults()
 extra["flutterSdkPath"] = flutterSdkPath
@@ -186,7 +190,9 @@ gradle.beforeProject(
 include(":app")
 
 if (fdroidBuild) {
-    logger.lifecycle("Configuring special F-Droid Android build without Firebase Android plugins")
+    logger.lifecycle(
+        "Configuring special F-Droid Android build without Firebase or ObjectBox Android plugins"
+    )
 }
 
 nativePluginLoader.getPlugins(settingsDir.parentFile).forEach { androidPlugin ->

@@ -809,11 +809,10 @@ class PushNotificationService {
     String cameraName,
     String timestamp,
   ) async {
-    final box = AppStores.instance.videoStore.box<Video>();
-
     final videoName = 'video_$timestamp.mp4';
-    final existing = box.query().build().find().any(
-      (video) => video.camera == cameraName && video.video == videoName,
+    final existing = await AppStores.instance.videoStore.hasVideo(
+      cameraName,
+      videoName,
     );
 
     if (existing) {
@@ -821,7 +820,7 @@ class PushNotificationService {
     }
 
     var video = Video(cameraName, videoName, false, true);
-    box.put(video);
+    await AppStores.instance.videoStore.put(video);
   }
 
   // TODO: Consider combining this with _tryUploadIfNeeded... although this mainly functions as a callback

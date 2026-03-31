@@ -102,8 +102,7 @@ class _CameraSetupStatusDialogState extends State<CameraSetupStatusDialog> {
       );
     }
 
-    final box = AppStores.instance.cameraStore.box<Camera>();
-    box.put(Camera(cameraName));
+    await AppStores.instance.cameraStore.put(Camera(cameraName));
 
     CameraListNotifier.instance.refreshCallback?.call();
 
