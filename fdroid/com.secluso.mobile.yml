@@ -63,11 +63,21 @@ Builds:
   - versionName: 0.1.0
     versionCode: 2
     commit: 1c038f129adeb424d8d383be5378ee4f512d804e
+    sudo:
+      - apt-get update || apt-get update
+      - apt-get install -y build-essential clang cmake pkg-config
     srclibs:
       - flutter@3.32.2
+      - rustup@1.27.1
     scanignore:
       - assets/design/review_front_door_preview.mp4
     build:
+      - $$rustup$$/rustup-init.sh -y --default-toolchain 1.90.0 --target
+        armv7-linux-androideabi aarch64-linux-android x86_64-linux-android
+      - source $HOME/.cargo/env
+      - export CARGO_HOME="$HOME/.cargo"
+      - export RUSTUP_HOME="$HOME/.rustup"
+      - export PATH="$HOME/.cargo/bin:$PATH"
       - export PUB_CACHE="$PWD/.pub-cache"
       - ./tool/fdroid/build_fdroid_apk.sh "$$flutter$$/bin/flutter"
     output: build/app/outputs/flutter-apk/app-release.apk
