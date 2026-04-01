@@ -21,7 +21,7 @@ Repo: https://github.com/secluso/mobile_app.git
 Builds:
   - versionName: 1.0.0
     versionCode: 41
-    commit: 83eceee33c3e970fd2c35c24d098915f8eb01314
+    commit: 1a350f073ad31370a6c3f286237c580015a5f7f4
     output: build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
     binary: https://github.com/secluso/mobile_app/releases/download/v%v/app-armeabi-v7a-release.apk
     sudo:
@@ -63,7 +63,7 @@ Builds:
       - $$flutter$$/bin/flutter build apk --release --no-pub --split-per-abi --target-platform="android-arm" --dart-define=SECLUSO_FDROID_BUILD=true
   - versionName: 1.0.0
     versionCode: 42
-    commit: 83eceee33c3e970fd2c35c24d098915f8eb01314
+    commit: 1a350f073ad31370a6c3f286237c580015a5f7f4
     output: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
     binary: https://github.com/secluso/mobile_app/releases/download/v%v/app-arm64-v8a-release.apk
     sudo:
@@ -105,7 +105,7 @@ Builds:
       - $$flutter$$/bin/flutter build apk --release --no-pub --split-per-abi --target-platform="android-arm64" --dart-define=SECLUSO_FDROID_BUILD=true
   - versionName: 1.0.0
     versionCode: 43
-    commit: 83eceee33c3e970fd2c35c24d098915f8eb01314
+    commit: 1a350f073ad31370a6c3f286237c580015a5f7f4
     output: build/app/outputs/flutter-apk/app-x86_64-release.apk
     binary: https://github.com/secluso/mobile_app/releases/download/v%v/app-x86_64-release.apk
     sudo:
