@@ -13,6 +13,8 @@ SourceCode: https://github.com/secluso/mobile_app
 IssueTracker: https://github.com/secluso/mobile_app/issues
 Changelog: https://github.com/secluso/mobile_app/releases
 
+AutoName: Secluso
+
 RepoType: git
 Repo: https://github.com/secluso/mobile_app.git
 Binaries: https://github.com/secluso/mobile_app/releases/download/v%v-%c/app-release-signed.apk
@@ -55,5 +57,6 @@ MaintainerNotes: |
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[\d.]+-\d+$
+UpdateCheckData: pubspec.yaml|version:\s.+\+(\d+)|pubspec.yaml|version:\s(.+)\+
 CurrentVersion: 0.1.0
 CurrentVersionCode: 3
