@@ -60,6 +60,10 @@ const bool _launchDesignController = bool.fromEnvironment(
   'SECLUSO_DESIGN_CONTROLLER',
   defaultValue: false,
 );
+const bool _captureMode = bool.fromEnvironment(
+  'SECLUSO_CAPTURE_MODE',
+  defaultValue: false,
+);
 const String _launchDesignTarget = String.fromEnvironment(
   'SECLUSO_DESIGN_TARGET',
   defaultValue: '',
@@ -69,7 +73,7 @@ const String _designCommandFile = String.fromEnvironment(
   defaultValue: '/tmp/secluso_design_command.txt',
 );
 const bool _designPreviewBoot =
-    kDebugMode &&
+    (kDebugMode || _captureMode) &&
     (_launchDesignLab || _launchDesignTarget != '' || _launchDesignController);
 
 void main([List<String> args = const []]) {
@@ -949,7 +953,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 }
               },
               child:
-                  kDebugMode
+                  (kDebugMode || _captureMode)
                       ? (_launchDesignController
                           ? DesignCommandPage(
                             commandFilePath: _designCommandFile,

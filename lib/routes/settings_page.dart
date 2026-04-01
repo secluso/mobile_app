@@ -24,6 +24,11 @@ import 'package:url_launcher/url_launcher.dart';
 
 enum SettingsPreviewScrollPosition { top, bottom, veryBottom }
 
+const bool _captureMode = bool.fromEnvironment(
+  'SECLUSO_CAPTURE_MODE',
+  defaultValue: false,
+);
+
 final Uri _privacyPolicyUri = Uri.parse('https://secluso.com/privacy-policy');
 final Uri _termsOfServiceUri = Uri.parse('https://secluso.com/terms');
 
@@ -437,7 +442,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 offset: const Offset(0, 1),
               ),
             ];
-    final showDevOnlyRows = kDebugMode;
+    final showDevOnlyRows = kDebugMode && !_captureMode;
     final storageManageRowStyle = GoogleFonts.inter(
       color: shell ? shellPrimaryTextColor : theme.colorScheme.onSurface,
       fontSize: shell ? shellMetrics.rowTitleSize : 11.05,

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/routes/app_drawer.dart';
+import 'package:secluso_flutter/routes/activity_page.dart';
 import 'package:secluso_flutter/routes/app_shell.dart';
 import 'package:secluso_flutter/routes/camera/list_cameras.dart';
 import 'package:secluso_flutter/routes/camera/camera_settings.dart'
@@ -24,10 +25,169 @@ import 'package:secluso_flutter/ui/secluso_preview_assets.dart';
 import 'package:secluso_flutter/routes/theme_provider.dart';
 import 'package:secluso_flutter/ui/secluso_surfaces.dart';
 import 'package:secluso_flutter/ui/secluso_theme.dart';
+import 'package:secluso_flutter/utilities/review_environment.dart';
 import 'package:secluso_flutter/utilities/storage_manager.dart';
+
+const _designReviewSession = ReviewEnvironmentSession(
+  relayId: 'app-review-2026',
+  relayLabel: 'Secluso Review Relay',
+  relayAddress: 'https://testing-relay.secluso.com',
+  cameras: [
+    ReviewCameraFixture(
+      id: 'review-front-door-01',
+      name: 'Front Door',
+      profileId: 'front-door',
+      livePreviewAssetPath: SeclusoPreviewAssets.designFrontDoor,
+      livePreviewVideoAssetPath: SeclusoPreviewAssets.reviewFrontDoorClip,
+      statusLabel: 'Person · 2m',
+      recentActivityTitle: 'Person detected',
+      recentActivityTimeLabel: '2m ago',
+      hasUnreadActivity: true,
+      clips: [
+        ReviewClipFixture(
+          videoFile: 'video_1774540440.mp4',
+          previewAssetPath: SeclusoPreviewAssets.hallwayEvent,
+          videoAssetPath: SeclusoPreviewAssets.reviewFrontDoorClip,
+          detections: {'human'},
+          motion: true,
+          duration: Duration(seconds: 16),
+          timeLabel: '2:34 PM',
+          sectionLabel: 'TODAY',
+        ),
+        ReviewClipFixture(
+          videoFile: 'video_1774539600.mp4',
+          previewAssetPath: SeclusoPreviewAssets.foyerEvent,
+          videoAssetPath: SeclusoPreviewAssets.reviewFrontDoorClip,
+          detections: {},
+          motion: true,
+          duration: Duration(seconds: 16),
+          timeLabel: '2:20 PM',
+          sectionLabel: 'TODAY',
+        ),
+        ReviewClipFixture(
+          videoFile: 'video_1774261920.mp4',
+          previewAssetPath: SeclusoPreviewAssets.deliveryNookEvent,
+          videoAssetPath: SeclusoPreviewAssets.reviewFrontDoorClip,
+          detections: {'human'},
+          motion: true,
+          duration: Duration(seconds: 16),
+          timeLabel: 'Mon 9:12 AM',
+          sectionLabel: 'EARLIER THIS WEEK',
+        ),
+      ],
+    ),
+  ],
+);
+
+List<CameraPreviewData> _reviewHomePreviewCameras(
+  ReviewEnvironmentSession session,
+) {
+  return session.cameras
+      .map(
+        (camera) => CameraPreviewData(
+          name: camera.name,
+          unreadMessages: camera.hasUnreadActivity,
+          previewAssetPath: camera.livePreviewAssetPath,
+          statusLabel: camera.statusLabel,
+          recentActivityTitle: camera.recentActivityTitle,
+          recentActivityTimeLabel: camera.recentActivityTimeLabel,
+        ),
+      )
+      .toList(growable: false);
+}
+
+List<HomeRecentEventPreviewData> _reviewRecentEventPreviews(
+  ReviewEnvironmentSession session,
+) {
+  final events = <HomeRecentEventPreviewData>[];
+  for (final camera in session.cameras) {
+    for (final clip in camera.clips) {
+      final hasPerson =
+          clip.detections.contains('human') ||
+          clip.detections.contains('person');
+      events.add(
+        HomeRecentEventPreviewData(
+          title: hasPerson ? 'Person detected' : 'Motion detected',
+          subtitle: camera.name,
+          timeLabel: clip.timeLabel,
+          previewAssetPath: clip.previewAssetPath,
+          previewVideoAssetPath: clip.videoAssetPath,
+          accentColor:
+              hasPerson ? const Color(0xFF8BB3EE) : const Color(0xFF6B7280),
+          videoName: clip.videoFile,
+          detections: clip.detections,
+          motion: clip.motion,
+          canDownload: true,
+          hasVideoFile: true,
+        ),
+      );
+    }
+  }
+  return events.take(3).toList(growable: false);
+}
+
+List<ActivityPreviewItem> _reviewActivityPreviewItems(
+  ReviewEnvironmentSession session,
+) {
+  final items = <ActivityPreviewItem>[];
+  for (final camera in session.cameras) {
+    for (final clip in camera.clips) {
+      items.add(
+        ActivityPreviewItem(
+          cameraName: camera.name,
+          videoName: clip.videoFile,
+          previewAssetPath: clip.previewAssetPath,
+          previewVideoAssetPath: clip.videoAssetPath,
+          detections: clip.detections,
+          motion: clip.motion,
+          durationLabel:
+              '0:${clip.duration.inSeconds.toString().padLeft(2, '0')}',
+          sectionLabel: clip.sectionLabel,
+        ),
+      );
+    }
+  }
+  return items;
+}
+
+CameraViewPage _reviewCameraDetailPreview(ReviewCameraFixture camera) {
+  final previewVideos = <Video>[];
+  final previewDetectionsByVideo = <String, Set<String>>{};
+  final previewThumbAssetsByVideo = <String, String>{};
+  final previewVideoAssetsByVideo = <String, String>{};
+  final previewDurationByVideo = <String, Duration>{};
+
+  for (final clip in camera.clips) {
+    previewVideos.add(Video(camera.name, clip.videoFile, true, clip.motion));
+    previewDetectionsByVideo[clip.videoFile] = clip.detections;
+    previewThumbAssetsByVideo[clip.videoFile] = clip.previewAssetPath;
+    final videoAssetPath = clip.videoAssetPath;
+    if (videoAssetPath != null) {
+      previewVideoAssetsByVideo[clip.videoFile] = videoAssetPath;
+    }
+    previewDurationByVideo[clip.videoFile] = clip.duration;
+  }
+
+  return CameraViewPage(
+    cameraName: camera.name,
+    previewVideos: previewVideos,
+    previewDetectionsByVideo: previewDetectionsByVideo,
+    previewThumbAssetsByVideo: previewThumbAssetsByVideo,
+    previewVideoAssetsByVideo: previewVideoAssetsByVideo,
+    previewDurationByVideo: previewDurationByVideo,
+    previewHeroAssetPath: camera.livePreviewAssetPath,
+    previewHeroVideoAssetPath: camera.livePreviewVideoAssetPath,
+  );
+}
 
 Widget? designLabTargetPage(String target, {String themeName = 'dark'}) {
   final isLight = themeName == 'light';
+  final reviewSession = _designReviewSession;
+  final reviewCamera = reviewSession.cameras.first;
+  final reviewActivityItems = _reviewActivityPreviewItems(reviewSession);
+  final reviewHomeCameras = _reviewHomePreviewCameras(reviewSession);
+  final reviewRecentEvents = _reviewRecentEventPreviews(reviewSession);
+  final reviewClip = reviewCamera.clips.first;
   final previewVideos = <Video>[
     Video('Front Door', '2:34 PM', true, true, id: 1),
     Video('Front Door', '11:02 AM', true, true, id: 2),
@@ -132,6 +292,18 @@ Widget? designLabTargetPage(String target, {String themeName = 'dark'}) {
       );
     case 'control_room':
       return const AppShell(preview: true);
+    case 'review_control_room':
+      return AppShell(
+        preview: true,
+        previewHomeHasSynced: true,
+        previewHomeUnreadCount:
+            reviewHomeCameras.where((camera) => camera.unreadMessages).length,
+        previewHomeCameras: reviewHomeCameras,
+        previewHomeRecentEvents: reviewRecentEvents,
+        previewActivityItems: reviewActivityItems,
+        previewSystemHasSynced: true,
+        previewSystemCameraNames: reviewSession.cameraNames,
+      );
     case 'home_shell_two_cameras':
       return const AppShell(
         preview: true,
@@ -282,6 +454,19 @@ Widget? designLabTargetPage(String target, {String themeName = 'dark'}) {
       );
     case 'activity_overview':
       return const AppShell(initialIndex: 1, preview: true);
+    case 'review_activity_overview':
+      return AppShell(
+        initialIndex: 1,
+        preview: true,
+        previewHomeHasSynced: true,
+        previewHomeUnreadCount:
+            reviewHomeCameras.where((camera) => camera.unreadMessages).length,
+        previewHomeCameras: reviewHomeCameras,
+        previewHomeRecentEvents: reviewRecentEvents,
+        previewActivityItems: reviewActivityItems,
+        previewSystemHasSynced: true,
+        previewSystemCameraNames: reviewSession.cameraNames,
+      );
     case 'activity_empty':
       return const AppShell(
         initialIndex: 1,
@@ -290,6 +475,14 @@ Widget? designLabTargetPage(String target, {String themeName = 'dark'}) {
       );
     case 'system_overview':
       return const AppShell(initialIndex: 2, preview: true);
+    case 'review_system_linked':
+      return ServerPage(
+        showBackButton: false,
+        showShellChrome: true,
+        previewHasSynced: true,
+        previewServerAddr: reviewSession.relayAddress,
+        previewCameraNames: reviewSession.cameraNames,
+      );
     case 'system_unpaired':
       return const AppShell(
         initialIndex: 2,
@@ -298,6 +491,19 @@ Widget? designLabTargetPage(String target, {String themeName = 'dark'}) {
       );
     case 'settings_overview':
       return const AppShell(initialIndex: 3, preview: true);
+    case 'review_settings_overview':
+      return AppShell(
+        initialIndex: 3,
+        preview: true,
+        previewHomeHasSynced: true,
+        previewHomeUnreadCount:
+            reviewHomeCameras.where((camera) => camera.unreadMessages).length,
+        previewHomeCameras: reviewHomeCameras,
+        previewHomeRecentEvents: reviewRecentEvents,
+        previewActivityItems: reviewActivityItems,
+        previewSystemHasSynced: true,
+        previewSystemCameraNames: reviewSession.cameraNames,
+      );
     case 'cameras_ready':
       return const CamerasPage(previewServerHasSynced: true);
     case 'cameras_populated':
@@ -346,6 +552,8 @@ Widget? designLabTargetPage(String target, {String themeName = 'dark'}) {
             isLight ? const <String, Duration>{} : previewDurations,
         previewHeroAssetPath: SeclusoPreviewAssets.designFrontDoor,
       );
+    case 'review_camera_detail':
+      return _reviewCameraDetailPreview(reviewCamera);
     case 'camera_detail_empty_dark':
       return const CameraViewPage(
         cameraName: 'Front Door',
@@ -367,10 +575,29 @@ Widget? designLabTargetPage(String target, {String themeName = 'dark'}) {
         previewDuration: Duration(seconds: 12),
         previewPosition: Duration(seconds: 4),
       );
+    case 'review_clip_viewer':
+      return VideoViewPage(
+        cameraName: reviewCamera.name,
+        videoTitle: reviewClip.videoFile,
+        visibleVideoTitle: 'Today · ${reviewClip.timeLabel}',
+        canDownload: true,
+        isLivestream: false,
+        previewAssetPath: reviewClip.previewAssetPath,
+        previewVideoAssetPath: reviewClip.videoAssetPath,
+        previewDetections: reviewClip.detections,
+        previewDuration: reviewClip.duration,
+        previewPosition: const Duration(seconds: 4),
+      );
     case 'livestream_viewer':
       return const LivestreamPage(
         cameraName: 'Front Door',
         previewAssetPath: SeclusoPreviewAssets.designFrontDoor,
+      );
+    case 'review_livestream_viewer':
+      return LivestreamPage(
+        cameraName: reviewCamera.name,
+        previewAssetPath: reviewCamera.livePreviewAssetPath,
+        previewVideoAssetPath: reviewCamera.livePreviewVideoAssetPath,
       );
     case 'livestream_error':
       return const LivestreamPage(
@@ -464,6 +691,8 @@ Widget? designLabTargetPage(String target, {String themeName = 'dark'}) {
       );
     case 'dialog_secluso_paired':
       return const ProprietaryCameraPairedPage(cameraName: 'Front Door');
+    case 'review_camera_paired':
+      return ProprietaryCameraPairedPage(cameraName: reviewCamera.name);
     case 'dialog_ip_import':
       return const IpCameraDialog();
     case 'dialog_qr_scan':
