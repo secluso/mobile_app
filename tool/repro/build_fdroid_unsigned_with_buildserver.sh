@@ -9,7 +9,7 @@ METADATA_SOURCE="${SECLUSO_FDROID_METADATA_SOURCE:-$REPO_ROOT/fdroid/$APP_ID.yml
 FDROIDSERVER_DIR="${SECLUSO_FDROIDSERVER_DIR:-$REPO_ROOT/.secluso-repro-cache/fdroidserver}"
 FDROIDSERVER_REF="${SECLUSO_FDROIDSERVER_REF:-master}"
 FDROIDSERVER_REPO_URL="${SECLUSO_FDROIDSERVER_REPO_URL:-https://gitlab.com/fdroid/fdroidserver.git}"
-FDROID_IMAGE="${SECLUSO_FDROID_BUILDSERVER_IMAGE:-registry.gitlab.com/fdroid/fdroidserver:buildserver}"
+FDROID_IMAGE="${SECLUSO_FDROID_BUILDSERVER_IMAGE:-registry.gitlab.com/fdroid/fdroidserver:buildserver-trixie}"
 DOCKER_PLATFORM="${SECLUSO_DOCKER_PLATFORM:-linux/amd64}"
 KEEP_WORK_ROOT="${KEEP_WORK_ROOT:-0}"
 REQUIRE_VERIFY="${SECLUSO_FDROID_REQUIRE_VERIFY:-0}"
@@ -122,20 +122,38 @@ GIT_COMMITTER_DATE="@$METADATA_EPOCH" \
   git -C "$WORK_ROOT" commit -q -m "Seed F-Droid repro workspace"
 
 read -r -d '' CONTAINER_COMMAND <<EOF || true
+set -euo pipefail
+
 . /etc/profile
-export PATH="\$fdroidserver:\$PATH" PYTHONPATH="\$fdroidserver"
-cd /build
-fdroid readmeta
-fdroid rewritemeta $APP_ID
-fdroid lint $APP_ID
-python3 /home/vagrant/fdroidserver/examples/fdroid_fetchsrclibs.py $APP_ID
-fdroid build --verbose --test --refresh-scanner --on-server --no-tarball $APP_ID
+
+apt-get update
+DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y
+# Match the mutable Android toolchain prep from fdroiddata GitLab CI.
+sdkmanager "platform-tools" "build-tools;31.0.0"
+DEBIAN_FRONTEND=noninteractive apt-get install -y sudo openjdk-21-jdk-headless
+update-alternatives --set java /usr/lib/jvm/java-21-openjdk-amd64/bin/java
+
+chown -R vagrant:vagrant /build
+
+sudo --preserve-env --user vagrant \
+  env PATH="/home/vagrant/fdroidserver:\$PATH" \
+  env PYTHONPATH="/home/vagrant/fdroidserver" \
+  env PYTHONUNBUFFERED=true \
+  env HOME=/home/vagrant \
+  bash -lc '
+    set -euo pipefail
+    cd /build
+    fdroid readmeta
+    fdroid rewritemeta $APP_ID
+    fdroid lint $APP_ID
+    python3 /home/vagrant/fdroidserver/examples/fdroid_fetchsrclibs.py $APP_ID
+    fdroid build --verbose --test --refresh-scanner --on-server --no-tarball $APP_ID
+  '
 EOF
 
 set +e
 docker run --rm \
   --platform "$DOCKER_PLATFORM" \
-  --user vagrant \
   --entrypoint /bin/bash \
   -v "$WORK_ROOT":/build \
   -v "$FDROIDSERVER_DIR":/home/vagrant/fdroidserver:ro \
