@@ -36,6 +36,7 @@ if [[ -z "$VERSION_CODE" ]]; then
   echo "Could not determine versionCode from $METADATA_SOURCE" >&2
   exit 1
 fi
+BUILD_SPEC="${APP_ID}:${VERSION_CODE}"
 
 metadata_source_epoch() {
   local epoch
@@ -54,16 +55,19 @@ metadata_source_epoch() {
 }
 
 bootstrap_fdroidserver() {
-  if [[ -x "$FDROIDSERVER_DIR/fdroid" ]]; then
-    return 0
-  fi
-
   if ! command -v git >/dev/null 2>&1; then
     echo "git is required to bootstrap fdroidserver" >&2
     exit 1
   fi
 
   mkdir -p "$(dirname "$FDROIDSERVER_DIR")"
+  if [[ -d "$FDROIDSERVER_DIR/.git" ]]; then
+    git -C "$FDROIDSERVER_DIR" fetch --depth=1 origin "$FDROIDSERVER_REF"
+    git -C "$FDROIDSERVER_DIR" reset --hard FETCH_HEAD
+    git -C "$FDROIDSERVER_DIR" clean -dffx
+    return 0
+  fi
+
   rm -rf "$FDROIDSERVER_DIR"
   git clone --depth=1 --branch "$FDROIDSERVER_REF" "$FDROIDSERVER_REPO_URL" "$FDROIDSERVER_DIR"
 }
@@ -133,7 +137,12 @@ sdkmanager "platform-tools" "build-tools;31.0.0"
 DEBIAN_FRONTEND=noninteractive apt-get install -y sudo openjdk-21-jdk-headless
 update-alternatives --set java /usr/lib/jvm/java-21-openjdk-amd64/bin/java
 
-chown -R vagrant:vagrant /build
+chown vagrant:vagrant /home/vagrant
+find /home/vagrant -mindepth 1 -maxdepth 1 ! -name fdroidserver -exec chown -R vagrant:vagrant {} +
+
+if [[ -d /home/vagrant/gradlew-fdroid/.git ]]; then
+  git -C /home/vagrant/gradlew-fdroid pull
+fi
 
 sudo --preserve-env --user vagrant \
   env PYTHONUNBUFFERED=true \
@@ -142,13 +151,13 @@ sudo --preserve-env --user vagrant \
     set -euo pipefail
     . /etc/profile
     export PATH="/home/vagrant/fdroidserver:$PATH"
-    export PYTHONPATH="/home/vagrant/fdroidserver"
-    cd /build
+    export PYTHONPATH="/home/vagrant/fdroidserver:/home/vagrant/fdroidserver/examples"
+    cd /home/vagrant
     fdroid readmeta
     fdroid rewritemeta $APP_ID
     fdroid lint $APP_ID
-    python3 /home/vagrant/fdroidserver/examples/fdroid_fetchsrclibs.py $APP_ID
-    fdroid build --verbose --test --refresh-scanner --on-server --no-tarball $APP_ID
+    fdroid fetchsrclibs --verbose $BUILD_SPEC
+    fdroid build --verbose --test --refresh-scanner --on-server --no-tarball $BUILD_SPEC
   '
 EOF
 
@@ -156,7 +165,7 @@ set +e
 docker run --rm \
   --platform "$DOCKER_PLATFORM" \
   --entrypoint /bin/bash \
-  -v "$WORK_ROOT":/build \
+  -v "$WORK_ROOT":/home/vagrant \
   -v "$FDROIDSERVER_DIR":/home/vagrant/fdroidserver:ro \
   "$FDROID_IMAGE" \
   -lc "$CONTAINER_COMMAND" 2>&1 | tee "$LOG_FILE"
