@@ -89,6 +89,18 @@ class CargoKitPlugin implements Plugin<Project> {
     static String file;
 
     private static List<String> flutterTargetPlatforms(String buildType) {
+        def requestedPlatform = System.getenv("SECLUSO_ANDROID_TARGET_PLATFORM")
+        if (requestedPlatform != null && !requestedPlatform.trim().isEmpty()) {
+            def normalizedPlatform = requestedPlatform.trim()
+            def supportedPlatforms = ["android-arm", "android-arm64", "android-x64"]
+            if (buildType == "debug") {
+                supportedPlatforms = supportedPlatforms + ["android-x86"]
+            }
+            if (!supportedPlatforms.contains(normalizedPlatform)) {
+                throw new GradleException("Unsupported SECLUSO_ANDROID_TARGET_PLATFORM '${normalizedPlatform}' for ${buildType} build")
+            }
+            return [normalizedPlatform]
+        }
         def platforms = ["android-arm", "android-arm64"]
         if (buildType == "debug") {
             platforms.add("android-x86")
