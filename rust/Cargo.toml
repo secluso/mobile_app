@@ -1,6 +1,6 @@
 [package]
 name = "rust_lib_secluso_flutter"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 
 [lib]
@@ -21,7 +21,7 @@ tracing-log = "0.2.0"
 
 [dependencies.secluso-app-native]
 git = "https://github.com/secluso/secluso"
-rev = "4c71dc5"
+rev = "b8c37bf16f761e10d188f12972ef2d328fc27ba8"
 package = "secluso-app-native"
 
 [lints.rust]

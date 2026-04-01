@@ -551,10 +551,49 @@ class SplashScreen extends StatelessWidget {
   }
 }
 
-class VersionBlockScreen extends StatelessWidget {
+class VersionBlockScreen extends StatefulWidget {
   const VersionBlockScreen({super.key, required this.info});
 
   final VersionGateInfo info;
+
+  @override
+  State<VersionBlockScreen> createState() => _VersionBlockScreenState();
+}
+
+class _VersionBlockScreenState extends State<VersionBlockScreen> {
+  late Future<List<String>> _cameraNamesFuture;
+  bool _isProcessing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _cameraNamesFuture = _cameraNamesFromStore();
+  }
+
+  Future<void> _runPrimaryAction(List<String> cameraNames) async {
+    if (_isProcessing) {
+      return;
+    }
+
+    setState(() {
+      _isProcessing = true;
+    });
+
+    try {
+      if (cameraNames.isNotEmpty) {
+        await _removeAllCamerasAndChangeServer(cameraNames: cameraNames);
+      } else {
+        await _openServerChangeFlow();
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+          _cameraNamesFuture = _cameraNamesFromStore();
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -568,67 +607,97 @@ class VersionBlockScreen extends StatelessWidget {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
               child: SeclusoGlassCard(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SeclusoStatusChip(
-                      label: 'Version check required',
-                      color: SeclusoColors.warning,
-                    ),
-                    const SizedBox(height: 20),
-                    Image.asset(
-                      'assets/icon_centered.png',
-                      width: 68,
-                      height: 68,
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      info.title,
-                      style: theme.textTheme.headlineSmall,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      info.message,
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 22),
-                    SeclusoGlassCard(
-                      borderRadius: 22,
-                      padding: const EdgeInsets.all(14),
-                      tint: theme.colorScheme.surface.withValues(alpha: 0.46),
-                      child: Column(
-                        children: [
-                          _VersionRow(
-                            label: 'Server version',
-                            value: info.serverVersion,
+                child: FutureBuilder<List<String>>(
+                  future: _cameraNamesFuture,
+                  builder: (context, snapshot) {
+                    final cameraNames = snapshot.data ?? const <String>[];
+                    final hasAttachedCameras = cameraNames.isNotEmpty;
+                    final primaryLabel =
+                        hasAttachedCameras
+                            ? cameraNames.length == 1
+                                ? 'Remove camera and change server'
+                                : 'Remove cameras and change server'
+                            : 'Change server';
+
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SeclusoStatusChip(
+                          label: 'Version check required',
+                          color: SeclusoColors.warning,
+                        ),
+                        const SizedBox(height: 20),
+                        Image.asset(
+                          'assets/icon_centered.png',
+                          width: 68,
+                          height: 68,
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          widget.info.title,
+                          style: theme.textTheme.headlineSmall,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          widget.info.message,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                        const SizedBox(height: 22),
+                        SeclusoGlassCard(
+                          borderRadius: 22,
+                          padding: const EdgeInsets.all(14),
+                          tint: theme.colorScheme.surface.withValues(
+                            alpha: 0.46,
                           ),
-                          const SizedBox(height: 10),
-                          _VersionRow(
-                            label: 'App version',
-                            value: info.clientVersion,
+                          child: Column(
+                            children: [
+                              _VersionRow(
+                                label: 'Server version',
+                                value: widget.info.serverVersion,
+                              ),
+                              const SizedBox(height: 10),
+                              _VersionRow(
+                                label: 'App version',
+                                value: widget.info.clientVersion,
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      'Update or install a compatible build to continue.',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 18),
-                    FilledButton(
-                      onPressed: _handleChangeServer,
-                      child: const Text('Change server'),
-                    ),
-                    const SizedBox(height: 10),
-                    OutlinedButton(
-                      onPressed: _checkServerVersion,
-                      child: const Text('Retry version check'),
-                    ),
-                  ],
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          hasAttachedCameras
+                              ? 'A paired camera is still attached to this relay. Remove it here, then the app will take you to relay setup.'
+                              : 'Update or install a compatible build to continue.',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 18),
+                        FilledButton(
+                          onPressed:
+                              _isProcessing
+                                  ? null
+                                  : () => _runPrimaryAction(cameraNames),
+                          child:
+                              _isProcessing
+                                  ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                  : Text(primaryLabel),
+                        ),
+                        const SizedBox(height: 10),
+                        OutlinedButton(
+                          onPressed: _isProcessing ? null : _checkServerVersion,
+                          child: const Text('Retry version check'),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
@@ -677,63 +746,48 @@ Future<void> _initAllCameras({List<String>? cameraNames}) async {
   }
 }
 
-Future<void> _handleChangeServer() async {
-  final cameraNames = await _cameraNamesFromStore();
-  if (cameraNames.isNotEmpty) {
-    if (navigatorKey.currentContext == null) {
-      return;
-    }
-    await showDialog<void>(
-      context: navigatorKey.currentContext!,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: const Text('Remove all cameras first'),
-            content: const Text(
-              'To change the relay while this version mismatch is active, you must first remove all attached cameras.\n\nUse the button below to remove them.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () async {
-                  Navigator.of(dialogContext).pop();
-                  for (final cameraName in cameraNames) {
-                    await CameraUiBridge.deleteCamera(cameraName);
-                  }
-                  CameraUiBridge.refreshCameraListCallback?.call();
-                  ScaffoldMessenger.maybeOf(
-                    navigatorKey.currentState?.context ??
-                        navigatorKey.currentContext!,
-                  )?.showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'All cameras removed. Tap Change server again to continue.',
-                      ),
-                    ),
-                  );
-                },
-                child: const Text('Remove All Cameras'),
-              ),
-            ],
-          ),
-    );
+Future<void> _openServerChangeFlow() async {
+  final prefs = await SharedPreferences.getInstance();
+  await _clearStoredRelayConnection(prefs);
+  if (CameraUiBridge.switchShellTabCallback != null) {
+    CameraUiBridge.switchShellTabCallback!(2, openRelayScanOnLoad: true);
     return;
   }
-
-  final prefs = await SharedPreferences.getInstance();
-  await _invalidateServerCredentials(prefs);
-  HttpClientService.instance.resetVersionGateState();
-  VersionGate.clear();
-  _cancelVersionCheckRetry();
   final nav = navigatorKey.currentState;
   if (nav == null) {
     return;
   }
-  await nav.push(
-    MaterialPageRoute(builder: (context) => const AppShell(initialIndex: 2)),
+  await nav.pushAndRemoveUntil(
+    MaterialPageRoute(
+      builder:
+          (context) =>
+              const AppShell(initialIndex: 2, openRelayScanOnLoad: true),
+    ),
+    (_) => false,
   );
+}
+
+Future<void> _removeAllCamerasAndChangeServer({
+  List<String>? cameraNames,
+}) async {
+  final attachedCameraNames = cameraNames ?? await _cameraNamesFromStore();
+  if (attachedCameraNames.isNotEmpty) {
+    for (final cameraName in attachedCameraNames) {
+      await CameraUiBridge.deleteCamera(cameraName);
+    }
+    CameraUiBridge.refreshCameraListCallback?.call();
+    ScaffoldMessenger.maybeOf(
+      navigatorKey.currentState?.context ?? navigatorKey.currentContext!,
+    )?.showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Attached cameras removed. Choose a new relay to continue.',
+        ),
+      ),
+    );
+  }
+
+  await _openServerChangeFlow();
 }
 
 Future<void> _checkServerVersion() async {
@@ -813,6 +867,29 @@ Future<void> _invalidateServerCredentials(SharedPreferences prefs) async {
   await prefs.remove(PrefKeys.serverUsername);
   await prefs.remove(PrefKeys.serverPassword);
   await prefs.remove(PrefKeys.fcmConfigJson);
+}
+
+Future<void> _clearStoredRelayConnection(SharedPreferences prefs) async {
+  final androidPushPlatform = AndroidPushTransport.fromPrefs(prefs);
+  await _invalidateServerCredentials(prefs);
+  await prefs.remove(PrefKeys.relayConnectionKind);
+  await prefs.remove(PrefKeys.needUpdateFcmToken);
+  await prefs.remove(PrefKeys.needUpdateIosRelayBinding);
+  await prefs.remove(PrefKeys.needUploadIosNotificationTarget);
+  await prefs.remove(PrefKeys.iosApnsToken);
+  await prefs.remove(PrefKeys.iosRelayHubToken);
+  await prefs.remove(PrefKeys.iosRelayHubTokenExpiryMs);
+  await prefs.remove(PrefKeys.iosRelayBindingJson);
+  await prefs.remove(PrefKeys.unifiedPushEndpointUrl);
+  await prefs.remove(PrefKeys.unifiedPushPubKey);
+  await prefs.remove(PrefKeys.unifiedPushAuth);
+  HttpClientService.instance.resetVersionGateState();
+  VersionGate.clear();
+  _cancelVersionCheckRetry();
+  if (Platform.isAndroid &&
+      AndroidPushTransport.isUnifiedValue(androidPushPlatform)) {
+    await UnifiedPushService.instance.deactivate();
+  }
 }
 
 /// Query server for cameras that have video updates and proceed to queue them for download

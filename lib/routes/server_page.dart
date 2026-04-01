@@ -163,7 +163,11 @@ class _ServerPageState extends State<ServerPage> {
     }
     if (oldWidget.relayScanRequestId != widget.relayScanRequestId ||
         (!oldWidget.openRelayScanOnLoad && widget.openRelayScanOnLoad)) {
-      _maybeAutoOpenRelayScan();
+      if (_isPreviewMode) {
+        _maybeAutoOpenRelayScan();
+      } else {
+        unawaited(_loadServerSettings());
+      }
     }
   }
 
