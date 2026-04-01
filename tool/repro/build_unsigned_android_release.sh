@@ -43,10 +43,12 @@ export RUSTUP_HOME="${RUSTUP_HOME:-/opt/rustup}"
 export CARGOKIT_RUST_TOOLCHAIN="${CARGOKIT_RUST_TOOLCHAIN:-1.90.0}"
 export SECLUSO_FLUTTER_VERBOSE="${SECLUSO_FLUTTER_VERBOSE:-0}"
 export SECLUSO_ANDROID_TARGET_PLATFORM="${SECLUSO_ANDROID_TARGET_PLATFORM:-android-arm64}"
+export SECLUSO_ANDROID_SPLIT_PER_ABI="${SECLUSO_ANDROID_SPLIT_PER_ABI:-0}"
 export SECLUSO_FDROID_BUILD="${SECLUSO_FDROID_BUILD:-0}"
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$SECLUSO_REPRO_MAX_WORKERS}"
 export CARGO_INCREMENTAL=0
 export SECLUSO_REPRO_CLEAN="${SECLUSO_REPRO_CLEAN:-0}"
+export SECLUSO_REPRO_OUTPUT_APK="${SECLUSO_REPRO_OUTPUT_APK:-}"
 export PATH="$FLUTTER_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$CARGO_HOME/bin:$PATH"
 
 if [[ -z "${SOURCE_DATE_EPOCH:-}" ]]; then
@@ -62,6 +64,24 @@ mkdir -p "$ANDROID_HOME" "$CARGO_HOME" "$GRADLE_USER_HOME" "$PUB_CACHE" "$RUSTUP
 
 log_step() {
   printf '\n==> %s\n' "$1"
+}
+
+abi_name_for_target_platform() {
+  case "$1" in
+    android-arm)
+      printf '%s\n' "armeabi-v7a"
+      ;;
+    android-arm64)
+      printf '%s\n' "arm64-v8a"
+      ;;
+    android-x64)
+      printf '%s\n' "x86_64"
+      ;;
+    *)
+      echo "Unsupported Android target platform for split-per-ABI: $1" >&2
+      return 1
+      ;;
+  esac
 }
 
 run_flutter_build() {
@@ -121,6 +141,9 @@ flutter_build_args=(
   --no-pub
   --target-platform="$SECLUSO_ANDROID_TARGET_PLATFORM"
 )
+if [[ "$SECLUSO_ANDROID_SPLIT_PER_ABI" == "1" ]]; then
+  flutter_build_args+=(--split-per-abi)
+fi
 if [[ "$SECLUSO_FDROID_BUILD" == "1" ]]; then
   flutter_build_args+=(--dart-define=SECLUSO_FDROID_BUILD=true)
 fi
@@ -133,14 +156,20 @@ fi
 
 OUTPUT_DIR="$REPO_ROOT/build/reproducible"
 mkdir -p "$OUTPUT_DIR"
+BUILT_APK_PATH="$REPO_ROOT/build/app/outputs/flutter-apk/app-release.apk"
+OUTPUT_APK_NAME="app-release-unsigned.apk"
+if [[ "$SECLUSO_ANDROID_SPLIT_PER_ABI" == "1" ]]; then
+  TARGET_ABI="$(abi_name_for_target_platform "$SECLUSO_ANDROID_TARGET_PLATFORM")"
+  BUILT_APK_PATH="$REPO_ROOT/build/app/outputs/flutter-apk/app-$TARGET_ABI-release.apk"
+  OUTPUT_APK_NAME="app-$TARGET_ABI-release-unsigned.apk"
+fi
+OUTPUT_APK_PATH="${SECLUSO_REPRO_OUTPUT_APK:-$OUTPUT_DIR/$OUTPUT_APK_NAME}"
+mkdir -p "$(dirname "$OUTPUT_APK_PATH")"
 log_step "Collecting reproducible build artifact"
-cp "$REPO_ROOT/build/app/outputs/flutter-apk/app-release.apk" \
-  "$OUTPUT_DIR/app-release-unsigned.apk"
+cp "$BUILT_APK_PATH" "$OUTPUT_APK_PATH"
 
 if command -v sha256sum >/dev/null 2>&1; then
-  sha256sum "$OUTPUT_DIR/app-release-unsigned.apk" \
-    | tee "$OUTPUT_DIR/app-release-unsigned.apk.sha256"
+  sha256sum "$OUTPUT_APK_PATH" | tee "$OUTPUT_APK_PATH.sha256"
 else
-  shasum -a 256 "$OUTPUT_DIR/app-release-unsigned.apk" \
-    | tee "$OUTPUT_DIR/app-release-unsigned.apk.sha256"
+  shasum -a 256 "$OUTPUT_APK_PATH" | tee "$OUTPUT_APK_PATH.sha256"
 fi

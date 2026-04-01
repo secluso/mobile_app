@@ -15,9 +15,6 @@ KEEP_WORK_ROOT="${KEEP_WORK_ROOT:-0}"
 REQUIRE_VERIFY="${SECLUSO_FDROID_REQUIRE_VERIFY:-0}"
 SRCLIBS_SOURCE_DIR="${SECLUSO_FDROID_SRCLIBS_DIR:-$REPO_ROOT/../fdroiddata/srclibs}"
 OUTPUT_DIR="${SECLUSO_FDROID_OUTPUT_DIR:-$REPO_ROOT/build/reproducible/fdroid}"
-OUTPUT_APK="${SECLUSO_FDROID_OUTPUT_APK:-$OUTPUT_DIR/app-release-unsigned.apk}"
-REFERENCE_APK="${SECLUSO_FDROID_REFERENCE_APK:-$OUTPUT_DIR/reference-release-signed.apk}"
-LOG_FILE="${SECLUSO_FDROID_OUTPUT_LOG:-$OUTPUT_DIR/fdroid-build.log}"
 WORK_ROOT="${SECLUSO_FDROID_BUILD_WORKDIR:-$(mktemp -d "${TMPDIR:-/tmp}/secluso-fdroid-build.XXXXXX")}"
 METADATA_SOURCE_REL="${METADATA_SOURCE#$REPO_ROOT/}"
 
@@ -31,11 +28,50 @@ if [[ ! -f "$METADATA_SOURCE" ]]; then
   exit 1
 fi
 
-VERSION_CODE="$(sed -n -E 's/^    versionCode: ([0-9]+)$/\1/p' "$METADATA_SOURCE" | head -n 1)"
+metadata_version_codes() {
+  sed -n -E 's/^    versionCode: ([0-9]+)$/\1/p' "$METADATA_SOURCE"
+}
+
+abi_name_from_version_code() {
+  case "${1: -1}" in
+    1)
+      printf '%s\n' "armeabi-v7a"
+      ;;
+    2)
+      printf '%s\n' "arm64-v8a"
+      ;;
+    3)
+      printf '%s\n' "x86_64"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+DEFAULT_VERSION_CODE="$(metadata_version_codes | head -n 1)"
+VERSION_CODE="${SECLUSO_FDROID_VERSION_CODE:-$DEFAULT_VERSION_CODE}"
 if [[ -z "$VERSION_CODE" ]]; then
   echo "Could not determine versionCode from $METADATA_SOURCE" >&2
   exit 1
 fi
+if ! metadata_version_codes | grep -qx "$VERSION_CODE"; then
+  echo "versionCode $VERSION_CODE is not present in $METADATA_SOURCE" >&2
+  exit 1
+fi
+ABI_NAME="$(abi_name_from_version_code "$VERSION_CODE" || true)"
+if [[ -n "$ABI_NAME" ]]; then
+  DEFAULT_OUTPUT_APK="$OUTPUT_DIR/app-$ABI_NAME-release-unsigned.apk"
+  DEFAULT_REFERENCE_APK="$OUTPUT_DIR/reference-$ABI_NAME-release-signed.apk"
+  DEFAULT_LOG_FILE="$OUTPUT_DIR/fdroid-build-$ABI_NAME.log"
+else
+  DEFAULT_OUTPUT_APK="$OUTPUT_DIR/app-release-unsigned.apk"
+  DEFAULT_REFERENCE_APK="$OUTPUT_DIR/reference-release-signed.apk"
+  DEFAULT_LOG_FILE="$OUTPUT_DIR/fdroid-build.log"
+fi
+OUTPUT_APK="${SECLUSO_FDROID_OUTPUT_APK:-$DEFAULT_OUTPUT_APK}"
+REFERENCE_APK="${SECLUSO_FDROID_REFERENCE_APK:-$DEFAULT_REFERENCE_APK}"
+LOG_FILE="${SECLUSO_FDROID_OUTPUT_LOG:-$DEFAULT_LOG_FILE}"
 BUILD_SPEC="${APP_ID}:${VERSION_CODE}"
 
 metadata_source_epoch() {
