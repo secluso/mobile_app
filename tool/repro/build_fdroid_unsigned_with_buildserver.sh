@@ -136,12 +136,13 @@ update-alternatives --set java /usr/lib/jvm/java-21-openjdk-amd64/bin/java
 chown -R vagrant:vagrant /build
 
 sudo --preserve-env --user vagrant \
-  env PATH="/home/vagrant/fdroidserver:\$PATH" \
-  env PYTHONPATH="/home/vagrant/fdroidserver" \
   env PYTHONUNBUFFERED=true \
   env HOME=/home/vagrant \
-  bash -lc '
+  bash -c '
     set -euo pipefail
+    . /etc/profile
+    export PATH="/home/vagrant/fdroidserver:$PATH"
+    export PYTHONPATH="/home/vagrant/fdroidserver"
     cd /build
     fdroid readmeta
     fdroid rewritemeta $APP_ID
