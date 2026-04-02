@@ -22,6 +22,7 @@ import 'home_page.dart';
 import 'package:secluso_flutter/utilities/firebase_init.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/routes/system_shell_page.dart';
+import 'package:secluso_flutter/ui/secluso_qr_reader.dart';
 import 'package:secluso_flutter/ui/secluso_surfaces.dart';
 import 'package:secluso_flutter/ui/secluso_shell_ui.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
@@ -1657,15 +1658,11 @@ class _RelayQrScanPageState extends State<_RelayQrScanPage>
               : Stack(
                 fit: StackFit.expand,
                 children: [
-                  ReaderWidget(
+                  SeclusoQrReader(
                     onScan: _handleDetection,
                     codeFormat: Format.qrCode,
                     cropPercent: 1.0,
                     tryHarder: true,
-                    showFlashlight: false,
-                    showToggleCamera: false,
-                    showGallery: false,
-                    showScannerOverlay: false,
                     loading: const ColoredBox(color: Color(0xFF050505)),
                   ),
                   if (_handlingScan)

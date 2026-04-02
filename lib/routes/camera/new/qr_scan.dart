@@ -13,6 +13,7 @@ import 'package:secluso_flutter/utilities/review_environment.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'dart:convert';
 import 'package:secluso_flutter/ui/google_fonts.dart';
+import 'package:secluso_flutter/ui/secluso_qr_reader.dart';
 import 'package:secluso_flutter/ui/secluso_surfaces.dart';
 import 'package:secluso_flutter/ui/secluso_theme.dart';
 
@@ -339,9 +340,11 @@ class GenericCameraQrScanPage extends StatefulWidget {
   const GenericCameraQrScanPage({super.key});
 
   static Future<Map<String, Object>?> show(BuildContext context) {
-    return Navigator.of(context).push<Map<String, Object>?>(
+    return Navigator.of(
+      context,
+      rootNavigator: true,
+    ).push<Map<String, Object>?>(
       MaterialPageRoute<Map<String, Object>?>(
-        fullscreenDialog: true,
         builder: (_) => const GenericCameraQrScanPage(),
       ),
     );
@@ -357,6 +360,7 @@ class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage>
   PermissionStatus? _cameraPermissionStatus;
   bool _handlingScan = false;
   String? _indicatorMessage;
+  String? _scannerErrorMessage;
   Timer? _indicatorTimer;
 
   @override
@@ -391,6 +395,16 @@ class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage>
     if (!mounted) return;
     setState(() {
       _cameraPermissionStatus = status;
+    });
+  }
+
+  void _handleScannerControllerCreated(
+    CameraController? controller,
+    Exception? error,
+  ) {
+    if (!mounted) return;
+    setState(() {
+      _scannerErrorMessage = error?.toString();
     });
   }
 
@@ -598,15 +612,12 @@ class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage>
               : Stack(
                 fit: StackFit.expand,
                 children: [
-                  ReaderWidget(
+                  SeclusoQrReader(
                     onScan: _handleDetectedBarcode,
+                    onControllerCreated: _handleScannerControllerCreated,
                     codeFormat: Format.qrCode,
                     cropPercent: 1.0,
                     tryHarder: true,
-                    showFlashlight: false,
-                    showToggleCamera: false,
-                    showGallery: false,
-                    showScannerOverlay: false,
                     loading: const ColoredBox(color: Color(0xFF050505)),
                   ),
                   if (_handlingScan)
@@ -620,7 +631,7 @@ class _GenericCameraQrScanPageState extends State<GenericCameraQrScanPage>
           _cameraPermissionStatus == null
               ? 'Checking camera access…'
               : _indicatorMessage,
-      errorMessage: _cameraPermissionMessage(),
+      errorMessage: _scannerErrorMessage ?? _cameraPermissionMessage(),
       actionArea: _cameraPermissionActions(context),
     );
   }
@@ -1108,15 +1119,11 @@ class _QrScanDialogState extends State<QrScanDialog>
                                   )
                                   : !hasCameraPermission
                                   ? _cameraPermissionPlaceholder(theme)
-                                  : ReaderWidget(
+                                  : SeclusoQrReader(
                                     onScan: _onDetectBarcode,
                                     codeFormat: Format.qrCode,
                                     cropPercent: 1.0,
                                     tryHarder: true,
-                                    showFlashlight: false,
-                                    showToggleCamera: false,
-                                    showGallery: false,
-                                    showScannerOverlay: false,
                                     loading: const ColoredBox(
                                       color: Color(0xFF050505),
                                     ),
