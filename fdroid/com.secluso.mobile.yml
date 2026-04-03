@@ -17,7 +17,7 @@ Repo: https://github.com/secluso/mobile_app.git
 Builds:
   - versionName: 1.0.0
     versionCode: 41
-    commit: def1fa5e9cb5f33be7f05279e2f3fe94947168d4
+    commit: acef5994616683a439137a239070d9d4d67c2862
     sudo:
       - apt-get update
       - apt-get install -y build-essential clang cmake pkg-config rustup
@@ -53,7 +53,7 @@ Builds:
 
   - versionName: 1.0.0
     versionCode: 42
-    commit: def1fa5e9cb5f33be7f05279e2f3fe94947168d4
+    commit: acef5994616683a439137a239070d9d4d67c2862
     sudo:
       - apt-get update
       - apt-get install -y build-essential clang cmake pkg-config rustup
@@ -89,7 +89,7 @@ Builds:
 
   - versionName: 1.0.0
     versionCode: 43
-    commit: def1fa5e9cb5f33be7f05279e2f3fe94947168d4
+    commit: acef5994616683a439137a239070d9d4d67c2862
     sudo:
       - apt-get update
       - apt-get install -y build-essential clang cmake pkg-config rustup
