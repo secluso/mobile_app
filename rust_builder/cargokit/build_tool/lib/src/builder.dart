@@ -214,9 +214,9 @@ class RustBuilder {
       MapEntry(environment.manifestDir, '/workspace/rust'),
       if (_pathEnv('CARGOKIT_ROOT_PROJECT_DIR') case final rootProjectDir?)
         MapEntry(rootProjectDir, '/workspace'),
-      if (_pathEnv('CARGO_HOME') case final cargoHome?)
+      if (_cargoHome() case final cargoHome?)
         MapEntry(cargoHome, '/cargo-home'),
-      if (_pathEnv('RUSTUP_HOME') case final rustupHome?)
+      if (_rustupHome() case final rustupHome?)
         MapEntry(rustupHome, '/rustup-home'),
     ];
 
@@ -242,5 +242,23 @@ class RustBuilder {
       return null;
     }
     return path.canonicalize(value);
+  }
+
+  String? _cargoHome() {
+    return _pathEnv('CARGO_HOME') ?? _defaultUserHomeSubdir('.cargo');
+  }
+
+  String? _rustupHome() {
+    return _pathEnv('RUSTUP_HOME') ?? _defaultUserHomeSubdir('.rustup');
+  }
+
+  String? _defaultUserHomeSubdir(String dirname) {
+    final home = Platform.isWindows
+        ? Platform.environment['USERPROFILE']
+        : Platform.environment['HOME'];
+    if (home == null || home.trim().isEmpty) {
+      return null;
+    }
+    return path.canonicalize(path.join(home, dirname));
   }
 }
