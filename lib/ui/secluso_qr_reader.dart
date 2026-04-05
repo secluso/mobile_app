@@ -31,8 +31,8 @@ class SeclusoQrReader extends StatefulWidget {
     ),
   });
 
-  final ValueChanged<zxing.Code> onScan;
-  final ValueChanged<zxing.Code>? onScanFailure;
+  final FutureOr<void> Function(zxing.Code) onScan;
+  final FutureOr<void> Function(zxing.Code)? onScanFailure;
   final void Function(CameraController? controller, Exception? error)?
   onControllerCreated;
   final int codeFormat;
@@ -64,6 +64,7 @@ class _SeclusoQrReaderState extends State<SeclusoQrReader>
   bool _isCameraOn = false;
   bool _isInitializing = false;
   bool _cameraProcessingStarted = false;
+  bool _isDisposing = false;
   String _controllerVersion = '';
 
   bool _isAndroid() => Theme.of(context).platform == TargetPlatform.android;
@@ -99,7 +100,7 @@ class _SeclusoQrReaderState extends State<SeclusoQrReader>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    unawaited(_disposeController());
+    unawaited(_disposeController(updateUi: false));
     if (_cameraProcessingStarted) {
       zxing.zx.stopCameraProcessing();
     }
@@ -135,7 +136,7 @@ class _SeclusoQrReaderState extends State<SeclusoQrReader>
   }
 
   Future<void> _selectCamera(CameraDescription cameraDescription) async {
-    if (_isInitializing) {
+    if (_isInitializing || _isDisposing) {
       return;
     }
 
@@ -186,7 +187,8 @@ class _SeclusoQrReaderState extends State<SeclusoQrReader>
     }
   }
 
-  Future<void> _disposeController() async {
+  Future<void> _disposeController({bool updateUi = true}) async {
+    _isDisposing = true;
     final controller = _controller;
     _controller = null;
     _isCameraOn = false;
@@ -194,7 +196,13 @@ class _SeclusoQrReaderState extends State<SeclusoQrReader>
     _controllerVersion = 'disposed_${DateTime.now().millisecondsSinceEpoch}';
 
     if (controller == null) {
+      _isDisposing = false;
       return;
+    }
+
+    if (updateUi && mounted) {
+      setState(() {});
+      await WidgetsBinding.instance.endOfFrame;
     }
 
     if (controller.value.isStreamingImages) {
@@ -206,6 +214,28 @@ class _SeclusoQrReaderState extends State<SeclusoQrReader>
     try {
       await controller.dispose();
     } catch (_) {}
+    _isDisposing = false;
+  }
+
+  Future<void> _pauseForHandledScan(String controllerVersion) async {
+    if (controllerVersion != _controllerVersion || _controller == null) {
+      return;
+    }
+
+    await _disposeController();
+  }
+
+  Future<void> _resumeAfterHandledScan() async {
+    final selectedCamera = _selectedCamera;
+    if (!mounted ||
+        _controller != null ||
+        _isInitializing ||
+        _isDisposing ||
+        selectedCamera == null) {
+      return;
+    }
+
+    await _selectCamera(selectedCamera);
   }
 
   void _reportControllerError(Object error) {
@@ -269,10 +299,14 @@ class _SeclusoQrReaderState extends State<SeclusoQrReader>
 
       final result = await zxing.zx.processCameraImage(image, params);
       if (result.isValid) {
-        widget.onScan(result);
-        await Future<void>.delayed(widget.scanDelaySuccess);
+        await _pauseForHandledScan(controllerVersion);
+        await Future.sync(() => widget.onScan(result));
+        if (mounted) {
+          await Future<void>.delayed(widget.scanDelaySuccess);
+          await _resumeAfterHandledScan();
+        }
       } else {
-        widget.onScanFailure?.call(result);
+        await Future.sync(() => widget.onScanFailure?.call(result));
       }
     } catch (error) {
       debugPrint('SeclusoQrReader processImageStream error: $error');
@@ -323,7 +357,10 @@ class _SeclusoQrReaderState extends State<SeclusoQrReader>
                 fit: BoxFit.cover,
                 child: SizedBox(
                   width: cameraMaxSize,
-                  child: CameraPreview(controller),
+                  child: CameraPreview(
+                    controller,
+                    key: ValueKey<String>(_controllerVersion),
+                  ),
                 ),
               ),
             ),
