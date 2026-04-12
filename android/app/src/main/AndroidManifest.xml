@@ -19,13 +19,14 @@
     <application
         android:label="Secluso"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+	android:icon="@mipmap/ic_launcher"
+	android:allowBackup="false">
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_notification" />
-            <meta-data
-    android:name="firebase_data_collection_default_enabled"
-    android:value="false" />
+        <meta-data
+            android:name="firebase_data_collection_default_enabled"
+            android:value="false" />
         <meta-data
             android:name="firebase_analytics_collection_enabled"
             android:value="false" />
