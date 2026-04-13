@@ -121,6 +121,14 @@ class FcmConfig {
 }
 
 class HttpClientService {
+  // Some of these constants are based on the ones in server/main.rs.
+  static const int maxMotionFileSize = 50 * 1024 * 1024; // 50 mebibytes
+  static const int maxLivestreamFileSize = 20 * 1024 * 1024; // 20 mebibytes
+  static const int maxCommandFileSize = 100 * 1024; // 100 kibibytes
+  static const int maxFcmConfigSize = 10 * 1024; // 10 kibibytes
+  static const int maxServerVersionSize = 10 * 1024; // 10 kibibytes
+
+
   HttpClientService._();
   static final HttpClientService instance = HttpClientService._();
   Future<void>? _versionCheckInFlight;
@@ -130,6 +138,52 @@ class HttpClientService {
   static const Duration _groupNameInitTimeout = Duration(seconds: 8);
   final Map<String, DateTime> _groupNameInitLast = {};
   final Map<String, String> _groupNameCache = {};
+  final http.Client _client = http.Client();
+
+  Future<http.Response> _cappedGetResponse(
+    Uri url, {
+    required Map<String, String> headers,
+    required int maxBytes,
+    Duration? timeout,
+  }) async {
+    final request = http.Request('GET', url);
+    request.headers.addAll(headers);
+
+    Future<http.StreamedResponse> future = _client.send(request);
+    final streamed =
+        timeout == null ? await future : await future.timeout(timeout);
+
+    // Early reject if the server tells us the size.
+    final contentLength = streamed.contentLength;
+    if (contentLength != null && contentLength > maxBytes) {
+      throw Exception(
+        'Response too large: $contentLength bytes exceeds cap of $maxBytes',
+      );
+    }
+
+    final chunks = <int>[];
+    var received = 0;
+
+    await for (final chunk in streamed.stream) {
+      received += chunk.length;
+      if (received > maxBytes) {
+        throw Exception(
+          'Response exceeded cap of $maxBytes bytes while downloading',
+        );
+      }
+      chunks.addAll(chunk);
+    }
+
+    return http.Response.bytes(
+      Uint8List.fromList(chunks),
+      streamed.statusCode,
+      headers: streamed.headers,
+      request: streamed.request,
+      reasonPhrase: streamed.reasonPhrase,
+      isRedirect: streamed.isRedirect,
+      persistentConnection: streamed.persistentConnection,
+    );
+  }
 
   void clearGroupNameCache(String cameraName) {
     _groupNameCache.removeWhere((key, _) => key.startsWith('$cameraName|'));
@@ -328,7 +382,11 @@ class HttpClientService {
     final headers = await _basicAuthHeaders(username, password);
 
     // Fetch fcm config action
-    final response = await http.get(url, headers: headers);
+    final response = await _cappedGetResponse(
+      url,
+      headers: headers,
+      maxBytes: maxFcmConfigSize,
+    );
     await _handleServerVersionHeader(response);
     if (response.statusCode != 200) {
       if (response.statusCode == 404) {
@@ -373,7 +431,11 @@ class HttpClientService {
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
     // Video download action
-    final responseFuture = http.get(url, headers: headers);
+    final Future<http.Response> responseFuture = _cappedGetResponse(
+      url,
+      headers: headers,
+      maxBytes: maxMotionFileSize,
+    );
     final http.Response response;
     try {
       response =
@@ -527,7 +589,11 @@ class HttpClientService {
     final url = _buildUrl(creds.serverAddr, ['livestream', group, chunkNumber]);
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
-    final response = await http.get(url, headers: headers);
+    final response = await _cappedGetResponse(
+      url,
+      headers: headers,
+      maxBytes: maxLivestreamFileSize,
+    );
     await _handleServerVersionHeader(response);
     if (response.statusCode != 200) {
       final message =
@@ -600,7 +666,11 @@ class HttpClientService {
     final url = _buildUrl(creds.serverAddr, ['config_response', group]);
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
-    final response = await http.get(url, headers: headers);
+    final response = await _cappedGetResponse(
+      url,
+      headers: headers,
+      maxBytes: maxCommandFileSize,
+    );
     await _handleServerVersionHeader(response);
     if (response.statusCode != 200) {
       if (response.statusCode == 404) {
@@ -726,7 +796,11 @@ class HttpClientService {
     final url = _buildUrl(creds.serverAddr, ['status']);
     final headers = await _basicAuthHeaders(creds.username, creds.password);
 
-    final response = await http.get(url, headers: headers);
+    final response = await _cappedGetResponse(
+      url,
+      headers: headers,
+      maxBytes: maxServerVersionSize,
+    );
     if (response.statusCode != 200 && response.statusCode != 409) {
       throw Exception(
         'Failed to fetch server version: ${response.statusCode} ${response.reasonPhrase}',
