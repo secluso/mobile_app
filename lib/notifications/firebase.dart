@@ -786,6 +786,28 @@ class PushNotificationService {
           continue;
         }
 
+        // Get the detected event from the metadata file
+        final metaPath = '${docs.path}/waiting/meta/meta_$timestamp.txt';
+
+        String alertLabel = 'Motion';
+
+        try {
+          final raw = await File(metaPath).readAsString();
+          if (raw.trim().isNotEmpty) {
+            final detections = (jsonDecode(raw) as List).cast<String>();
+            final decision = evaluateMotionAlertPreferences(
+              prefs,
+              cameraName,
+              motion: true,
+              detections: detections,
+            );
+
+            alertLabel = decision.label ?? 'Motion';
+          }
+        } catch (e) {
+          Log.w('Could not read notification metadata $metaPath: $e');
+        }
+
         // Update same notification id with a BigPicture/attachment version.
         await showMotionNotification(
           cameraName: cameraName,
@@ -793,6 +815,7 @@ class PushNotificationService {
           thumbnailPath: thumbPath,
           notificationId: notifId,
           onlyAlertOnce: true, // don't vibrate/sound again on Android
+          alertLabel: alertLabel,
         );
         Log.d("Upgraded motion notification with thumbnail: $thumbPath");
         return;
