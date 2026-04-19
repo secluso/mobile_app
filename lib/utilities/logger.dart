@@ -34,6 +34,8 @@ class Log {
   static const String _prefsBackgroundReasonKey = 'log_background_reason';
   static const String _prefsBackgroundTsKey = 'log_background_ts';
   static const String _copyRedactionPlaceholder = 'SECRET HIDDEN';
+  static const String _copySecretValuePattern =
+      "(?:\"[^\"\\n]*\"|'[^'\\n]*'|[^,\\n)\\]}]+)";
 
   static final ValueNotifier<int> errorNotifier = ValueNotifier(0);
 
@@ -41,11 +43,15 @@ class Log {
   static String _defaultContext = '';
   static final List<RegExp> _copySecretPatterns = [
     RegExp(
-      "((?:password|passphrase|secret|token|authorization)\\s*[:=]\\s*)(?:\"[^\"\\n]*\"|'[^'\\n]*'|[^,\\n)\\]}]+)",
+      "((?:password|passphrase|secret|token|authorization|auth)\\s*[:=]\\s*)($_copySecretValuePattern)",
       caseSensitive: false,
     ),
     RegExp(
-      "((?:password|passphrase|secret|token|authorization)\\s+to\\s+)(?:\"[^\"\\n]*\"|'[^'\\n]*'|[^,\\n)\\]}]+)",
+      "((?:password|passphrase|secret|token|authorization|auth)\\s+to\\s+)($_copySecretValuePattern)",
+      caseSensitive: false,
+    ),
+    RegExp(
+      "((?:\"|')?[A-Za-z0-9_-]*?(?:password|passphrase|secret|token|authorization|auth)[A-Za-z0-9_-]*?(?:\"|')?\\s*[:=]\\s*)($_copySecretValuePattern)",
       caseSensitive: false,
     ),
   ];
@@ -193,7 +199,15 @@ class Log {
     for (final pattern in _copySecretPatterns) {
       redacted = redacted.replaceAllMapped(pattern, (match) {
         final prefix = match.group(1) ?? '';
-        return '$prefix$_copyRedactionPlaceholder';
+        final value = match.group(2) ?? '';
+        final replacementValue = switch (value) {
+          final quoted when quoted.startsWith('"') && quoted.endsWith('"') =>
+            '"$_copyRedactionPlaceholder"',
+          final quoted when quoted.startsWith("'") && quoted.endsWith("'") =>
+            "'$_copyRedactionPlaceholder'",
+          _ => _copyRedactionPlaceholder,
+        };
+        return '$prefix$replacementValue';
       });
     }
     return redacted;
