@@ -1,10 +1,10 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/app_paths.dart';
 import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'package:secluso_flutter/utilities/rust_util.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
@@ -83,7 +83,7 @@ class _IpCameraDialogState extends State<IpCameraDialog> {
         HttpClientService.instance.clearGroupNameCache(lastCameraName);
         prefs.remove(PrefKeys.lastCameraAdd);
 
-        final docsDir = await getApplicationDocumentsDirectory();
+        final docsDir = await AppPaths.dataDirectory();
         final camDir = Directory(
           p.join(docsDir.path, 'camera_dir_$lastCameraName'),
         );

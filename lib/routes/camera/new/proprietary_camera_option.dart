@@ -16,11 +16,11 @@ import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/ui/google_fonts.dart';
 
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as p;
+import 'package:secluso_flutter/utilities/app_paths.dart';
 
 /// Popup: User connects to camera's Wi-Fi hotspot.
 class ProprietaryCameraConnectDialog extends StatefulWidget {
@@ -1419,7 +1419,7 @@ class _ProprietaryCameraInfoDialogState
       HttpClientService.instance.clearGroupNameCache(lastCameraAdd);
       await sharedPreferences.remove(PrefKeys.lastCameraAdd);
 
-      final docsDir = await getApplicationDocumentsDirectory();
+      final docsDir = await AppPaths.dataDirectory();
       final camDir = Directory(
         p.join(docsDir.path, 'camera_dir_$lastCameraAdd'),
       );

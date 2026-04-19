@@ -10,7 +10,6 @@ import 'package:uuid/rng.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
 import 'package:secluso_flutter/database/entities.dart';
@@ -26,6 +25,7 @@ import 'package:secluso_flutter/routes/camera/new/show_new_camera_options.dart';
 import 'package:secluso_flutter/routes/home_page.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/app_coordination_state.dart';
+import 'package:secluso_flutter/utilities/app_paths.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/proprietary_camera_hotspot.dart';
 import 'package:secluso_flutter/utilities/review_environment.dart';
@@ -463,7 +463,7 @@ class _ProprietaryCameraWaitingDialogState
     HttpClientService.instance.clearGroupNameCache(cameraName);
     prefs.remove(PrefKeys.lastCameraAdd);
 
-    final docsDir = await getApplicationDocumentsDirectory();
+    final docsDir = await AppPaths.dataDirectory();
     final camDir = Directory(p.join(docsDir.path, 'camera_dir_$cameraName'));
     if (await camDir.exists()) {
       try {

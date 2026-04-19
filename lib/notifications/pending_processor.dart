@@ -4,10 +4,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
 import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/app_paths.dart';
 import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
 import 'package:secluso_flutter/notifications/alert_preferences.dart';
@@ -150,7 +150,7 @@ class QueueProcessor {
       return;
     }
 
-    final baseDir = await getApplicationDocumentsDirectory();
+    final baseDir = await AppPaths.dataDirectory();
     final receivePort = ReceivePort();
     try {
       await Isolate.spawn(_collectPendingWorkEntry, {

@@ -6,11 +6,11 @@ import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/routes/camera/list_cameras.dart';
 import 'package:secluso_flutter/utilities/app_coordination_state.dart';
+import 'package:secluso_flutter/utilities/app_paths.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/lock.dart';
 import 'package:secluso_flutter/utilities/version_gate.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -177,7 +177,7 @@ class ThumbnailManager {
       return false;
     }
     // Check if the file already exists in the thumbnails folder
-    final baseDir = await getApplicationDocumentsDirectory();
+    final baseDir = await AppPaths.dataDirectory();
 
     final filePath = p.join(
       baseDir.path,
@@ -320,7 +320,7 @@ class ThumbnailManager {
             }
 
             Log.d("Proceeding after thumbnail download");
-            final baseDir = await getApplicationDocumentsDirectory();
+            final baseDir = await AppPaths.dataDirectory();
             final metaDir = Directory(p.join(baseDir.path, 'waiting', 'meta'));
             await metaDir.create(recursive: true);
 
@@ -375,7 +375,7 @@ class ThumbnailManager {
                 );
                 if (markerPayload != null &&
                     _isThumbnailFilename(markerPayload)) {
-                  final baseDir = await getApplicationDocumentsDirectory();
+                  final baseDir = await AppPaths.dataDirectory();
                   final decPath = p.join(
                     baseDir.path,
                     'camera_dir_$camera',
@@ -460,7 +460,7 @@ class ThumbnailManager {
               );
               if (markerPayload != null &&
                   _isThumbnailFilename(markerPayload)) {
-                final baseDir = await getApplicationDocumentsDirectory();
+                final baseDir = await AppPaths.dataDirectory();
                 final decPath = p.join(
                   baseDir.path,
                   'camera_dir_$camera',
@@ -627,7 +627,7 @@ class ThumbnailManager {
             }
 
             Log.d("Proceeding after thumbnail download");
-            final baseDir = await getApplicationDocumentsDirectory();
+            final baseDir = await AppPaths.dataDirectory();
             final metaDir = Directory(p.join(baseDir.path, 'waiting', 'meta'));
             await metaDir.create(recursive: true);
 
@@ -681,7 +681,7 @@ class ThumbnailManager {
                 );
                 if (markerPayload != null &&
                     _isThumbnailFilename(markerPayload)) {
-                  final baseDir = await getApplicationDocumentsDirectory();
+                  final baseDir = await AppPaths.dataDirectory();
                   final decPath = p.join(
                     baseDir.path,
                     'camera_dir_$camera',
@@ -765,7 +765,7 @@ class ThumbnailManager {
               );
               if (markerPayload != null &&
                   _isThumbnailFilename(markerPayload)) {
-                final baseDir = await getApplicationDocumentsDirectory();
+                final baseDir = await AppPaths.dataDirectory();
                 final decPath = p.join(
                   baseDir.path,
                   'camera_dir_$camera',

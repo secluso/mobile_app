@@ -12,9 +12,9 @@ import 'package:secluso_flutter/ui/secluso_preview_assets.dart';
 import 'package:secluso_flutter/ui/secluso_surfaces.dart';
 import 'package:secluso_flutter/ui/secluso_shell_ui.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/app_paths.dart';
 import 'package:secluso_flutter/utilities/video_thumbnail_store.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 class ActivityPreviewItem {
   const ActivityPreviewItem({
@@ -257,7 +257,7 @@ class _ActivityPageState extends State<ActivityPage>
   }
 
   Future<bool> _videoFileExists(String cameraName, String videoFile) async {
-    final docsDir = await getApplicationDocumentsDirectory();
+    final docsDir = await AppPaths.dataDirectory();
     final file = File(
       p.join(docsDir.path, 'camera_dir_$cameraName', 'videos', videoFile),
     );

@@ -5,7 +5,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/painting.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import 'package:secluso_flutter/utilities/app_paths.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/video_thumbnail_fallback.dart';
 
@@ -44,7 +44,7 @@ class VideoThumbnailStore {
 
     final future = () async {
       try {
-        final docsDir = await getApplicationDocumentsDirectory();
+        final docsDir = await AppPaths.dataDirectory();
         final videosDir = p.join(
           docsDir.path,
           'camera_dir_$cameraName',

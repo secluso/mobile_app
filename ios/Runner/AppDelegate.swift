@@ -35,6 +35,57 @@ import workmanager_apple
 
         let controller: FlutterViewController = window?.rootViewController as! FlutterViewController
         IosPushRelayBridge.shared.register(with: controller)
+        let storage = FlutterMethodChannel(
+            name: "secluso.com/storage",
+            binaryMessenger: controller.binaryMessenger)
+        storage.setMethodCallHandler { call, result in
+            guard let args = call.arguments as? [String: Any],
+                let path = args["path"] as? String,
+                !path.isEmpty
+            else {
+                result(
+                    FlutterError(
+                        code: "INVALID_ARGS", message: "Missing path", details: nil))
+                return
+            }
+
+            switch call.method {
+            case "excludeFromBackup":
+                do {
+                    try Self.excludeFromBackup(path: path)
+                    result(nil)
+                } catch {
+                    result(
+                        FlutterError(
+                            code: "BACKUP_EXCLUDE_FAILED",
+                            message: error.localizedDescription,
+                            details: nil))
+                }
+            case "excludeTreeFromBackup":
+                do {
+                    try Self.excludeTreeFromBackup(path: path)
+                    result(nil)
+                } catch {
+                    result(
+                        FlutterError(
+                            code: "BACKUP_TREE_EXCLUDE_FAILED",
+                            message: error.localizedDescription,
+                            details: nil))
+                }
+            case "isExcludedFromBackup":
+                do {
+                    result(try Self.isExcludedFromBackup(path: path))
+                } catch {
+                    result(
+                        FlutterError(
+                            code: "BACKUP_STATUS_FAILED",
+                            message: error.localizedDescription,
+                            details: nil))
+                }
+            default:
+                result(FlutterMethodNotImplemented)
+            }
+        }
         let wifi = FlutterMethodChannel(
             name: "secluso.com/wifi",
             binaryMessenger: controller.binaryMessenger)
@@ -217,5 +268,40 @@ import workmanager_apple
             didReceive: response,
             withCompletionHandler: completionHandler
         )
+    }
+
+    private static func excludeFromBackup(path: String) throws {
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        let isDirectory = (try? FileManager.default.attributesOfItem(atPath: path)[.type] as? FileAttributeType)
+            == .typeDirectory
+        var url = URL(fileURLWithPath: path, isDirectory: isDirectory)
+        try url.setResourceValues(values)
+    }
+
+    private static func excludeTreeFromBackup(path: String) throws {
+        let fileManager = FileManager.default
+        try excludeFromBackup(path: path)
+
+        guard let enumerator = fileManager.enumerator(
+            at: URL(fileURLWithPath: path, isDirectory: true),
+            includingPropertiesForKeys: nil,
+            options: [],
+            errorHandler: { _, _ in true }
+        ) else {
+            return
+        }
+
+        for case let url as URL in enumerator {
+            try excludeFromBackup(path: url.path)
+        }
+    }
+
+    private static func isExcludedFromBackup(path: String) throws -> Bool {
+        let isDirectory = (try? FileManager.default.attributesOfItem(atPath: path)[.type] as? FileAttributeType)
+            == .typeDirectory
+        let url = URL(fileURLWithPath: path, isDirectory: isDirectory)
+        let values = try url.resourceValues(forKeys: [.isExcludedFromBackupKey])
+        return values.isExcludedFromBackup ?? false
     }
 }

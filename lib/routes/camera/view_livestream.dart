@@ -16,9 +16,9 @@ import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/byte_player_view.dart';
+import 'package:secluso_flutter/utilities/app_paths.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/result.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/ui/google_fonts.dart';
@@ -368,7 +368,7 @@ class _LivestreamPageState extends State<LivestreamPage>
 
   Future<void> _writeArchiveChunk(Uint8List dec) async {
     if (!_archiveInitialized) {
-      final baseDir = await getApplicationDocumentsDirectory();
+      final baseDir = await AppPaths.dataDirectory();
       final timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
       final videoName = 'video_$timestamp.mp4';
       final filePath = p.join(
