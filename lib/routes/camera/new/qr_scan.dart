@@ -989,7 +989,6 @@ class _QrScanDialogState extends State<QrScanDialog>
     if (_hasScannedCode || !barcode.isValid) return; // already handled
 
     final text = barcode.text;
-    Log.d("Detected barcode with text: $text");
     if (text == null || text.isEmpty) {
       return;
     }
