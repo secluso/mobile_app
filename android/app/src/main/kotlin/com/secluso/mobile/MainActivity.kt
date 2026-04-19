@@ -81,7 +81,6 @@ class MainActivity : FlutterActivity() {
                         Log.e("WIFI", "Found connectToWifi request");
                         val ssid = call.argument<String>("ssid")!!
                         val passphrase = call.argument<String>("password")!!
-                        Log.e("WIFI", "SSID = $ssid, passphrase = $passphrase")
 
                         try {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

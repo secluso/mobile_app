@@ -128,7 +128,6 @@ class HttpClientService {
   static const int maxFcmConfigSize = 10 * 1024; // 10 kibibytes
   static const int maxServerVersionSize = 10 * 1024; // 10 kibibytes
 
-
   HttpClientService._();
   static final HttpClientService instance = HttpClientService._();
   Future<void>? _versionCheckInFlight;
@@ -400,8 +399,7 @@ class HttpClientService {
       }
     }
 
-    print(response.body);
-    Log.d("Success fetching fcm config");
+    Log.d("Success fetching fcm config (bytes=${response.body.length})");
     return FcmConfig.fromJson(jsonDecode(response.body));
   }, bypassVersionGate: true);
 
