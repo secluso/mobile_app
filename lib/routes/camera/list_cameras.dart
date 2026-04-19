@@ -542,7 +542,7 @@ class CamerasPageState extends State<CamerasPage>
   }
 
   Future<void> _copyLogs(BuildContext context) async {
-    final logs = await Log.getLogDump();
+    final logs = await Log.getCopySafeLogDump();
     final message =
         logs.trim().isEmpty
             ? 'No logs available yet.'
@@ -605,7 +605,11 @@ class CamerasPageState extends State<CamerasPage>
                 ),
                 TextButton(
                   onPressed: () async {
-                    await Clipboard.setData(ClipboardData(text: snapshot.logs));
+                    await Clipboard.setData(
+                      ClipboardData(
+                        text: Log.redactSecretsForCopy(snapshot.logs),
+                      ),
+                    );
                     await Log.clearBackgroundSnapshot();
                     await Log.clearErrorFlag();
                     if (mounted) {
