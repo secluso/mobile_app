@@ -43,10 +43,6 @@ class Log {
   static String _defaultContext = '';
   static final List<RegExp> _copySecretPatterns = [
     RegExp(
-      "((?:password|passphrase|secret|token|authorization|auth)\\s*[:=]\\s*)($_copySecretValuePattern)",
-      caseSensitive: false,
-    ),
-    RegExp(
       "((?:password|passphrase|secret|token|authorization|auth)\\s+to\\s+)($_copySecretValuePattern)",
       caseSensitive: false,
     ),
