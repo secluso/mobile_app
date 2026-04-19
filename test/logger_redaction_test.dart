@@ -40,6 +40,18 @@ void main() {
     );
   });
 
+  test('redacts JSON-style secret keys in copied logs', () {
+    const input =
+        '12:00:00.000 [D] http_client.dart:1:1 -> Pairing body: {"pairing_token":"abc123","notification_target":{"ios_relay_binding":{"hub_token":"hub456","device_token":"dev789"},"unifiedpush_auth":"auth000"}}';
+
+    final redacted = Log.redactSecretsForCopy(input);
+
+    expect(
+      redacted,
+      '12:00:00.000 [D] http_client.dart:1:1 -> Pairing body: {"pairing_token":"SECRET HIDDEN","notification_target":{"ios_relay_binding":{"hub_token":"SECRET HIDDEN","device_token":"SECRET HIDDEN"},"unifiedpush_auth":"SECRET HIDDEN"}}',
+    );
+  });
+
   test('leaves non-secret log text unchanged', () {
     const input =
         '12:00:00.000 [I] scheduler.dart:1:1 -> Network statuses: wifi = true, cell = false';
