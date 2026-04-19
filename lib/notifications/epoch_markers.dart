@@ -2,14 +2,14 @@
 
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import 'package:secluso_flutter/utilities/app_paths.dart';
 
 String _markerName(String kind, int epoch) {
   return ".epoch_${kind}_$epoch.done";
 }
 
 Future<File> _markerFile(String cameraName, String kind, int epoch) async {
-  final base = await getApplicationDocumentsDirectory();
+  final base = await AppPaths.dataDirectory();
   final dir = p.join(base.path, 'camera_dir_$cameraName', 'videos');
   return File(p.join(dir, _markerName(kind, epoch)));
 }

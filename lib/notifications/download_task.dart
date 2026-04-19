@@ -1,12 +1,12 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
-import 'package:path_provider/path_provider.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/notifications/epoch.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/routes/app_drawer.dart';
 import 'package:secluso_flutter/src/rust/frb_generated.dart';
+import 'package:secluso_flutter/utilities/app_paths.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/lock.dart';
 import 'package:secluso_flutter/utilities/app_coordination_state.dart';
@@ -61,7 +61,7 @@ Future<bool> _cameraStillExists(String cameraName) async {
 }
 
 Future<void> _enqueuePendingVideo(String cameraName, String decFileName) async {
-  final baseDir = await getApplicationDocumentsDirectory();
+  final baseDir = await AppPaths.dataDirectory();
   final filePath = p.join(
     baseDir.path,
     'waiting',
@@ -490,7 +490,7 @@ Future<bool> retrieveVideos(String cameraName) async {
                 epoch,
               );
               if (markerPayload != null) {
-                final baseDir = await getApplicationDocumentsDirectory();
+                final baseDir = await AppPaths.dataDirectory();
                 final decPath = p.join(
                   baseDir.path,
                   'camera_dir_$cameraName',

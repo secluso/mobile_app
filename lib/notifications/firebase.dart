@@ -17,7 +17,7 @@ import 'package:secluso_flutter/notifications/scheduler.dart';
 import 'package:secluso_flutter/notifications/thumbnails.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:secluso_flutter/utilities/app_paths.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../keys.dart';
 import '../utilities/hub_identity.dart';
@@ -773,7 +773,7 @@ class PushNotificationService {
           "Acquired target thumbnail for notification, attempting to update",
         );
 
-        final docs = await getApplicationDocumentsDirectory();
+        final docs = await AppPaths.dataDirectory();
         final thumbPath =
             '${docs.path}/camera_dir_$cameraName/videos/thumbnail_$timestamp.png';
 

@@ -8,7 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/notifications/android_push_transport.dart';
 import 'package:path/path.dart' as p;
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'dart:async';
 
@@ -21,6 +20,7 @@ import 'package:secluso_flutter/utilities/firebase_init.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/main.dart';
 import 'package:secluso_flutter/routes/app_shell.dart';
+import 'package:secluso_flutter/utilities/app_paths.dart';
 import 'package:secluso_flutter/ui/secluso_preview_assets.dart';
 import 'package:secluso_flutter/ui/secluso_luxury.dart';
 import 'package:secluso_flutter/ui/secluso_surfaces.dart';
@@ -1238,7 +1238,7 @@ class CamerasPageState extends State<CamerasPage>
   }
 
   Future<bool> _videoFileExists(String cameraName, String videoFile) async {
-    final docsDir = await getApplicationDocumentsDirectory();
+    final docsDir = await AppPaths.dataDirectory();
     final file = File(
       p.join(docsDir.path, 'camera_dir_$cameraName', 'videos', videoFile),
     );

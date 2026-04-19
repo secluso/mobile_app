@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 import 'package:gal/gal.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/app_paths.dart';
 import 'package:secluso_flutter/ui/secluso_surfaces.dart';
 import 'package:secluso_flutter/ui/secluso_theme.dart';
 
@@ -111,7 +112,7 @@ class _VideoViewPageState extends State<VideoViewPage> {
 
   Future<void> _initVideo() async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await AppPaths.dataDirectory();
       var cam = widget.cameraName;
       _videoPath = p.join(
         dir.path,

@@ -4,10 +4,10 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
 import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/utilities/app_paths.dart';
 import 'package:secluso_flutter/utilities/http_client.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/app_coordination_state.dart';
@@ -69,7 +69,7 @@ class CameraUiBridge {
     final videos = await videoStore.listByCamera(cameraName);
     await videoStore.removeMany(videos.map((video) => video.id).toList());
 
-    final docsDir = await getApplicationDocumentsDirectory();
+    final docsDir = await AppPaths.dataDirectory();
     final camDir = Directory(p.join(docsDir.path, 'camera_dir_$cameraName'));
     if (await camDir.exists()) {
       try {

@@ -1,11 +1,12 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
 import 'dart:async';
-import 'package:path_provider/path_provider.dart';
-import 'package:secluso_flutter/utilities/logger.dart';
+import 'dart:io';
+
 import 'package:path/path.dart' as p;
 import 'package:secluso_flutter/src/rust/api/lock_manager.dart';
-import 'dart:io';
+import 'package:secluso_flutter/utilities/app_paths.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
 
 /// Acquire a file lock via Rust-code
 Future<bool> lock(
@@ -15,7 +16,7 @@ Future<bool> lock(
 }) async {
   Log.d("Attempting to acquire lock $name");
   var lockParentDirectory = p.join(
-    (await getApplicationDocumentsDirectory()).path,
+    (await AppPaths.dataDirectory()).path,
     "locks",
   );
   var parentDirectoryFile = Directory(lockParentDirectory);
@@ -63,7 +64,7 @@ Future<bool> lock(
 Future<void> unlock(String name) async {
   Log.d("Releasing lock $name");
   var lockLocation = p.join(
-    (await getApplicationDocumentsDirectory()).path,
+    (await AppPaths.dataDirectory()).path,
     "locks",
     name,
   );

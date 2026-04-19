@@ -4,11 +4,11 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
 import 'package:secluso_flutter/database/entities.dart';
 import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/utilities/app_paths.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 
 class StorageSummary {
@@ -72,7 +72,7 @@ class StorageManager {
   static const int _keepForeverSentinel = 0;
 
   static Future<StorageSummary> calculateSummary() async {
-    final docsDir = await getApplicationDocumentsDirectory();
+    final docsDir = await AppPaths.dataDirectory();
     if (!await docsDir.exists()) {
       return const StorageSummary(
         totalBytes: 0,
@@ -217,7 +217,7 @@ class StorageManager {
   }
 
   static Future<StorageCleanupResult> clearAllThumbnails() async {
-    final docsDir = await getApplicationDocumentsDirectory();
+    final docsDir = await AppPaths.dataDirectory();
     var bytesFreed = 0;
     var deletedThumbnails = 0;
 
@@ -249,7 +249,7 @@ class StorageManager {
   }
 
   static Future<StorageCleanupResult> clearEncryptedTempFiles() async {
-    final docsDir = await getApplicationDocumentsDirectory();
+    final docsDir = await AppPaths.dataDirectory();
     var bytesFreed = 0;
     var deletedTempFiles = 0;
 
@@ -285,7 +285,7 @@ class StorageManager {
     final videoStore = AppStores.instance.videoStore;
     final detectionStore = AppStores.instance.detectionStore;
     final videos = await videoStore.getAllAsync();
-    final docsDir = await getApplicationDocumentsDirectory();
+    final docsDir = await AppPaths.dataDirectory();
 
     final videoIdsToRemove = <int>[];
     final removedVideoNames = <String>{};
@@ -357,7 +357,7 @@ class StorageManager {
       await AppStores.init();
     }
 
-    final docsDir = await getApplicationDocumentsDirectory();
+    final docsDir = await AppPaths.dataDirectory();
     final videoStore = AppStores.instance.videoStore;
     final detectionStore = AppStores.instance.detectionStore;
     final videos = await videoStore.getAllAsync();
@@ -441,7 +441,7 @@ class StorageManager {
   static Future<void> _deleteEpochMarkersReferencing(
     bool Function(String markerPayload) shouldDelete,
   ) async {
-    final docsDir = await getApplicationDocumentsDirectory();
+    final docsDir = await AppPaths.dataDirectory();
     await for (final entity in docsDir.list(
       recursive: true,
       followLinks: false,

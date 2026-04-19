@@ -3,8 +3,8 @@
 import 'dart:async';
 
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:secluso_flutter/objectbox.g.dart' as objectbox;
+import 'package:secluso_flutter/utilities/app_paths.dart';
 import 'package:sqflite/sqflite.dart';
 
 import 'entities.dart';
@@ -208,7 +208,7 @@ class _ObjectBoxAppStoresBackend implements _AppStoresBackend {
   final objectbox.Store _detectionStore;
 
   static Future<_ObjectBoxAppStoresBackend> open() async {
-    final docsDir = await getApplicationDocumentsDirectory();
+    final docsDir = await AppPaths.dataDirectory();
     final cameraStore = await objectbox.openStore(
       directory: p.join(docsDir.path, 'camera-db'),
     );
@@ -455,7 +455,7 @@ class _SqfliteAppStoresBackend implements _AppStoresBackend {
   final Database _db;
 
   static Future<_SqfliteAppStoresBackend> open() async {
-    final docsDir = await getApplicationDocumentsDirectory();
+    final docsDir = await AppPaths.dataDirectory();
     final dbPath = p.join(docsDir.path, 'secluso-fdroid.sqlite');
     final db = await openDatabase(
       dbPath,

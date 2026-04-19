@@ -6,13 +6,13 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
 import 'package:secluso_flutter/constants.dart';
 import 'package:secluso_flutter/keys.dart';
 import 'package:secluso_flutter/notifications/android_push_transport.dart';
 import 'package:secluso_flutter/notifications/epoch.dart';
 import 'package:secluso_flutter/notifications/ios_notification_relay.dart';
 import 'package:secluso_flutter/notifications/notifications.dart';
+import 'package:secluso_flutter/utilities/app_paths.dart';
 import 'package:secluso_flutter/utilities/rust_api.dart';
 import 'package:secluso_flutter/utilities/app_coordination_state.dart';
 import 'package:secluso_flutter/utilities/http_entities.dart';
@@ -779,7 +779,7 @@ class HttpClientService {
   }
 
   Future<Directory> _ensureEncryptedDir(String cameraName) async {
-    final base = await getApplicationDocumentsDirectory();
+    final base = await AppPaths.dataDirectory();
     final dir = Directory('${base.path}/camera_dir_$cameraName/encrypted');
     if (!await dir.exists()) {
       await dir.create(recursive: true);

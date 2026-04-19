@@ -2,7 +2,7 @@
 
 import 'dart:io';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import 'package:secluso_flutter/utilities/app_paths.dart';
 
 /// Reads the stored epoch for cameraName. Returns default value of 2 if missing
 /// or unreadable. Type is either "video" or "thumbnail".
@@ -11,7 +11,7 @@ Future<int> readEpoch(
   String type, {
   int defaultValue = 2,
 }) async {
-  final dir = await getApplicationDocumentsDirectory();
+  final dir = await AppPaths.dataDirectory();
   final path = p.join(dir.path, 'camera_dir_$cameraName', 'epoch_$type');
   final f = File(path);
 
@@ -33,7 +33,7 @@ Future<int> readEpoch(
 /// 3) close
 /// 4) rename temp -> final (atomic on POSIX filesystems)
 Future<void> writeEpoch(String cameraName, String type, int value) async {
-  final dir = await getApplicationDocumentsDirectory();
+  final dir = await AppPaths.dataDirectory();
   final cameraDir = Directory(p.join(dir.path, 'camera_dir_$cameraName'));
   if (!await cameraDir.exists()) {
     await cameraDir.create(recursive: true);

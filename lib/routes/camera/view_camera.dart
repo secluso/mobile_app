@@ -17,8 +17,8 @@ import 'view_video.dart';
 import 'view_livestream.dart';
 import 'camera_settings.dart';
 import 'package:secluso_flutter/database/entities.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:secluso_flutter/database/app_stores.dart';
+import 'package:secluso_flutter/utilities/app_paths.dart';
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/main.dart';
 import 'dart:async';
@@ -323,7 +323,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
   /*
   Future<void> _printAllFiles(String cameraName) async {
     Log.d("_printAllFiles called for $cameraName");
-    final docsDir = await getApplicationDocumentsDirectory();
+    final docsDir = await AppPaths.dataDirectory();
     final dir = Directory(p.join(docsDir.path, 'camera_dir_$cameraName'));
 
     if (!await dir.exists()) return;
@@ -351,7 +351,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
     _dataGeneration++;
     _isLoading = false;
 
-    final dir = await getApplicationDocumentsDirectory();
+    final dir = await AppPaths.dataDirectory();
     final videoDir = Directory(
       '${dir.path}/camera_dir_${widget.cameraName}/videos',
     );
@@ -536,7 +536,7 @@ class _CameraViewPageState extends State<CameraViewPage> with RouteAware {
   }
 
   void _deleteOne(Video v, int index) async {
-    final dir = await getApplicationDocumentsDirectory();
+    final dir = await AppPaths.dataDirectory();
 
     if (v.received) {
       final videoPath = '${dir.path}/camera_dir_${v.camera}/videos/${v.video}';

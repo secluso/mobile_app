@@ -1,12 +1,13 @@
 //! SPDX-License-Identifier: GPL-3.0-or-later
 
 import 'dart:async';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:secluso_flutter/utilities/rust_api.dart';
-import 'package:secluso_flutter/utilities/logger.dart';
-import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secluso_flutter/keys.dart';
+import 'package:secluso_flutter/utilities/app_paths.dart';
+import 'package:secluso_flutter/utilities/logger.dart';
+import 'package:secluso_flutter/utilities/rust_api.dart';
 
 class _InitState {
   Future<bool>? inFlight;
@@ -219,8 +220,10 @@ Future<bool> initializeCore(String cameraName, bool firstTime) async {
     return false;
   }
 
-  var filesDir =
-      "${(await getApplicationDocumentsDirectory()).absolute.path}/camera_dir_$cameraName";
+  var filesDir = p.join(
+    (await AppPaths.dataDirectory()).absolute.path,
+    'camera_dir_$cameraName',
+  );
 
   var videosDir = "$filesDir/videos";
   var encryptedDir = "$filesDir/encrypted";
