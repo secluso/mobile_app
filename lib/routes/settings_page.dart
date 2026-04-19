@@ -226,7 +226,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _copyLogs() async {
-    final logs = await Log.getLogDump();
+    final logs = await Log.getCopySafeLogDump();
     final exportText = logs.trim().isEmpty ? 'No logs available yet.' : logs;
     await Clipboard.setData(ClipboardData(text: exportText));
     if (!mounted) return;

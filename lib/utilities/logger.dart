@@ -33,11 +33,22 @@ class Log {
   static const String _prefsBackgroundKey = 'log_background_snapshot';
   static const String _prefsBackgroundReasonKey = 'log_background_reason';
   static const String _prefsBackgroundTsKey = 'log_background_ts';
+  static const String _copyRedactionPlaceholder = 'SECRET HIDDEN';
 
   static final ValueNotifier<int> errorNotifier = ValueNotifier(0);
 
   static final Object _contextKey = Object();
   static String _defaultContext = '';
+  static final List<RegExp> _copySecretPatterns = [
+    RegExp(
+      "((?:password|passphrase|secret|token|authorization)\\s*[:=]\\s*)(?:\"[^\"\\n]*\"|'[^'\\n]*'|[^,\\n)\\]}]+)",
+      caseSensitive: false,
+    ),
+    RegExp(
+      "((?:password|passphrase|secret|token|authorization)\\s+to\\s+)(?:\"[^\"\\n]*\"|'[^'\\n]*'|[^,\\n)\\]}]+)",
+      caseSensitive: false,
+    ),
+  ];
 
   static void init() {
     _logger = _buildLogger();
@@ -170,6 +181,22 @@ class Log {
   static Future<String> getLogDump() async {
     await ensureStorageReady();
     return _buffer.join('\n');
+  }
+
+  static Future<String> getCopySafeLogDump() async {
+    final logs = await getLogDump();
+    return redactSecretsForCopy(logs);
+  }
+
+  static String redactSecretsForCopy(String text) {
+    var redacted = text;
+    for (final pattern in _copySecretPatterns) {
+      redacted = redacted.replaceAllMapped(pattern, (match) {
+        final prefix = match.group(1) ?? '';
+        return '$prefix$_copyRedactionPlaceholder';
+      });
+    }
+    return redacted;
   }
 
   static Future<void> saveBackgroundSnapshot({String reason = ''}) async {
