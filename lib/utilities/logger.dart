@@ -169,9 +169,14 @@ class Log {
       final prefs = await SharedPreferences.getInstance();
       final stored = prefs.getStringList(_prefsKey);
       if (stored != null && stored.isNotEmpty) {
-        _buffer = List<String>.from(stored);
+        final sanitized = _sanitizeBufferedLines(stored);
+        final changed = !_listEquals(stored, sanitized);
+        _buffer = List<String>.from(sanitized);
         if (_buffer.length > _maxEntries) {
           _buffer = _buffer.sublist(_buffer.length - _maxEntries);
+        }
+        if (changed) {
+          _scheduleFlush();
         }
       }
       _lastErrorEpochMs = prefs.getInt(_prefsErrorKey) ?? 0;
@@ -241,7 +246,11 @@ class Log {
         ts == null
             ? null
             : DateTime.fromMillisecondsSinceEpoch(ts, isUtc: false);
-    return BackgroundLogSnapshot(data, reason: reason, timestamp: when);
+    return BackgroundLogSnapshot(
+      redactSecretsForCopy(data),
+      reason: reason,
+      timestamp: when,
+    );
   }
 
   static Future<void> clearBackgroundSnapshot() async {
@@ -372,10 +381,26 @@ class Log {
   }
 
   static void _appendLine(String line) {
-    _buffer.add(line);
+    _buffer.add(_sanitizeLineForStorage(line));
     if (_buffer.length > _maxEntries) {
       _buffer.removeRange(0, _buffer.length - _maxEntries);
     }
+  }
+
+  static String _sanitizeLineForStorage(String line) {
+    return redactSecretsForCopy(line);
+  }
+
+  static List<String> _sanitizeBufferedLines(List<String> lines) {
+    return lines.map(_sanitizeLineForStorage).toList(growable: false);
+  }
+
+  static bool _listEquals(List<String> left, List<String> right) {
+    if (left.length != right.length) return false;
+    for (var i = 0; i < left.length; i++) {
+      if (left[i] != right[i]) return false;
+    }
+    return true;
   }
 
   static String _formatLine(
