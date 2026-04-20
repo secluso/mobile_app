@@ -657,10 +657,9 @@ class PushNotificationService {
               prefs,
               cameraName,
             );
-            if (shouldShowProvisional &&
-                await _cameraStillExists(prefs, cameraName)) {
-              final notifId = _motionNotifId(cameraName, response);
-
+            final notifId = _motionNotifId(cameraName, response);
+            final cameraStillExists = await _cameraStillExists(prefs, cameraName);
+            if (shouldShowProvisional && cameraStillExists) {
               showMotionNotification(
                 cameraName: cameraName,
                 timestamp: response,
@@ -668,14 +667,19 @@ class PushNotificationService {
                 onlyAlertOnce: false,
                 alertLabel: 'Motion',
               );
-
-              unawaited(_tryAttachThumbLater(cameraName, response, notifId));
             } else if (!await _cameraStillExists(prefs, cameraName)) {
               Log.d(
                 "[FCM] Camera deleted before motion notification for $cameraName; skipping.",
               );
             } else {
               Log.d("Not showing motion notification due to preference");
+            }
+
+            // Even if preferences are set to not show notifications, we should
+            // still donwload the thumbnail as it will be used in the video list
+            // in the app too.
+            if (cameraStillExists) {
+              unawaited(_tryAttachThumbLater(cameraName, response, notifId));
             }
 
             final nowTimestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
@@ -789,35 +793,38 @@ class PushNotificationService {
         // Get the detected event from the metadata file
         final metaPath = '${docs.path}/waiting/meta/meta_$timestamp.txt';
 
-        String alertLabel = 'Motion';
+        List<String> detections = [];
 
         try {
           final raw = await File(metaPath).readAsString();
           if (raw.trim().isNotEmpty) {
-            final detections = (jsonDecode(raw) as List).cast<String>();
-            final decision = evaluateMotionAlertPreferences(
-              prefs,
-              cameraName,
-              motion: true,
-              detections: detections,
-            );
-
-            alertLabel = decision.label ?? 'Motion';
+            detections = (jsonDecode(raw) as List).cast<String>();
           }
         } catch (e) {
           Log.w('Could not read notification metadata $metaPath: $e');
         }
 
-        // Update same notification id with a BigPicture/attachment version.
-        await showMotionNotification(
-          cameraName: cameraName,
-          timestamp: timestamp,
-          thumbnailPath: thumbPath,
-          notificationId: notifId,
-          onlyAlertOnce: true, // don't vibrate/sound again on Android
-          alertLabel: alertLabel,
+        final decision = evaluateMotionAlertPreferences(
+          prefs,
+          cameraName,
+          motion: true,
+          detections: detections,
         );
-        Log.d("Upgraded motion notification with thumbnail: $thumbPath");
+
+        if (decision.shouldShow) {
+          // Update same notification id with a BigPicture/attachment version.
+          String alertLabel = decision.label ?? 'Motion';
+          await showMotionNotification(
+            cameraName: cameraName,
+            timestamp: timestamp,
+            thumbnailPath: thumbPath,
+            notificationId: notifId,
+            onlyAlertOnce: true, // don't vibrate/sound again on Android
+            alertLabel: alertLabel,
+          );
+          Log.d("Upgraded motion notification with thumbnail: $thumbPath");
+        }
+
         return;
       }
       await Future.delayed(pollEvery);

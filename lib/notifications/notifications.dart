@@ -162,15 +162,17 @@ Future<void> showMotionNotification({
 }) async {
   final formatted = _formatTimestamp(timestamp);
   final id = notificationId ?? _motionNotifId(cameraName, timestamp);
-  final bodyText = '$alertLabel at $formatted';
+  final titleText = '$cameraName: $alertLabel detected';
+  final bodyText = formatted;
 
   // Android
   AndroidNotificationDetails androidDetails;
   if (thumbnailPath != null) {
+    final thumbBitmap = FilePathAndroidBitmap(thumbnailPath);
     final bigPic = BigPictureStyleInformation(
-      FilePathAndroidBitmap(thumbnailPath),
+      thumbBitmap,
       hideExpandedLargeIcon: true,
-      contentTitle: cameraName,
+      contentTitle: titleText,
       summaryText: bodyText,
     );
 
@@ -181,6 +183,7 @@ Future<void> showMotionNotification({
       importance: Importance.high,
       priority: Priority.high,
       icon: 'ic_notification',
+      largeIcon: thumbBitmap,
       vibrationPattern: Int64List.fromList([500, 500, 500, 500, 500]),
       enableLights: true,
       color: const Color(0xFF8BB3EE),
@@ -229,7 +232,7 @@ Future<void> showMotionNotification({
 
   await _notifs.show(
     id: id, // unique id
-    title: cameraName, // title
+    title: titleText, // title
     body: bodyText, // body
     notificationDetails: details,
     payload: jsonEncode({"cameraName": cameraName, "timestamp": timestamp}),
@@ -277,7 +280,7 @@ String _formatTimestamp(String unixSeconds) {
   final secs = int.tryParse(unixSeconds) ?? 0;
   final date =
       DateTime.fromMillisecondsSinceEpoch(secs * 1000, isUtc: true).toLocal();
-  return DateFormat('yyyy-MM-dd HH:mm:ss').format(date);
+  return DateFormat('HH:mm:ss, yyyy-MM-dd').format(date);
 }
 
 Future<void> showCameraStatusNotification({
