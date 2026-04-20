@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 import 'package:path/path.dart' as p;
+import 'package:secluso_flutter/notifications/thumbnails.dart';
 
 import 'package:secluso_flutter/utilities/logger.dart';
 import 'package:secluso_flutter/utilities/app_paths.dart';
@@ -217,6 +218,16 @@ class QueueProcessor {
     final updatedCameraNames = <String>{};
     final pendingPathsToDelete = <String>[];
     final metaPathsToDelete = <String>[];
+
+    // Sometimes, a thumbnail and its metadata are not downloaded upon receiving the FCM notification,
+    // but the corresponding video is later downloaded and processed here. In such a case, we would
+    // not show the right detections in the video list in the app (it will just show as "Motion").
+    // Therefore, here, we try again to download pending thumbnails before proceeding.
+    for (final cam in cameras) {
+      await ThumbnailManager.retrieveThumbnails(
+        camera: cam.name,
+      );
+    }
 
     for (final item in items) {
       final cameraName = item['cameraName'] as String?;

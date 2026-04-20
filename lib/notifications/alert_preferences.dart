@@ -143,7 +143,7 @@ AlertDecision evaluateMotionAlertPreferences(
       _globalPersonAlertsEnabled(prefs) &&
       _cameraAllowsHumans(cameraEvents)) {
     return AlertDecision.show(
-      'Person detected',
+      'Person',
       shouldAlertOnce: provisionalWouldShow,
     );
   }
@@ -152,7 +152,7 @@ AlertDecision evaluateMotionAlertPreferences(
       _globalMotionAlertsEnabled(prefs) &&
       _cameraAllowsVehicles(cameraEvents)) {
     return AlertDecision.show(
-      'Vehicle detected',
+      'Vehicle',
       shouldAlertOnce: provisionalWouldShow,
     );
   }
@@ -161,7 +161,7 @@ AlertDecision evaluateMotionAlertPreferences(
       _globalMotionAlertsEnabled(prefs) &&
       _cameraAllowsPets(cameraEvents)) {
     return AlertDecision.show(
-      'Pet detected',
+      'Pet',
       shouldAlertOnce: provisionalWouldShow,
     );
   }
