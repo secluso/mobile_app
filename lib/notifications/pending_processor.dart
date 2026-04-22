@@ -103,6 +103,7 @@ class QueueProcessor {
   bool _isRunning = false;
   bool _isStarted = false;
   static const int _metaGraceMs = 3000;
+  static const Duration _metaRetention = Duration(hours: 24);
 
   QueueProcessor._() {
     Log.d('New instance created');
@@ -307,7 +308,8 @@ class QueueProcessor {
       if (pendingPath != null) {
         pendingPathsToDelete.add(pendingPath);
       }
-      if ((metaParsed || discardMeta) && metaPath != null) {
+      // Keep processed metadata around so notification upgrade can still read detections even after the pending video is ingested.
+      if (discardMeta) {
         metaPathsToDelete.add(metaPath);
       }
     }
@@ -334,6 +336,28 @@ class QueueProcessor {
         await File(path).delete();
       } catch (e) {
         Log.e("Error deleting meta file $path: $e");
+      }
+    }
+
+    // Processed metadata is retained so notification upgrade can still read it later
+    // clean up stale files here so the directory does not grow forever
+    final metaDir = Directory(p.join(baseDir.path, 'waiting', 'meta'));
+    if (await metaDir.exists()) {
+      final cutoff = DateTime.now().subtract(_metaRetention);
+      await for (final entry in metaDir.list(followLinks: false)) {
+        if (entry is! File) continue;
+        final name = p.basename(entry.path);
+        if (!name.startsWith('meta_') || !name.endsWith('.txt')) {
+          continue;
+        }
+        try {
+          final stat = await entry.stat();
+          if (stat.modified.isBefore(cutoff)) {
+            await entry.delete();
+          }
+        } catch (e) {
+          Log.e("Error cleaning stale meta file ${entry.path}: $e");
+        }
       }
     }
 
