@@ -658,7 +658,10 @@ class PushNotificationService {
               cameraName,
             );
             final notifId = _motionNotifId(cameraName, response);
-            final cameraStillExists = await _cameraStillExists(prefs, cameraName);
+            final cameraStillExists = await _cameraStillExists(
+              prefs,
+              cameraName,
+            );
             if (shouldShowProvisional && cameraStillExists) {
               showMotionNotification(
                 cameraName: cameraName,
@@ -812,13 +815,28 @@ class PushNotificationService {
         );
 
         if (decision.shouldShow) {
-          // Update same notification id with a BigPicture/attachment version.
+          var upgradedNotifId = notifId;
+          if (Platform.isIOS) {
+            // Reposting over an already delivered notification doesn't seem to work on newer iOS builds
+            // So we now replace it by revoking the old notification and sending a new one
+            await cancelMotionNotification(
+              cameraName: cameraName,
+              timestamp: timestamp,
+            );
+            upgradedNotifId = upgradedMotionNotificationId(
+              cameraName,
+              timestamp,
+            );
+          }
+
+          // Update same notification id with a BigPicture version (on Android).
+          // Repost as a fresh notification on iOS so the attachment is now rendered
           String alertLabel = decision.label ?? 'Motion';
           await showMotionNotification(
             cameraName: cameraName,
             timestamp: timestamp,
             thumbnailPath: thumbPath,
-            notificationId: notifId,
+            notificationId: upgradedNotifId,
             onlyAlertOnce: true, // don't vibrate/sound again on Android
             alertLabel: alertLabel,
           );

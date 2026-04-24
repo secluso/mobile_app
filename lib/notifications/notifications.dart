@@ -152,6 +152,10 @@ int motionNotificationId(String cameraName, String timestamp) {
   return _motionNotifId(cameraName, timestamp);
 }
 
+int upgradedMotionNotificationId(String cameraName, String timestamp) {
+  return _motionNotifId(cameraName, timestamp) ^ 0x40000000;
+}
+
 Future<void> showMotionNotification({
   required String cameraName,
   required String timestamp, // unix seconds
@@ -218,7 +222,12 @@ Future<void> showMotionNotification({
       interruptionLevel: InterruptionLevel.timeSensitive,
       sound: onlyAlertOnce ? null : 'default',
       badgeNumber: 1,
-      attachments: [DarwinNotificationAttachment(thumbnailPath)],
+      attachments: [
+        DarwinNotificationAttachment(
+          thumbnailPath,
+          identifier: 'motion-thumb-$cameraName-$timestamp',
+        ),
+      ],
     );
   } else {
     iosDetails = DarwinNotificationDetails(
