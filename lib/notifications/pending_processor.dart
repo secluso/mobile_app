@@ -149,6 +149,41 @@ class QueueProcessor {
     }
 
     final baseDir = await AppPaths.dataDirectory();
+    final AppStores stores;
+    try {
+      stores = AppStores.instance;
+    } catch (e, st) {
+      Log.e("AppStores instance unavailable: $e\n$st");
+      return;
+    }
+
+    final cameraStore = stores.cameraStore;
+    final videoStore = stores.videoStore;
+    final detectionStore = stores.detectionStore;
+    final cameras = await cameraStore.getAllAsync();
+    final cameraByName = {for (final cam in cameras) cam.name: cam};
+    final existingVideos = await videoStore.getAllAsync();
+    final videoByCameraAndFile = {
+      for (final video in existingVideos)
+        '${video.camera}\n${video.video}': video,
+    };
+
+    final videosToPut = <Video>[];
+    final detectionsToPut = <Detection>[];
+    final camerasToUpdate = <Camera>[];
+    final updatedCameraNames = <String>{};
+    final pendingPathsToDelete = <String>[];
+    final metaPathsToDelete = <String>[];
+
+    // Sometimes, a thumbnail and its metadata are not downloaded upon receiving the FCM notification,
+    // but the corresponding video is later downloaded and processed here. In such a case, we would
+    // not show the right detections in the video list in the app (it will just show as "Motion").
+    // Therefore, here, we try again to download pending thumbnails before proceeding.
+    // This must happen before collecting pending work so newly created metadata is visible in
+    // the same processing pass.
+    for (final cam in cameras) {
+      await ThumbnailManager.retrieveThumbnails(camera: cam.name);
+    }
     final receivePort = ReceivePort();
     try {
       await Isolate.spawn(_collectPendingWorkEntry, {
@@ -192,42 +227,6 @@ class QueueProcessor {
     }
 
     if (items.isEmpty) return;
-
-    final AppStores stores;
-    try {
-      stores = AppStores.instance;
-    } catch (e, st) {
-      Log.e("AppStores instance unavailable: $e\n$st");
-      return;
-    }
-
-    final cameraStore = stores.cameraStore;
-    final videoStore = stores.videoStore;
-    final detectionStore = stores.detectionStore;
-    final cameras = await cameraStore.getAllAsync();
-    final cameraByName = {for (final cam in cameras) cam.name: cam};
-    final existingVideos = await videoStore.getAllAsync();
-    final videoByCameraAndFile = {
-      for (final video in existingVideos)
-        '${video.camera}\n${video.video}': video,
-    };
-
-    final videosToPut = <Video>[];
-    final detectionsToPut = <Detection>[];
-    final camerasToUpdate = <Camera>[];
-    final updatedCameraNames = <String>{};
-    final pendingPathsToDelete = <String>[];
-    final metaPathsToDelete = <String>[];
-
-    // Sometimes, a thumbnail and its metadata are not downloaded upon receiving the FCM notification,
-    // but the corresponding video is later downloaded and processed here. In such a case, we would
-    // not show the right detections in the video list in the app (it will just show as "Motion").
-    // Therefore, here, we try again to download pending thumbnails before proceeding.
-    for (final cam in cameras) {
-      await ThumbnailManager.retrieveThumbnails(
-        camera: cam.name,
-      );
-    }
 
     for (final item in items) {
       final cameraName = item['cameraName'] as String?;
