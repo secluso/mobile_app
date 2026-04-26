@@ -7,6 +7,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 DOCKER_PLATFORM="${SECLUSO_DOCKER_PLATFORM:-linux/amd64}"
 HOST_CACHE_ROOT="${SECLUSO_REPRO_CACHE_ROOT:-$REPO_ROOT/.secluso-repro-cache}"
 USE_HOST_CACHES="${SECLUSO_REPRO_USE_HOST_CACHES:-1}"
+AAB_PATH="$REPO_ROOT/build/reproducible/app-release-unsigned.aab"
+AAB_SHA_PATH="$AAB_PATH.sha256"
 
 dockerfile_hash() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -68,11 +70,20 @@ docker run --rm \
   /workspace/tool/repro/run_build_in_container_workspace.sh \
     tool/repro/build_unsigned_android_appbundle.sh
 
-if [[ -f "$REPO_ROOT/build/reproducible/app-release-unsigned.aab.sha256" ]]; then
-  tmp_sha="$(mktemp "${TMPDIR:-/tmp}/secluso-aab-sha.XXXXXX")"
-  sed "s|/workspace|$REPO_ROOT|g" \
-    "$REPO_ROOT/build/reproducible/app-release-unsigned.aab.sha256" > "$tmp_sha"
-  mv "$tmp_sha" "$REPO_ROOT/build/reproducible/app-release-unsigned.aab.sha256"
+if [[ -f "$AAB_PATH" ]]; then
+  tmp_aab="$(mktemp "${TMPDIR:-/tmp}/secluso-aab-normalized.XXXXXX.aab")"
+  python3 "$SCRIPT_DIR/aab_normalize.py" "$AAB_PATH" "$tmp_aab" >/dev/null
+  mv "$tmp_aab" "$AAB_PATH"
 fi
 
-printf '\n==> Host artifact ready at %s\n' "$REPO_ROOT/build/reproducible/app-release-unsigned.aab"
+if [[ -f "$AAB_SHA_PATH" ]]; then
+  tmp_sha="$(mktemp "${TMPDIR:-/tmp}/secluso-aab-sha.XXXXXX")"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$AAB_PATH" > "$tmp_sha"
+  else
+    shasum -a 256 "$AAB_PATH" > "$tmp_sha"
+  fi
+  mv "$tmp_sha" "$AAB_SHA_PATH"
+fi
+
+printf '\n==> Host artifact ready at %s\n' "$AAB_PATH"
